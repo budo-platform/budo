@@ -60,6 +60,25 @@ Then call the make command:
 make build
 ```
 
+## Run an application
+
+```bash
+./build/budo run examples/demo
+```
+
+The application directory should contain one of:
+
+- `main.js` - JavaScript entry point (uses QuickJS)
+- `main.ts` - TypeScript entry point (stripped and run via QuickJS)
+- `main.lua` - Lua entry point (uses Lua 5.4)
+- `main.wat` - WebAssembly text format (uses Wasmtime)
+- `main.wasm` - WebAssembly binary format (uses Wasmtime)
+
+That same directory can also contain vertex and fragment shader files, which application code can load relative to the project root.
+
+The runtime checks for files in this order: `main.ts` → `main.js` → `main.lua` → `main.wat` → `main.wasm`.
+You can also pass a single `.js`, `.ts`, `.lua`, `.wat`, or `.wasm` file; Budo stages it as the only file in a temporary virtual app directory and runs it as the matching `main.*` entrypoint.
+
 ## Android application packaging
 
 > **Budo Pro:** Android APK/AAB packaging is a paid feature. Public builds
@@ -133,66 +152,6 @@ budo web-serve examples/demo
 - **MIDI**: Web MIDI API is only available in Chromium-based browsers (Chrome, Edge, Opera)
 - **Synchronous HTTP**: `network_request()` is not available; use the async `fetch()` API
 - **CORS**: Browser fetch is subject to Cross-Origin Resource Sharing restrictions
-
-## Usage
-
-```bash
-budo <project_dir|file> [options]
-```
-
-- `project_dir` should contain one of these entrypoints:
-- `main.js` - JavaScript entry point (uses QuickJS)
-- `main.ts` - TypeScript entry point (stripped and run via QuickJS)
-- `main.lua` - Lua entry point (uses Lua 5.4)
-- `main.wat` - WebAssembly text format (uses Wasmtime)
-- `main.wasm` - WebAssembly binary format (uses Wasmtime)
-
-That same directory can also contain vertex and fragment shader files, which application code can load relative to the project root.
-
-The runtime checks for files in this order: `main.ts` → `main.js` → `main.lua` → `main.wat` → `main.wasm`.
-You can also pass a single `.js`, `.ts`, `.lua`, `.wat`, or `.wasm` file; Budo stages it as the only file in a temporary virtual app directory and runs it as the matching `main.*` entrypoint.
-
-```bash
-# Run a JavaScript example
-budo examples/demo
-
-# Run a WebAssembly example
-budo examples/wasm_shapes
-
-# Run the shader example
-budo examples/shader_demo
-
-# Run a single-file sketch
-budo sketch.js
-
-# Run code piped from stdin
-echo 'console.log("hello from stdin")' | budo run --from-input js
-
-# Run the graphics orientation diagnostics example
-budo examples/orientation_lab
-
-# Run the frozen terrain FPS demo
-budo examples/frozenator
-
-# Available options
-Options:
-  --width <n>      Window width (default: 800)
-  --height <n>     Window height (default: 600)
-  --title <str>    Window title
-  --fullscreen     Start in fullscreen mode
-  --no-vsync       Disable vertical sync
-  --watch          Restart the app when project files change
-  --from-input <k> Read stdin as a virtual app main file (js, ts, lua, wat, wasm)
-  --help           Show help message
-```
-
-## Dependencies
-
-- **Skia**: 2D graphics library (must be installed, see setup scripts)
-- **QuickJS**: JavaScript engine (fetched via CMake)
-- **Wasmtime**: WebAssembly runtime (fetched via CMake)
-- **SDL2**: Cross-platform windowing and input (must be installed)
-- **ONNX Runtime** *(optional)*: neural inference library, loaded at runtime (see above)
 
 ## License
 
