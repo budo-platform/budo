@@ -16,7 +16,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y install cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
+          sudo apt-get install -y cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
 
       - name: Download Skia
         run: ./scripts/setup-skia.sh
