@@ -59,25 +59,25 @@ interface Keyboard {
 }
 
 interface TextInputEdit {
-    text: string;
-    selectionStart: number;
-    selectionEnd: number;
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
 }
 
 interface TextInputComposition {
-    active: boolean;
-    changed: boolean;
-    text: string;
-    selectionStart: number;
-    selectionEnd: number;
+  active: boolean;
+  changed: boolean;
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
 }
 
 interface TextInputOptions {
-    text: string;
-    selectionStart: number;
-    selectionEnd: number;
-    multiline?: boolean;
-    caret?: { x: number; y: number; width: number; height: number };
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
+  multiline?: boolean;
+  caret?: { x: number; y: number; width: number; height: number };
 }
 
 interface InputState {
@@ -85,11 +85,11 @@ interface InputState {
   pointers: Pointer[];
   mouse: Mouse;
   keyboard: Keyboard;
-    /** Layout-aware UTF-8 text committed since the previous frame. */
-    text: string;
-    textEdit: TextInputEdit | null;
-    composition: TextInputComposition;
-    textInputActive: boolean;
+  /** Layout-aware UTF-8 text committed since the previous frame. */
+  text: string;
+  textEdit: TextInputEdit | null;
+  composition: TextInputComposition;
+  textInputActive: boolean;
   deltaTime: number;
   totalTime: number;
   frameCount: number;
@@ -99,17 +99,17 @@ interface InputState {
 // -- MIDI message type --------------------------------------------------------
 
 interface MidiMessage {
-    status: number;
-    data1: number;
-    data2: number;
-    /** Native receive/event timestamp in microseconds from a monotonic clock, or 0 when unavailable. */
-    timestamp: number;
-    type: number;
-    channel: number;
-    /** SysEx bytes for system-exclusive messages. */
-    data?: number[];
-    /** True when the message was received from an RTP-MIDI network session. */
-    network?: boolean;
+  status: number;
+  data1: number;
+  data2: number;
+  /** Native receive/event timestamp in microseconds from a monotonic clock, or 0 when unavailable. */
+  timestamp: number;
+  type: number;
+  channel: number;
+  /** SysEx bytes for system-exclusive messages. */
+  data?: number[];
+  /** True when the message was received from an RTP-MIDI network session. */
+  network?: boolean;
 }
 
 // -- MIDI device info ---------------------------------------------------------
@@ -120,22 +120,22 @@ interface MidiDevice {
 }
 
 interface MidiDevicesChangedEvent {
-    /** Fresh input device snapshot after the topology change. */
-    inputs: MidiDevice[];
-    /** Fresh output device snapshot after the topology change. */
-    outputs: MidiDevice[];
-    /** Monotonically increasing generation for this callback registration. */
-    generation: number;
+  /** Fresh input device snapshot after the topology change. */
+  inputs: MidiDevice[];
+  /** Fresh output device snapshot after the topology change. */
+  outputs: MidiDevice[];
+  /** Monotonically increasing generation for this callback registration. */
+  generation: number;
 }
 
 // -- RTP-MIDI session info ---------------------------------------------------
 
 interface RtpMidiSession {
-    handle: number;
-    name: string;
-    port: number;
-    state: "idle" | "listening" | "connecting" | "connected" | "closed" | "unknown";
-    peerCount: number;
+  handle: number;
+  name: string;
+  port: number;
+  state: "idle" | "listening" | "connecting" | "connected" | "closed" | "unknown";
+  peerCount: number;
 }
 
 // -- File entry type ----------------------------------------------------------
@@ -147,8 +147,8 @@ interface FileEntry {
 }
 
 interface PickedTextFile {
-    name: string;
-    text: string;
+  name: string;
+  text: string;
 }
 
 // -- Accelerometer data -------------------------------------------------------
@@ -207,76 +207,42 @@ interface Response {
 }
 
 interface CanvasTextureCanvas {
-    /** Clear this offscreen canvas texture. */
-    clear(color?: Color): void;
-    /** Flush this offscreen canvas texture so its GL texture can be sampled. */
-    flush(): void;
-    /** Draw a filled/stroked rectangle into this offscreen canvas texture. */
-    drawRect(x: number, y: number, width: number, height: number): void;
-    /** Draw a filled/stroked circle into this offscreen canvas texture. */
-    drawCircle(cx: number, cy: number, radius: number): void;
-    /** Draw text into this offscreen canvas texture. */
-    drawText(text: string, x: number, y: number, fontSize?: number): void;
+  /** Clear this offscreen canvas texture. */
+  clear(color?: Color): void;
+  /** Flush this offscreen canvas texture so its GL texture can be sampled. */
+  flush(): void;
+  /** Draw a filled/stroked rectangle into this offscreen canvas texture. */
+  drawRect(x: number, y: number, width: number, height: number): void;
+  /** Draw a filled/stroked circle into this offscreen canvas texture. */
+  drawCircle(cx: number, cy: number, radius: number): void;
+  /** Draw text into this offscreen canvas texture. */
+  drawText(text: string, x: number, y: number, fontSize?: number): void;
 }
 
 interface CanvasTexture {
-    /** Opaque CanvasTexture handle. */
-    readonly id: number;
-    /** Current width in pixels. */
-    readonly width: number;
-    /** Current height in pixels. */
-    readonly height: number;
-    /** Backing GL texture id. Pass the CanvasTexture object to sys.gl.bindCanvasTexture. */
-    readonly texture: number;
-    /** Backing GL framebuffer id. */
-    readonly target: number;
-    /** Skia drawing API for this offscreen texture. */
-    readonly canvas: CanvasTextureCanvas;
-    /** Flush pending Skia work so the backing GL texture can be sampled. */
-    flush(): void;
-    /** Resize this texture-backed Skia surface. */
-    resize(width: number, height: number): void;
-    /** Destroy the owned Skia surface, GL texture, and framebuffer. */
-    destroy(): void;
-}
-
-interface ShaderProgram {
-    /** Opaque numeric shader program id. */
-    readonly id: number;
-    /** Bind this shader program immediately. */
-    use(): ShaderProgram;
-    /** Set immediate scalar uniforms. */
-    uniform1i(name: string, value: number): ShaderProgram;
-    uniform1f(name: string, value: number): ShaderProgram;
-    uniform2f(name: string, x: number, y: number): ShaderProgram;
-    uniform3f(name: string, x: number, y: number, z: number): ShaderProgram;
-    uniform4f(name: string, x: number, y: number, z: number, w: number): ShaderProgram;
-    /** Set a mat4 uniform from a 16-element Float32Array. */
-    uniformMatrix4(name: string, mat16: Float32Array): ShaderProgram;
-    /** Bind a 2D texture id or CanvasTexture to a sampler uniform immediately. */
-    texture(name: string, texture: number | CanvasTexture, textureUnit: number): ShaderProgram;
-    /** Bind a CanvasTexture to a sampler uniform immediately, flushing it first. */
-    canvasTexture(name: string, canvasTexture: CanvasTexture, textureUnit: number): ShaderProgram;
-    /** Bind a render target's color texture to a sampler uniform immediately. */
-    renderTargetTexture(name: string, targetId: number, textureUnit: number): ShaderProgram;
-    /** Draw a fullscreen shader immediately against the currently bound target. */
-    drawFullscreen(sourceTexture?: number | CanvasTexture): ShaderProgram;
-    /** Draw a rectangular shader region immediately against the current or given render target. */
-    drawRegion(x: number, y: number, w: number, h: number, targetId?: number): ShaderProgram;
-    /** Draw a mesh immediately using this program. */
-    drawMesh(layoutId: number, options: GLDrawOptions): ShaderProgram;
-}
-
-interface GLScreenTarget {
-    /** Bind the screen/default framebuffer immediately and set the viewport to the window size. */
-    bind(): void;
+  /** Opaque CanvasTexture handle. */
+  readonly id: number;
+  /** Current width in pixels. */
+  readonly width: number;
+  /** Current height in pixels. */
+  readonly height: number;
+  /** Backing GL texture id. Pass the CanvasTexture object to sys.gl.bindCanvasTexture. */
+  readonly texture: number;
+  /** Backing GL framebuffer id. */
+  readonly target: number;
+  /** Skia drawing API for this offscreen texture. */
+  readonly canvas: CanvasTextureCanvas;
+  /** Flush pending Skia work so the backing GL texture can be sampled. */
+  flush(): void;
+  /** Resize this texture-backed Skia surface. */
+  resize(width: number, height: number): void;
+  /** Destroy the owned Skia surface, GL texture, and framebuffer. */
+  destroy(): void;
 }
 
 // -- sys.gl namespace ---------------------------------------------------------
 
 interface SysGL {
-  readonly screen: GLScreenTarget;
-
   // ---- 3D pipeline ----------------------------------------------------------
 
   /** Create a vertex or index buffer. If `data` is given, uploads it immediately. */
@@ -390,8 +356,6 @@ interface SysCapabilities {
   readonly http: CapabilityEntry;
   /** Accelerometer and compass availability. */
   readonly sensors: CapabilityEntry;
-  /** Advanced Skia canvas and shader feature availability. */
-  readonly shadersAdvanced: CapabilityEntry;
 }
 
 /** Device-level controls owned by the current application runtime. */
@@ -440,20 +404,20 @@ interface SysCanvas {
   /** Clear the entire canvas with the given color. */
   clear(color?: Color): void;
 
-  /** Force any pending Skia draw calls to be submitted to the GPU. The desktop and mobile graphics pipeline is GPU-immediate (Ganesh GL): canvas drawing updates the backing GL texture as part of the current frame. Calling flush() guarantees that all draws issued so far are visible in that texture, which is required before sampling it from a custom shader pass via sys.gl.* or before reading pixels back via readPixels(). */
-  flush(): void;
+  /** Draw a filled/stroked rectangle. */
+  drawRect(x: number, y: number, width: number, height: number): void;
+
+  /** Draw a filled/stroked circle. */
+  drawCircle(cx: number, cy: number, radius: number): void;
+
+  /** Draw text at the given position. The default font size is 32. */
+  drawText(text: string, x: number, y: number, fontSize?: number): void;
 
   /** Read the canvas's current pixel content back from the GPU. Returns RGBA8 premultiplied pixels in row-major top-to-bottom order. Implicitly flushes pending draws and stalls until the GPU has finished, so use sparingly. Useful for screenshots, image processing, and procedural content generation that needs to inspect what was just drawn. */
   readPixels(): { width: number, height: number, pixels: ArrayBuffer };
 
-  /** Draw a filled/stroked rectangle. */
-  drawRect(x: number, y: number, width: number, height: number): void;
-
   /** Draw a filled/stroked rounded rectangle. */
   drawRoundRect(x: number, y: number, width: number, height: number, rx: number, ry: number): void;
-
-  /** Draw a filled/stroked circle. */
-  drawCircle(cx: number, cy: number, radius: number): void;
 
   /** Draw a filled/stroked oval inscribed in the given rectangle. */
   drawOval(x: number, y: number, width: number, height: number): void;
@@ -464,17 +428,18 @@ interface SysCanvas {
   /** Draw a single point. */
   drawPoint(x: number, y: number): void;
 
-  /** Draw text at the given position. The default font size is 32. */
-  drawText(text: string, x: number, y: number, fontSize?: number): void;
+  drawPath(arg1: any): any;
+
+  /** Draw an arc. Angles in degrees. If useCenter is true, draws a pie-shaped wedge. */
+  drawArc(x: number, y: number, width: number, height: number, startAngle: number, sweepAngle: number, useCenter?: boolean): void;
+
+  drawSvg(arg1: any, arg2: any, arg3: any, arg4: any, arg5: any): any;
 
   /** Measure text width in pixels using the active font. The default font size is 32. */
   measureText(text: string, fontSize?: number): number;
 
   /** Measure text bounds in pixels using the active font. The default font size is 32. */
   measureTextRect(text: string, fontSize?: number): { width: number, height: number };
-
-  /** Draw an arc. Angles in degrees. If useCenter is true, draws a pie-shaped wedge. */
-  drawArc(x: number, y: number, width: number, height: number, startAngle: number, sweepAngle: number, useCenter?: boolean): void;
 
   /** Set the fill color and switch paint style to fill. */
   setFillColor(color: Color): void;
@@ -497,17 +462,40 @@ interface SysCanvas {
   /** Set the stroke join style. */
   setStrokeJoin(join: "miter" | "round" | "bevel"): void;
 
-  /** Set the SkBlendMode used when compositing. Requires `sys.capabilities.shadersAdvanced.available`. Throws RangeError on an unknown mode name. */
+  /** Set the SkBlendMode used when compositing. Throws RangeError on an unknown mode name. */
   setBlendMode(mode: "src-over" | "src" | "dst-over" | "dst-in" | "dst-out" | "src-in" | "src-out" | "clear" | "plus" | "multiply" | "screen" | "overlay" | "darken" | "lighten" | "color-dodge" | "color-burn" | "hard-light" | "soft-light" | "difference" | "exclusion" | "hue" | "saturation" | "color" | "luminosity"): boolean;
 
-  /** Attach a Skia image-filter to the default paint, or clear it. Forms: `setImageFilter("blur", sigmaX, sigmaY?)`; `setImageFilter("drop-shadow", dx, dy, sigmaX, sigmaY?, color)` (color is ARGB number or "#RRGGBBAA"); `setImageFilter("drop-shadow-only", dx, dy, sigmaX, sigmaY?, color)` (same args, but only the shadow is rasterised -- the original paint output is dropped, useful for composing shadows under separately drawn elements); `setImageFilter("none")` / `setImageFilter(null)` / `setImageFilter()` to clear. Requires `sys.capabilities.shadersAdvanced.available`. Throws TypeError on missing required arguments and RangeError on an unknown filter name. */
+  /** Attach a Skia image-filter to the default paint, or clear it. Forms: `setImageFilter("blur", sigmaX, sigmaY?)`; `setImageFilter("drop-shadow", dx, dy, sigmaX, sigmaY?, color)` (color is ARGB number or "#RRGGBBAA"); `setImageFilter("drop-shadow-only", dx, dy, sigmaX, sigmaY?, color)` (same args, but only the shadow is rasterised -- the original paint output is dropped, useful for composing shadows under separately drawn elements); `setImageFilter("none")` / `setImageFilter(null)` / `setImageFilter()` to clear.`. Throws TypeError on missing required arguments and RangeError on an unknown filter name. */
   setImageFilter(name?: "blur" | "drop-shadow" | "drop-shadow-only" | "none" | null, ...args: (number | string)[]): boolean;
 
-  /** Attach a Skia color-filter to the default paint, or clear it. Forms: `setColorFilter("matrix", m)` where `m` is an array-like of exactly 20 numbers (4x5 row-major matrix applied as `[Rout Gout Bout Aout]^T = M * [R G B A 1]^T`, channels in 0..1, last column is the bias term); `setColorFilter("blend", color, blendModeName)` composes the source with `color` (ARGB number or "#RRGGBBAA") using one of the names accepted by `setBlendMode`; `setColorFilter("none")` / `setColorFilter(null)` / `setColorFilter()` to clear. Requires `sys.capabilities.shadersAdvanced.available`. Throws TypeError on missing / wrong-typed arguments and RangeError on an unknown filter or blend mode name. */
+  /** Attach a Skia color-filter to the default paint, or clear it. Forms: `setColorFilter("matrix", m)` where `m` is an array-like of exactly 20 numbers (4x5 row-major matrix applied as `[Rout Gout Bout Aout]^T = M * [R G B A 1]^T`, channels in 0..1, last column is the bias term); `setColorFilter("blend", color, blendModeName)` composes the source with `color` (ARGB number or "#RRGGBBAA") using one of the names accepted by `setBlendMode`; `setColorFilter("none")` / `setColorFilter(null)` / `setColorFilter()` to clear. Throws TypeError on missing / wrong-typed arguments and RangeError on an unknown filter or blend mode name. */
   setColorFilter(name?: "matrix" | "blend" | "none" | null, ...args: (number | string | ArrayLike<number>)[]): boolean;
 
-  /** Return and clear the last `sys.canvas` error message. */
-  getError(): string;
+  setFont(arg1: any): any;
+
+  /** Save the current transform and clip state onto a stack. */
+  save(): void;
+
+  /** Restore the most recently saved transform/clip state. */
+  restore(): void;
+
+  /** Translate the canvas origin. */
+  translate(dx: number, dy: number): void;
+
+  /** Rotate the canvas. If px/py are given, rotate around that point. */
+  rotate(degrees: number, px?: number, py?: number): void;
+
+  /** Scale the canvas. */
+  scale(sx: number, sy: number): void;
+
+  /** Skew the canvas. */
+  skew(sx: number, sy: number): void;
+
+  /** Reset the transform to identity. */
+  reset(): void;
+
+  /** Clip drawing to a rectangle. */
+  clipRect(x: number, y: number, width: number, height: number): void;
 
 }
 
@@ -517,11 +505,6 @@ interface SysGraphics {
   /** Create an offscreen Skia canvas backed by a GL texture and framebuffer. */
   createCanvasTexture(width: number, height: number): CanvasTexture;
 
-}
-
-// -- sys.canvas object -----------------------------------------------------
-
-interface SysTransform {
 }
 
 // -- sys.path object ----------------------------------------------------------
@@ -554,9 +537,6 @@ interface SysPath {
   /** Add a circle subpath. */
   addCircle(pathId: number, cx: number, cy: number, radius: number): void;
 
-  /** Draw a previously created path with the current paint. */
-  draw(pathId: number): void;
-
 }
 
 // -- sys.svg object -----------------------------------------------------------
@@ -570,9 +550,6 @@ interface SysSVG {
 
   /** Destroy a loaded SVG and free its resources. */
   destroy(svgId: number): void;
-
-  /** Draw an SVG scaled to fit the given rectangle. */
-  draw(svgId: number, x: number, y: number, width: number, height: number): void;
 
   /** Get the intrinsic width of a loaded SVG. */
   getWidth(svgId: number): number;
@@ -590,12 +567,6 @@ interface SysFont {
 
   /** Load a font from an ArrayBuffer or TypedArray and register it under an optional name. */
   loadFromBuffer(buffer: ArrayBuffer | ArrayBufferView, name?: string): void;
-
-  /** Set the active typeface by name (previously loaded). */
-  set(name: string): void;
-
-  /** Reset text rendering to the runtime default font. */
-  reset(): void;
 
 }
 
@@ -650,15 +621,6 @@ interface SysAnimation {
 // -- sys.timer object ---------------------------------------------------------
 
 interface SysTimer {
-  /** Schedule a one-shot callback after delayMs milliseconds. Returns a timer ID when scheduled. */
-  once(delayMs: number, callback: () => void): number | undefined;
-
-  /** Schedule a repeating callback every intervalMs milliseconds. Returns a timer ID when scheduled. */
-  every(intervalMs: number, callback: () => void): number | undefined;
-
-  /** Cancel a timer returned by sys.timer.once() or sys.timer.every(). */
-  clear(timerId: number): void;
-
 }
 
 // -- sys.audio object ---------------------------------------------------------
@@ -1034,13 +996,13 @@ interface TensorInfo {
 
 /** ONNX model metadata returned by sys.neural.getModelInfo(). */
 interface ModelInfo {
-  description:  string;
+  description: string;
   producerName: string;
-  graphName:    string;
-  domain:       string;
-  version:      number;
-  inputs:       TensorInfo[];
-  outputs:      TensorInfo[];
+  graphName: string;
+  domain: string;
+  version: number;
+  inputs: TensorInfo[];
+  outputs: TensorInfo[];
 }
 
 interface SysNeural {
@@ -1186,8 +1148,6 @@ interface SysNetwork {
 interface Sys {
   /** 2D drawing primitives and paint style settings. */
   readonly canvas: SysCanvas;
-  /** Canvas transform operations. */
-  readonly transform: SysTransform;
   /** Path creation and manipulation. */
   readonly path: SysPath;
   /** SVG loading and drawing. */
@@ -1241,13 +1201,5 @@ declare const sys: Sys;
 
 /** Console output (stdout). */
 declare const console: {
-  /** Print arguments to stdout. */
-  log(...args: any[]): void;
-
 };
 
-/**
- * Perform an HTTP request (synchronous). Requires network policy in app.json.
- * Also available as sys.net.fetch.
- */
-declare function fetch(url: string, options?: RequestInit): Response;

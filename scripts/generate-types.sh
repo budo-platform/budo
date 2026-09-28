@@ -410,33 +410,6 @@ interface CanvasTexture {
     destroy(): void;
 }
 
-interface ShaderProgram {
-    /** Opaque numeric shader program id. */
-    readonly id: number;
-    /** Bind this shader program immediately. */
-    use(): ShaderProgram;
-    /** Set immediate scalar uniforms. */
-    uniform1i(name: string, value: number): ShaderProgram;
-    uniform1f(name: string, value: number): ShaderProgram;
-    uniform2f(name: string, x: number, y: number): ShaderProgram;
-    uniform3f(name: string, x: number, y: number, z: number): ShaderProgram;
-    uniform4f(name: string, x: number, y: number, z: number, w: number): ShaderProgram;
-    /** Set a mat4 uniform from a 16-element Float32Array. */
-    uniformMatrix4(name: string, mat16: Float32Array): ShaderProgram;
-    /** Bind a 2D texture id or CanvasTexture to a sampler uniform immediately. */
-    texture(name: string, texture: number | CanvasTexture, textureUnit: number): ShaderProgram;
-    /** Bind a CanvasTexture to a sampler uniform immediately, flushing it first. */
-    canvasTexture(name: string, canvasTexture: CanvasTexture, textureUnit: number): ShaderProgram;
-    /** Bind a render target's color texture to a sampler uniform immediately. */
-    renderTargetTexture(name: string, targetId: number, textureUnit: number): ShaderProgram;
-    /** Draw a fullscreen shader immediately against the currently bound target. */
-    drawFullscreen(sourceTexture?: number | CanvasTexture): ShaderProgram;
-    /** Draw a rectangular shader region immediately against the current or given render target. */
-    drawRegion(x: number, y: number, w: number, h: number, targetId?: number): ShaderProgram;
-    /** Draw a mesh immediately using this program. */
-    drawMesh(layoutId: number, options: GLDrawOptions): ShaderProgram;
-}
-
 EOF
 }
 
