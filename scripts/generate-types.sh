@@ -731,6 +731,8 @@ NEURAL_TYPES
     echo "// -- sys namespace ------------------------------------------------------------"
     echo ""
     echo "interface Sys {"
+    echo "  /** Outputs a message on stadard output*/"
+    echo "  log(message: string): void;"
     echo "  /** 2D drawing primitives and paint style settings. */"
     echo "  readonly canvas: SysCanvas;"
     echo "  /** Path creation and manipulation. */"

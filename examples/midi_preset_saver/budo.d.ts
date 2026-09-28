@@ -1146,6 +1146,8 @@ interface SysNetwork {
 // -- sys namespace ------------------------------------------------------------
 
 interface Sys {
+  /** Outputs a message on stadard output*/
+  log(message: string): void;
   /** 2D drawing primitives and paint style settings. */
   readonly canvas: SysCanvas;
   /** Path creation and manipulation. */
