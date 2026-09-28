@@ -13,8 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: apt-get install cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y install cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
 
       - name: Download Skia
         run: ./scripts/setup-skia.sh
