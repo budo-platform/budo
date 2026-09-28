@@ -1,0 +1,781 @@
+{
+  "registrations": [
+    {
+      "namespace": "sys.audio",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/audio/js_audio_bindings.c",
+      "subsystem": "audio",
+      "symbol": "js_audio_init"
+    },
+    {
+      "namespace": "sys.audio",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/audio/lua_audio_bindings.c",
+      "subsystem": "audio",
+      "symbol": "lua_audio_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/audio/wasm_audio_bindings.c",
+      "subsystem": "audio",
+      "symbol": "wasm_audio_register"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "canvas",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "sys.canvas"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "canvas",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": [
+        "sys.canvas"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "canvas",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "canvas",
+      "symbol": "wasm_canvas_create"
+    },
+    {
+      "namespace": [
+        "sys.graphics",
+        "CanvasTexture",
+        "CanvasTexture.canvas"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "canvas_texture",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": "sys.capabilities",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/core/js_capabilities_bindings.c",
+      "subsystem": "capabilities",
+      "symbol": "js_capabilities_init"
+    },
+    {
+      "namespace": "sys.capabilities",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/core/lua_capabilities_bindings.c",
+      "subsystem": "capabilities",
+      "symbol": "lua_capabilities_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/core/wasm_capabilities_bindings.c",
+      "subsystem": "capabilities",
+      "symbol": "wasm_capabilities_register"
+    },
+    {
+      "namespace": "console",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "console",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": "console",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "console",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "console",
+      "symbol": "wasm_canvas_create"
+    },
+    {
+      "namespace": "sys.device",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/device/js_device_bindings.c",
+      "subsystem": "device",
+      "symbol": "js_device_init"
+    },
+    {
+      "namespace": "sys.device",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/device/lua_device_bindings.c",
+      "subsystem": "device",
+      "symbol": "lua_device_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/device/wasm_device_bindings.c",
+      "subsystem": "device",
+      "symbol": "wasm_device_register"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "drawing_resources",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "sys.path",
+        "sys.svg",
+        "sys.font"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "drawing_resources",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": [
+        "sys.path",
+        "sys.svg",
+        "sys.font"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "drawing_resources",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "drawing_resources",
+      "symbol": "wasm_canvas_create"
+    },
+    {
+      "namespace": [
+        "sys.files",
+        "sys.assets"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/file/js_file_bindings.c",
+      "subsystem": "file",
+      "symbol": "js_file_init"
+    },
+    {
+      "namespace": [
+        "sys.files",
+        "sys.assets"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/file/lua_file_bindings.c",
+      "subsystem": "file",
+      "symbol": "lua_file_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/file/wasm_file_bindings.c",
+      "subsystem": "file",
+      "symbol": "wasm_file_register"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "gl",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "sys.gl",
+        "sys.gl.screen"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "gl",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": "sys.gl",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "gl",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "gl",
+      "symbol": "wasm_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "input_window",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "sys.input",
+        "sys.window"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "input_window",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": [
+        "sys.input",
+        "sys.window"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "input_window",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "input_window",
+      "symbol": "wasm_canvas_create"
+    },
+    {
+      "namespace": "sys.llamacpp",
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "runtime": "javascript",
+      "source": "src/llamacpp/js_llamacpp_bindings.cpp",
+      "subsystem": "llamacpp",
+      "symbol": "js_llamacpp_init"
+    },
+    {
+      "namespace": "sys.llamacpp",
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "runtime": "lua",
+      "source": "src/llamacpp/lua_llamacpp_bindings.cpp",
+      "subsystem": "llamacpp",
+      "symbol": "lua_llamacpp_init"
+    },
+    {
+      "namespace": "sys.sensors",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/magneto/js_magneto_bindings.c",
+      "subsystem": "magneto",
+      "symbol": "js_magneto_init"
+    },
+    {
+      "namespace": "sys.sensors",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/magneto/lua_magneto_bindings.c",
+      "subsystem": "magneto",
+      "symbol": "lua_magneto_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/magneto/wasm_magneto_bindings.c",
+      "subsystem": "magneto",
+      "symbol": "wasm_magneto_register"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "math",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": "sys.math",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/math/js_math_bindings.c",
+      "subsystem": "math",
+      "symbol": "js_math_init"
+    },
+    {
+      "namespace": "sys.math",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/math/lua_math_bindings.c",
+      "subsystem": "math",
+      "symbol": "lua_math_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/math/wasm_math_bindings.c",
+      "subsystem": "math",
+      "symbol": "wasm_math_register"
+    },
+    {
+      "namespace": "sys.midi",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/midi/js_midi_bindings.c",
+      "subsystem": "midi",
+      "symbol": "js_midi_init"
+    },
+    {
+      "namespace": "sys.midi",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/midi/lua_midi_bindings.c",
+      "subsystem": "midi",
+      "symbol": "lua_midi_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/midi/wasm_midi_bindings.c",
+      "subsystem": "midi",
+      "symbol": "wasm_midi_register"
+    },
+    {
+      "namespace": [
+        "guest.exports",
+        "runtime"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "module_lifecycle",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "language",
+        "runtime"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "module_lifecycle",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": [
+        "language",
+        "runtime"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "module_lifecycle",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": [
+        "guest.exports",
+        "runtime"
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "module_lifecycle",
+      "symbol": "wasm_canvas_load_wasm_file"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "network",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "sys.net",
+        "global",
+        "Response",
+        "Headers"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/network/js_network_bindings.c",
+      "subsystem": "network",
+      "symbol": "js_network_init"
+    },
+    {
+      "namespace": [
+        "sys.net",
+        "global"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/network/lua_network_bindings.c",
+      "subsystem": "network",
+      "symbol": "lua_network_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/network/wasm_network_bindings.c",
+      "subsystem": "network",
+      "symbol": "wasm_network_register"
+    },
+    {
+      "namespace": "sys.neural",
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "runtime": "javascript",
+      "source": "src/neural/js_neural_bindings.c",
+      "subsystem": "neural",
+      "symbol": "js_neural_init"
+    },
+    {
+      "namespace": "sys.neural",
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "runtime": "lua",
+      "source": "src/neural/lua_neural_bindings.c",
+      "subsystem": "neural",
+      "symbol": "lua_neural_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/neural/wasm_neural_bindings.c",
+      "subsystem": "neural",
+      "symbol": "wasm_neural_register"
+    },
+    {
+      "namespace": "guest.exports",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "scheduling",
+      "symbol": "js_web_wasm_start"
+    },
+    {
+      "namespace": [
+        "sys.animation",
+        "sys.timer"
+      ],
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_core_bindings.c",
+      "subsystem": "scheduling",
+      "symbol": "js_runtime_create"
+    },
+    {
+      "namespace": "sys.animation",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/graphics/lua_canvas_bindings.c",
+      "subsystem": "scheduling",
+      "symbol": "lua_canvas_create"
+    },
+    {
+      "namespace": "guest.exports",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/graphics/wasm_canvas_bindings.c",
+      "subsystem": "scheduling",
+      "symbol": "wasm_canvas_load_wasm_file"
+    },
+    {
+      "namespace": "sys.db",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/sqlite/js_sqlite_bindings.c",
+      "subsystem": "sqlite",
+      "symbol": "js_sqlite_init"
+    },
+    {
+      "namespace": "sys.db",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/sqlite/lua_sqlite_bindings.c",
+      "subsystem": "sqlite",
+      "symbol": "lua_sqlite_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/sqlite/wasm_sqlite_bindings.c",
+      "subsystem": "sqlite",
+      "symbol": "wasm_sqlite_register"
+    },
+    {
+      "namespace": "sys.net.udp",
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "runtime": "javascript",
+      "source": "src/network/js_udp_bindings.c",
+      "subsystem": "udp",
+      "symbol": "js_udp_init"
+    },
+    {
+      "namespace": "sys.net.udp",
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "runtime": "lua",
+      "source": "src/network/lua_udp_bindings.c",
+      "subsystem": "udp",
+      "symbol": "lua_udp_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/network/wasm_udp_bindings.c",
+      "subsystem": "udp",
+      "symbol": "wasm_udp_register"
+    }
+  ],
+  "version": 1
+}

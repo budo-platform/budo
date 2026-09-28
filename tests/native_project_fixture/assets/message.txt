@@ -1,0 +1,1 @@
+Native project assets are staged beside the executable.

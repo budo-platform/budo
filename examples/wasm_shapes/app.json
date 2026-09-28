@@ -1,0 +1,5 @@
+{
+    "name": "WASM Shapes",
+    "description": "WebAssembly example drawing basic shapes through Budo host imports.",
+    "icon": "icon.svg"
+}

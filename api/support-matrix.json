@@ -1,0 +1,2282 @@
+{
+  "subsystems": {
+    "audio": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 5,
+      "errorConvention": {
+        "javascript": {
+          "details": "Unavailable contexts and backend failures produce no-ops, false, 0.0, or -1 depending on the operation; loadBufferFromBuffer throws TypeError for a non-ArrayBuffer, and getError exposes the backend message. Most other missing or coercible arguments are accepted without throwing.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "lua": {
+          "details": "luaL argument checks and setBufferData allocation failure raise Lua errors; unavailable contexts and backend failures otherwise produce no-ops, false, fallback gain 0.5, or -1, and getError exposes the backend message.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "wasmtime": {
+          "details": "Host calls do not trap: mutating imports become no-ops when audio is unavailable and audio_create_oscillator returns -1. Wasmtime exposes neither getError nor buffer, playback-state, or master-gain query imports.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 25,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "Binding state and AudioContext wrappers are instance-owned, while Android audio initialization, cached JNI method IDs, and the AudioTrack helper remain process-global platform state.",
+            "AAudio streams are stored per AndroidAudioContext, but concurrent backend operation, especially through the shared AudioTrack fallback helper, is not guaranteed by binding isolation."
+          ],
+          "source": "private/android/android/app/src/main/cpp/android_audio.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua register sys.audio on web.",
+            "Browser-native WebAssembly receives no env.audio_* imports.",
+            "Each managed adapter owns its C binding state and asset root, but web_audio routes all wrappers through the single Module._hw_audio Web Audio graph; concurrent independent web backends are not supported."
+          ],
+          "source": "src/web/web_audio.c"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 5,
+          "exportCount": 30,
+          "namespace": "sys.audio",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 5,
+          "exportCount": 30,
+          "namespace": "sys.audio",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 15,
+          "namespace": "env",
+          "omittedOperations": [
+            "is_playing",
+            "get_master_gain",
+            "load_buffer",
+            "load_buffer_from_buffer",
+            "create_buffer",
+            "set_buffer_data",
+            "destroy_buffer",
+            "play_buffer",
+            "stop_buffer",
+            "get_error"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no audio_* imports; browser audio is exposed only to the managed JavaScript and Lua runtimes.",
+          "verifiedAbsentExportPrefixes": [
+            "audio_"
+          ]
+        }
+      }
+    },
+    "canvas": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "Browser env imports do not trap. Missing canvas or paint makes drawing and state changes no-ops; drawText returns 0. The browser bridge exposes only a portable subset and performs no guest-memory pixel readback or text measurement.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "javascript": {
+          "details": "QuickJS coercion accepts many numeric values, but invalid colors, stroke modes, filter arguments, buffers, or failed allocations can throw. Drawing without an active canvas is generally a no-op; getError returns and clears paint/filter errors.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "luaL argument checks raise Lua errors for invalid required values and failed allocations. Drawing without an active canvas is generally a no-op; getError returns and clears paint/filter errors.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "Host imports do not trap. Missing canvas, paint, memory, or invalid handles make void imports no-ops; canvas_read_pixels returns 0, text measurement returns 0, and output pointers are written only when valid.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 41,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "Android has managed JavaScript and Lua canvas bindings but no Wasmtime or browser-native WebAssembly runtime."
+          ],
+          "source": "src/graphics/js_canvas_bindings.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua use the same Skia-backed canvas binding tables as desktop and Android.",
+            "Browser-native WebAssembly exposes 11 canvas/paint imports and five transform imports; it omits pixel readback, text measurement, oval/point/arc drawing, stroke cap/join, advanced filters, skew, reset, and clipping.",
+            "Browser-native drawText bridges guest UTF-8 through temporary Emscripten memory, while Wasmtime reads directly from the guest memory export."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 17,
+          "namespace": "env",
+          "omittedOperations": [
+            "svg_draw",
+            "read_pixels",
+            "draw_oval",
+            "draw_point",
+            "measure_text",
+            "measure_text_rect",
+            "draw_arc",
+            "font_set",
+            "set_stroke_cap",
+            "set_stroke_join",
+            "set_blend_mode",
+            "set_image_filter",
+            "set_color_filter",
+            "set_blur_filter",
+            "set_drop_shadow_filter",
+            "set_drop_shadow_only_filter",
+            "clear_image_filter",
+            "set_color_matrix_filter",
+            "set_blend_color_filter",
+            "clear_color_filter",
+            "rotate_around",
+            "skew",
+            "reset_transform",
+            "clip_rect"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 33,
+          "namespace": [
+            "sys.canvas"
+          ],
+          "omittedOperations": [
+            "set_blur_filter",
+            "set_drop_shadow_filter",
+            "set_drop_shadow_only_filter",
+            "clear_image_filter",
+            "set_color_matrix_filter",
+            "set_blend_color_filter",
+            "clear_color_filter",
+            "rotate_around"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 33,
+          "namespace": [
+            "sys.canvas"
+          ],
+          "omittedOperations": [
+            "set_blur_filter",
+            "set_drop_shadow_filter",
+            "set_drop_shadow_only_filter",
+            "clear_image_filter",
+            "set_color_matrix_filter",
+            "set_blend_color_filter",
+            "clear_color_filter",
+            "rotate_around"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 36,
+          "namespace": "env",
+          "omittedOperations": [
+            "font_set",
+            "set_stroke_cap",
+            "set_stroke_join",
+            "set_image_filter",
+            "set_color_filter"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "The web host keeps one browser-WASM paint and fixed path registry in WebAppState and lends the current window canvas to bridge calls.",
+        "javascript": "Each JSCanvasContext owns its default paint, path/SVG/font registries, timers, callback values, and QuickJS runtime. Callbacks recover that instance through QuickJS context/runtime opaque data; no mutable process-global canvas context is retained. The frame host lends the current canvas, input, and window pointers.",
+        "lua": "Each LuaCanvasContext owns its default paint, path/SVG/font registries, callback reference, and Lua state. Callbacks recover that instance from the owning Lua state's private registry entry, keyed by an immutable file-scope identity token; no mutable process-global canvas context is retained. The frame host lends the current canvas, input, and window pointers.",
+        "wasmtime": "Each WasmCanvasContext owns its default paint, path/SVG registries, Wasmtime engine/linker/store/module, and subsystem binding states. Every canvas host callback receives that instance through its linker environment; no mutable process-global canvas context is retained. The frame host lends the current canvas, input, and window pointers."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "canvas_texture": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "Creation and resize require positive dimensions and throw on invalid arguments or allocation failure. Methods throw TypeError for an invalid/destroyed receiver where checked; destroy is idempotent after clearing the object metadata.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        }
+      },
+      "operationCount": 26,
+      "platformDifferences": {
+        "web": {
+          "details": [
+            "Managed JavaScript exposes CanvasTexture on web through the Skia-WASM GL backend.",
+            "Managed Lua and browser-native WebAssembly expose no equivalent surface.",
+            "The public object has id, width, height, texture, target, and canvas data properties; callable registration coverage is tracked here separately from those constructed fields."
+          ],
+          "source": "src/graphics/js_canvas_bindings.c"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 26,
+          "namespace": [
+            "sys.graphics",
+            "CanvasTexture",
+            "CanvasTexture.canvas"
+          ],
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "javascript": "JSCanvasContext owns every created CanvasTexture and destroys any live entries during context teardown. Each object exposes copied id/size/GL metadata plus methods that resolve the id back through that owning context."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no CanvasTexture creation or object API.",
+          "verifiedAbsentExportPrefixes": [
+            "canvas_texture_",
+            "graphics_"
+          ]
+        },
+        "lua": {
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ],
+          "reason": "Lua registers no sys.graphics table and exposes no CanvasTexture object methods.",
+          "verifiedAbsentExportPrefixes": []
+        },
+        "wasmtime": {
+          "platforms": [
+            "desktop"
+          ],
+          "reason": "Wasmtime registers no canvas_texture_* or graphics_* host imports.",
+          "verifiedAbsentExportPrefixes": []
+        }
+      }
+    },
+    "capabilities": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": "never_fails",
+      "operationCount": 6,
+      "platformDifferences": {},
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "sys.capabilities",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "sys.capabilities",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "env",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "javascript": "No lifecycle: registration reads one caller-owned CapabilitySnapshot through capabilities_get_snapshot, retains no state, requires no polling or cleanup, and the VM owns the registered objects.",
+        "lua": "No lifecycle: registration reads one caller-owned CapabilitySnapshot through capabilities_get_snapshot, retains no state, requires no polling or cleanup, and the VM owns the registered tables.",
+        "wasmtime": "No independent lifecycle: each host call reads a caller-owned CapabilitySnapshot and retains no state; linker functions are owned by WasmCanvasContext."
+      },
+      "typescript": {
+        "description": "Stable per-feature availability probes for the current process and platform.",
+        "interface": "SysCapabilities",
+        "kind": "capability_entries"
+      },
+      "unsupportedRuntimes": {}
+    },
+    "console": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "console.log stringifies each argument when possible, skips failed conversions, and returns undefined. Desktop/web print a space-separated line to stdout; Android writes one line to logcat.",
+          "kind": "never_fails"
+        },
+        "lua": {
+          "details": "console.log prints every Lua argument using tostring-style conversion and returns no values; output goes through the C runtime stream used by the host.",
+          "kind": "never_fails"
+        },
+        "wasmtime": {
+          "details": "The two scalar logging imports print one signed i32 or f32 followed by a newline and never trap.",
+          "kind": "never_fails"
+        }
+      },
+      "operationCount": 3,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "JavaScript console.log writes a bounded combined line through Android logcat; Lua follows its C stream implementation."
+          ],
+          "source": "src/graphics/js_canvas_bindings.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua expose console.log, while browser-native WebAssembly has no guest logging import despite host-side BudoWasmRunner console messages."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "console",
+          "omittedOperations": [
+            "log_int",
+            "log_float"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "console",
+          "omittedOperations": [
+            "log_int",
+            "log_float"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 2,
+          "namespace": "env",
+          "omittedOperations": [
+            "log"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no log_* imports; the runner itself uses the browser console only for host status/error messages.",
+          "verifiedAbsentExportPrefixes": [
+            "log_"
+          ]
+        }
+      }
+    },
+    "device": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": "transient_returns_false",
+      "operationCount": 1,
+      "platformDifferences": {},
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "sys.device",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "sys.device",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "env",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "javascript": "Each runtime owns one DeviceContext captured through QuickJS function data. Desktop and web register it in SubsystemRegistry; Android destroys it from the managed driver shutdown. Cleanup releases keepScreenOn before the VM is destroyed.",
+        "lua": "Each runtime owns one DeviceContext captured through a Lua closure upvalue. Desktop and web register it in SubsystemRegistry; Android destroys it from the managed driver shutdown. Cleanup releases keepScreenOn before the VM is destroyed.",
+        "wasmtime": "WasmCanvasContext owns one DeviceContext passed as the host callback environment and destroys it during context teardown. Cleanup releases keepScreenOn before the store is destroyed."
+      },
+      "typescript": {
+        "description": "Device-level controls owned by the current application runtime.",
+        "interface": "SysDevice",
+        "kind": "methods"
+      },
+      "unsupportedRuntimes": {}
+    },
+    "drawing_resources": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "The browser bridge exposes only path create, move, line, close, and draw. Creation returns -1 after the fixed registry is full or allocation fails; invalid handles are ignored.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "javascript": {
+          "details": "Path calls ignore invalid handles, while failed path/SVG/font allocation or loading and invalid managed buffer arguments can throw or return -1 according to the binding. Runtime-owned handles are released when the canvas context is destroyed.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "luaL checks raise for invalid arguments and resource load failures. Invalid path/SVG handles generally become no-ops or zero dimensions; runtime-owned handles are released with the canvas context.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "Host imports do not trap. Creation/loading returns -1 on capacity, memory, path, or decode failure; invalid handles make void calls no-ops and SVG dimensions return 0.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 16,
+      "platformDifferences": {
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua expose the complete path, SVG, and font tables on web.",
+            "Browser-native WebAssembly exposes only five path imports and has no SVG or font imports.",
+            "Browser-native paths cannot be reset, curved, or extended with rectangle/circle helpers; Wasmtime exposes the complete path and SVG import sets but no font imports."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 4,
+          "namespace": "env",
+          "omittedOperations": [
+            "path_reset",
+            "path_quad_to",
+            "path_cubic_to",
+            "path_add_rect",
+            "path_add_circle",
+            "svg_load",
+            "svg_load_from_buffer",
+            "svg_destroy",
+            "svg_get_width",
+            "svg_get_height",
+            "font_load",
+            "font_load_from_buffer"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 16,
+          "namespace": [
+            "sys.path",
+            "sys.svg",
+            "sys.font"
+          ],
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 16,
+          "namespace": [
+            "sys.path",
+            "sys.svg",
+            "sys.font"
+          ],
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 14,
+          "namespace": "env",
+          "omittedOperations": [
+            "font_load",
+            "font_load_from_buffer"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "WebAppState owns a fixed-capacity path registry for the active browser-WASM app and destroys it during web shutdown.",
+        "javascript": "JSCanvasContext owns all path, SVG, and font handles and the copied font names; explicit SVG destroy clears a slot, while paths and fonts otherwise live until context destruction.",
+        "lua": "LuaCanvasContext owns all path, SVG, and font handles and copied font names; explicit SVG destroy clears a slot, while paths and fonts otherwise live until context destruction.",
+        "wasmtime": "WasmCanvasContext owns fixed-capacity path and SVG handle registries; there is no Wasmtime font-management import surface."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "file": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "Wrong arity or type and unsafe virtual paths throw; missing roots, missing or denied entries, I/O failures, and picker launch contention return null or false, with sys.files.getError and sys.assets.getError sharing the wrapper error string.",
+          "kind": "throw_programmer_error_return_falsy_transient"
+        },
+        "lua": {
+          "details": "luaL checks reject wrong arguments and unsafe paths; missing roots, missing or denied entries, and I/O failures return nil or false, with sys.files.getError and sys.assets.getError sharing the wrapper error string.",
+          "kind": "throw_programmer_error_return_falsy_transient"
+        },
+        "wasmtime": {
+          "details": "Host calls do not trap and expose no get-error import: list, reads, and size return -1 on failure while exists and is_directory return 0; successful output writes may be truncated to the guest buffer and return the bytes copied.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 12,
+      "platformDifferences": {},
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 19,
+          "namespace": [
+            "sys.files",
+            "sys.assets"
+          ],
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 16,
+          "namespace": [
+            "sys.files",
+            "sys.assets"
+          ],
+          "omittedOperations": [
+            "append_binary",
+            "pick_text",
+            "save_text"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "env",
+          "omittedOperations": [
+            "write_text",
+            "write_binary",
+            "append_binary",
+            "pick_text",
+            "save_text",
+            "get_error"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no files_* imports.",
+          "verifiedAbsentExportPrefixes": [
+            "files_"
+          ]
+        }
+      }
+    },
+    "gl": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "Browser env imports do not throw into the guest. Creation returns -1 and buffer upload returns 0 on failure; void imports are no-ops without a window or valid temporary-memory range. Only eleven GL imports are exposed.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "javascript": {
+          "details": "QuickJS validates object receivers, buffers, enum strings, dimensions, and required arguments, and throws TypeError, RangeError, or InternalError on invalid input or wrapper failure. getLastError returns the window GL error string without adding a Wasm-style copy ABI.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "luaL checks raise for invalid arguments; resource creation and most immediate GL failures raise Lua errors using the window GL error. Destruction functions are generally tolerant of missing context or stale ids.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "Host imports do not trap. Resource creation and attribute lookup return -1 on missing context, invalid guest memory, or wrapper failure; upload and resize imports return 0 on failure; void imports become no-ops and retain the last error only inside WasmCanvasContext.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 53,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "Android exposes managed JavaScript and Lua GL tables but no Wasmtime or browser-native WebAssembly runtime."
+          ],
+          "source": "src/graphics/lua_canvas_bindings.c"
+        },
+        "desktop": {
+          "details": [
+            "JavaScript alone exposes object-style sys.gl.screen methods in addition to numeric sys.gl calls.",
+            "Lua and Wasmtime route drawFullscreen, drawRegion, bindTexture, texture binding, and drawMesh through immediate wrappers; JavaScript separately exposes queued and immediate forms where registered.",
+            "The TypeScript declaration advertises createTextureCube and drawMeshInstanced, but neither name appears in the JavaScript registration table; the source-backed callable surface contains loadTextureCube and drawMesh instead."
+          ],
+          "source": "src/graphics/js_canvas_bindings.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua expose their complete registered GL tables through the web host.",
+            "Browser-native WebAssembly exposes only program creation, fullscreen draw, two scalar uniforms, mat4 arrays, buffer create/upload, vertex-layout create/configuration, and mesh draw.",
+            "Browser-native WebAssembly omits destruction, render targets, textures, cubemaps, most uniforms, buffer sub-data, vertex-layout destruction, and attribute lookup.",
+            "Wasmtime and browser-WASM use the same name for several imports but browser-WASM implements a strict subset and copies guest data through temporary Emscripten allocations."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 11,
+          "namespace": "env",
+          "omittedOperations": [
+            "create_program_from_buffer",
+            "destroy_program",
+            "use_program",
+            "bind_screen",
+            "bind_render_target",
+            "draw_fullscreen_immediate",
+            "set_uniform_1i",
+            "set_uniform_3f",
+            "set_uniform_4f",
+            "get_last_error",
+            "get_project_dir",
+            "create_render_target",
+            "destroy_render_target",
+            "resize_render_target",
+            "draw_region",
+            "draw_region_immediate",
+            "bind_render_target_texture",
+            "bind_render_target_texture_immediate",
+            "bind_canvas_texture",
+            "program_texture",
+            "update_buffer",
+            "destroy_buffer",
+            "create_texture_2d",
+            "load_texture_2d",
+            "load_texture_2d_from_buffer",
+            "load_texture_cube",
+            "load_texture_cube_from_buffer",
+            "update_texture_2d",
+            "destroy_texture",
+            "destroy_vertex_layout",
+            "set_uniform_matrix3",
+            "set_uniform_1iv",
+            "set_uniform_1fv",
+            "set_uniform_2fv",
+            "set_uniform_3fv",
+            "set_uniform_4fv",
+            "bind_texture_2d",
+            "bind_texture_2d_immediate",
+            "bind_texture_cube",
+            "bind_texture_cube_immediate",
+            "draw_mesh",
+            "get_attrib_location"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 50,
+          "namespace": [
+            "sys.gl",
+            "sys.gl.screen"
+          ],
+          "omittedOperations": [
+            "buffer_data",
+            "bind_texture_2d_immediate",
+            "bind_texture_cube_immediate"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 44,
+          "namespace": "sys.gl",
+          "omittedOperations": [
+            "draw_fullscreen",
+            "draw_region",
+            "bind_render_target_texture",
+            "bind_canvas_texture",
+            "program_texture",
+            "buffer_data",
+            "bind_texture_2d",
+            "bind_texture_cube",
+            "draw_mesh"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 43,
+          "namespace": "env",
+          "omittedOperations": [
+            "draw_fullscreen",
+            "get_last_error",
+            "get_project_dir",
+            "draw_region",
+            "bind_render_target_texture",
+            "bind_canvas_texture",
+            "program_texture",
+            "bind_texture_2d",
+            "bind_texture_cube",
+            "draw_mesh"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "The web bridge copies guest strings and byte/float ranges into Emscripten memory for C wrappers; the WebAppState Window owns the resulting GL resources.",
+        "javascript": "Window owns app-created GL programs, targets, buffers, textures, and vertex layouts and resets them with the app runtime.",
+        "lua": "Lua exposes numeric resource ids only; all calls use the active LuaCanvasContext's borrowed Window, which owns and resets app-created GL resources.",
+        "wasmtime": "Wasmtime exposes numeric resource ids and reads strings/buffers from the guest memory export; the borrowed Window owns the underlying GL resources."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "input_window": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "Scalar browser env imports never throw into the guest. Width, height, and mouse coordinates return zero without host state; invalid mouse buttons return false. No density, keyboard, timing, touch, focus, or text-input imports exist.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "javascript": {
+          "details": "Snapshot and window queries return undefined, false, zero-like defaults, or density 1 when context is unavailable. Text-input methods require a structured options object and can throw TypeError or conversion exceptions; valid platform requests return a boolean.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "Snapshot and window queries return nil, false, zero, or density 1 when context is unavailable. luaL checks raise for invalid scancodes or text-input option tables; valid platform requests return a boolean.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "Scalar host imports never trap. Missing context/input returns zero, false, or density 1; out-of-range mouse buttons and scancodes return false. No snapshot, touch, text-input, key-pressed, focus, or frame-count imports exist.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 14,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "Android exposes managed JavaScript and Lua only; text-input methods route through platform callbacks and the snapshot carries UTF-8 committed text plus UTF-16 selection indices.",
+            "There is no Android Wasmtime or browser-native WebAssembly runtime."
+          ],
+          "source": "src/core/input.h"
+        },
+        "desktop": {
+          "details": [
+            "Wasmtime input is scalar and omits the managed touch arrays, per-frame key-pressed query, IME editing state, frame count, and focus state."
+          ],
+          "source": "src/graphics/wasm_canvas_bindings.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua expose the complete snapshot, key, IME, dimensions, and density tables on web.",
+            "Browser-native WebAssembly exposes only width, height, mouse x/y, and mouse-button state; Wasmtime additionally exposes density, key-down, delta time, and total time.",
+            "Browser-native mouse-button validation accepts the host INPUT_MOUSE_MAX range, while Wasmtime explicitly accepts only indices 0 through 2.",
+            "Managed snapshots include mouse, unified pointer, active pointers, modifiers, committed text, replacement edits, composition state, timing, frame count, and focus."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 5,
+          "namespace": "env",
+          "omittedOperations": [
+            "input_snapshot",
+            "key_down",
+            "key_pressed",
+            "start_text_input",
+            "update_text_input",
+            "stop_text_input",
+            "display_density",
+            "delta_time",
+            "total_time"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 9,
+          "namespace": [
+            "sys.input",
+            "sys.window"
+          ],
+          "omittedOperations": [
+            "mouse_x",
+            "mouse_y",
+            "mouse_button",
+            "delta_time",
+            "total_time"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 9,
+          "namespace": [
+            "sys.input",
+            "sys.window"
+          ],
+          "omittedOperations": [
+            "mouse_x",
+            "mouse_y",
+            "mouse_button",
+            "delta_time",
+            "total_time"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 9,
+          "namespace": "env",
+          "omittedOperations": [
+            "input_snapshot",
+            "key_pressed",
+            "start_text_input",
+            "update_text_input",
+            "stop_text_input"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "WebAppState owns InputState and Window directly; browser env closures read them synchronously.",
+        "javascript": "JSCanvasContext borrows the frame host's InputState and Window and copies current dimensions and display density before loading and before each frame callback. Returned input snapshots are new QuickJS objects.",
+        "lua": "LuaCanvasContext borrows the frame host's InputState and Window and copies current dimensions and display density before loading and before each frame callback. Returned input snapshots are new Lua tables.",
+        "wasmtime": "WasmCanvasContext borrows the current InputState and Window and stores copied dimensions/density; scalar imports read that state synchronously."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "llamacpp": {
+      "availabilityGates": [
+        {
+          "behavior": "ENABLE_LLAMACPP is OFF by default on desktop and enabled by the private Android pack. The pinned revision builds CPU support everywhere and Metal on macOS; Budo registers sys.llamacpp after the file service.",
+          "kind": "compile_time",
+          "platforms": [
+            "desktop"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "source": "CMakeLists.txt",
+          "source_symbols": [
+            "ENABLE_LLAMACPP",
+            "BUDO_LLAMACPP",
+            "llama"
+          ]
+        }
+      ],
+      "capabilityGate": null,
+      "capabilityRelationships": [
+        {
+          "applies_to": [
+            "is_available",
+            "get_devices",
+            "load_model"
+          ],
+          "kind": "availability_probe",
+          "operation": "llamacpp",
+          "required_for_registration": true,
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "subsystem": "capabilities",
+          "unavailable_behavior": "sys.capabilities.llamacpp.available is false and sys.llamacpp is absent when BUDO_LLAMACPP is not compiled."
+        }
+      ],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "Invalid arguments and synchronous sandbox or queue failures throw. Asynchronous model-load and generation failures are delivered through callbacks on the owning runtime thread.",
+          "kind": "throw_programmer_error_report_async_failure"
+        },
+        "lua": {
+          "details": "Invalid arguments and synchronous sandbox or queue failures raise Lua errors. Asynchronous model-load failures are delivered through the callback on the owning runtime thread.",
+          "kind": "throw_programmer_error_report_async_failure"
+        }
+      },
+      "operationCount": 4,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "The private arm64-v8a feature pack builds the pinned CPU backend and registers JavaScript and Lua after the file service.",
+            "Models load from the files/ mount without APK duplication; runtime pause cooperatively cancels active generation while retaining loaded models."
+          ],
+          "source": "private/android/android/app/src/main/cpp/android_main.cpp"
+        },
+        "desktop": {
+          "details": [
+            "CPU is mandatory; Metal is compiled on macOS.",
+            "Models are opened through FileContext using no-follow traversal and passed to llama.cpp as caller-owned FILE streams.",
+            "A single worker serializes model loading and generation; callbacks run only during subsystem polling.",
+            "Automatic placement cache records are keyed by the pinned llama.cpp revision, sandbox file identity and size, context size, and batch size; explicit placement bypasses the cache.",
+            "CUDA and Vulkan are opt-in dynamic ggml backend profiles requiring their vendor SDK and shared-library staging beside budo."
+          ],
+          "source": "src/core/main.c"
+        },
+        "web": {
+          "details": [
+            "No sources or API are compiled for web."
+          ],
+          "source": "web/CMakeLists.txt"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 4,
+          "namespace": "sys.llamacpp",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 4,
+          "namespace": "sys.llamacpp",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "cleanup": "Cleanup rejects stale events, cancels work, joins the worker, releases chats before models, drains event payloads, releases VM callbacks, and shuts down the process-counted llama backend reference.",
+        "javascript": "Each runtime owns one JsLlamaCppContext, service, worker, handle tables, queue, and copied callback references. Polling is the only path that invokes QuickJS.",
+        "lua": "Each runtime owns one LuaLlamaCppContext, service, worker, handle tables, queue, and Lua registry callback references. Polling is the only path that invokes Lua."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "llama.cpp is intentionally omitted from the web build.",
+          "verifiedAbsentExportPrefixes": []
+        },
+        "wasmtime": {
+          "platforms": [
+            "desktop",
+            "android"
+          ],
+          "reason": "The managed object and callback API has no Wasmtime handle/polling contract.",
+          "verifiedAbsentExportPrefixes": []
+        }
+      }
+    },
+    "magneto": {
+      "availabilityGates": [],
+      "capabilityGate": {
+        "kind": "availability_probe",
+        "operation": "sensors",
+        "required_for_registration": false,
+        "subsystem": "capabilities",
+        "unavailable_behavior": "The magneto API remains registered; capability false predicts false availability/start results and null, nil, or zero readings."
+      },
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "Availability, start, and active probes return false when the context or sensor is unavailable; getAccel and getCompass return null until valid active sensor data exists, and stop is a no-op when inactive.",
+          "kind": "unavailable_returns_false_or_null"
+        },
+        "lua": {
+          "details": "Availability, start, and active probes return false when the context or sensor is unavailable; getAccel and getCompass return nil until valid active sensor data exists, and stop is a no-op when inactive.",
+          "kind": "unavailable_returns_false_or_null"
+        },
+        "wasmtime": {
+          "details": "Availability, start, and active imports return 0 when unavailable; scalar reading imports return 0.0 when the context is absent or no valid reading exists, so callers must use the availability and active probes.",
+          "kind": "unavailable_returns_false_or_zero"
+        }
+      },
+      "operationCount": 8,
+      "platformDifferences": {},
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 8,
+          "namespace": "sys.sensors",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 8,
+          "namespace": "sys.sensors",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 13,
+          "namespace": "env",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no magneto_* imports.",
+          "verifiedAbsentExportPrefixes": [
+            "magneto_"
+          ]
+        }
+      }
+    },
+    "math": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": "programmer_error_on_invalid_buffer",
+      "operationCount": 26,
+      "platformDifferences": {},
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "env",
+          "omittedOperations": [
+            "mat4_ortho",
+            "mat4_translate",
+            "mat4_rotate_z",
+            "mat4_scale",
+            "mat4_invert",
+            "mat4_transpose",
+            "vec3_add",
+            "vec3_sub",
+            "vec3_scale",
+            "vec3_normalize",
+            "vec3_cross",
+            "vec3_dot",
+            "vec3_length",
+            "vec3_transform_mat4",
+            "vec3_normalize_many",
+            "vec3_transform_mat4_many",
+            "quat_from_axis_angle",
+            "quat_multiply",
+            "quat_slerp",
+            "quat_to_mat4"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 26,
+          "namespace": "sys.math",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 26,
+          "namespace": "sys.math",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 24,
+          "namespace": "env",
+          "omittedOperations": [
+            "vec3_normalize_many",
+            "vec3_transform_mat4_many"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "No native lifecycle: imports operate on the current browser WebAssembly instance memory and are discarded with that instance.",
+        "javascript": "No lifecycle: math registration retains no mutable state, requires no polling or cleanup, and functions operate only on caller-owned arrays.",
+        "lua": "No lifecycle: math registration retains no mutable state, requires no polling or cleanup, and functions operate only on caller-owned tables and temporary C arrays.",
+        "wasmtime": "WasmCanvasContext owns the memory/error adapter state; math has no independent registry entry and is destroyed with that parent runtime."
+      },
+      "typescript": {
+        "description": "In-place 3D math helpers. Matrices, vectors, and quaternions use caller-owned Float32Array storage; mat4 values are column-major.",
+        "interface": "SysMath",
+        "kind": "methods"
+      },
+      "unsupportedRuntimes": {}
+    },
+    "midi": {
+      "availabilityGates": [],
+      "capabilityGate": {
+        "kind": "availability_probe",
+        "operation": "midi",
+        "required_for_registration": false,
+        "subsystem": "capabilities",
+        "unavailable_behavior": "The managed API remains registered. The probe describes whether the build ships a MIDI backend, not whether a device is attached, browser permission has completed, or RTP-MIDI is available."
+      },
+      "capabilityRelationships": [
+        {
+          "applies_to": [
+            "create_session",
+            "connect_session",
+            "destroy_session",
+            "on_session_message",
+            "session_send",
+            "session_note_on",
+            "session_note_off",
+            "session_control_change",
+            "session_send_raw",
+            "get_sessions",
+            "get_session_count"
+          ],
+          "kind": "required",
+          "operation": "udp",
+          "required_for_registration": false,
+          "subsystem": "capabilities",
+          "unavailable_behavior": "RTP-MIDI exports remain registered, but without the UDP-backed RTP context create returns -1, connect and sends return false, enumeration returns [] or 0, and callback or destroy operations are no-ops."
+        }
+      ],
+      "constantCount": 17,
+      "errorConvention": {
+        "javascript": {
+          "details": "The API remains registered when no MIDI or RTP context can be created. Local counts and lists return 0 or [], opens return -1, sends return false, and closes or callback registration become no-ops as indicated by each signature. onDevicesChanged throws TypeError for a value other than a function or null; most other short-arity and operational failures use sentinels. RTP-MIDI uses -1, false, [], or no-op when its UDP-backed context is absent. No managed getError export is provided.",
+          "kind": "throw_programmer_error_return_falsy_transient"
+        },
+        "lua": {
+          "details": "luaL argument checks raise errors for invalid arguments after the applicable context exists. An absent local or RTP context can short-circuit first to 0, an empty table, -1, false, or no result as indicated by each signature. Operational device and session failures use the same sentinels. No managed getError export is provided.",
+          "kind": "throw_programmer_error_return_falsy_transient"
+        },
+        "wasmtime": {
+          "details": "Host imports do not deliberately trap. Missing contexts, invalid handles, and failed sends return 0; opens and RTP session creation return -1. Guest-memory imports return 0 or -1 when memory is unavailable or a pointer/length range is invalid. Close and destroy imports are no-ops when unavailable. No MIDI or RTP error-string import is provided.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 32,
+      "platformDifferences": {
+        "web": {
+          "details": [
+            "Local MIDI uses navigator.requestMIDIAccess asynchronously. Enumeration is initially empty and opens or sends fail until access is ready; lack of browser support or denied permission does not remove sys.midi and does not make the build-level sys.capabilities.midi probe false.",
+            "The backend first requests SysEx permission and retries without SysEx if that request fails, so local non-SysEx MIDI can remain available while SysEx receive or send is unavailable.",
+            "Device topology changes originate from MIDIAccess.onstatechange and are delivered by the JavaScript or Lua frame-thread polling path.",
+            "Browsers have no raw UDP backend. All rtpmidi_* wrapper functions are stubs, and the JavaScript or Lua RTP exports remain present but return -1, false, [], or no result without invoking network I/O.",
+            "Browser-native WebAssembly receives no MIDI host imports."
+          ],
+          "source": "src/web/web_midi.c"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 17,
+          "exportCount": 48,
+          "namespace": "sys.midi",
+          "omittedOperations": [
+            "get_session_count"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 17,
+          "exportCount": 48,
+          "namespace": "sys.midi",
+          "omittedOperations": [
+            "get_session_count"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 16,
+          "namespace": "env",
+          "omittedOperations": [
+            "get_input_devices",
+            "get_output_devices",
+            "refresh_devices",
+            "on_devices_changed",
+            "open_input",
+            "close_input",
+            "channel_pressure",
+            "poly_pressure",
+            "get_type",
+            "get_channel",
+            "on_session_message",
+            "session_note_on",
+            "session_note_off",
+            "session_control_change",
+            "session_send_raw",
+            "get_sessions"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "cleanup": "Runtime ownership is ordered UDP then RTP-MIDI then managed MIDI so reverse registry shutdown makes binding callbacks inert before RtpMidiContext destruction and destroys RTP-MIDI before UDP. WasmCanvasContext enforces the same binding, RTP-MIDI, UDP teardown order internally.",
+        "javascript": "Each JsMidiContext owns its QuickJS context pointer, lazy local MidiContext, local and RTP callback references, topology observer, bounded regular MIDI/RTP queues, bounded inline SysEx storage, queue mutexes, and borrowed RtpMidiContext reference. Cleanup closes delivery queues, detaches RTP callbacks, destroys local MIDI delivery, releases VM references, and then frees queue state.",
+        "lua": "Each LuaMidiContext owns its lua_State pointer, lazy local MidiContext, local and RTP registry references, topology observer, bounded regular MIDI/RTP queues, bounded inline SysEx storage, queue mutexes, and borrowed RtpMidiContext reference. Cleanup closes delivery queues, detaches RTP callbacks, destroys local MIDI delivery, releases VM references, and then frees queue state.",
+        "wasmtime": "Each WasmMidiBindingState is the host-function env for one linker and owns its lazy local MidiContext plus borrowed RtpMidiContext, store, and memory references. WasmCanvasContext clears memory and detaches the RTP reference before destroying the MIDI env, destroys RTP-MIDI next, and destroys the UDP binding last."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no midi_* or rtpmidi_* imports; Web MIDI is exposed only through the JavaScript and Lua sys.midi bindings.",
+          "verifiedAbsentExportPrefixes": [
+            "midi_",
+            "rtpmidi_"
+          ]
+        }
+      }
+    },
+    "module_lifecycle": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "The runner requires /main.wasm and a guest memory export. Missing bytes, a staged WAT without compiled WASM, instantiation failure, missing memory, or an exception from optional init rejects startup and is logged by the runner catch block.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "javascript": {
+          "details": "Entrypoint and imported-module read, TypeScript stripping, compile, resolution, or evaluation failures print the QuickJS exception and fail runtime initialization. The custom normalizer rejects empty and absolute specifiers and any canonical path outside the project root.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "The runtime opens the standard Lua libraries, including package/require. Entrypoint load or execution errors are printed and fail initialization; required-module behavior follows the opened Lua package searchers rather than the JavaScript project-root normalizer.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "Module read, WAT conversion, compilation, instantiation, or linker failures make loading return false with a stored error. Exported memory is optional at instantiation but memory-dependent imports then return sentinels; optional init traps/errors are warned and do not make module loading fail.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 4,
+      "platformDifferences": {
+        "desktop": {
+          "details": [
+            "Desktop chooses JavaScript, Lua, or Wasmtime from the configured entrypoint; Wasmtime wires guest memory before optional init so init may safely call memory-dependent imports."
+          ],
+          "source": "src/core/main.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript loads the configured JS/TS entrypoint from the virtual filesystem and supports project-root-sandboxed ES module imports.",
+            "Managed Lua opens all standard libraries and loads /main.lua; require uses Lua package searchers rather than the QuickJS realpath sandbox.",
+            "Browser-native WebAssembly requires /main.wasm and exported memory, optionally calls init, and rejects a staged main.wat when no compiled main.wasm exists.",
+            "Wasmtime accepts .wasm and .wat and tolerates a missing memory export until a memory-dependent host import is used."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 3,
+          "namespace": [
+            "guest.exports",
+            "runtime"
+          ],
+          "omittedOperations": [
+            "module_import"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 2,
+          "namespace": [
+            "language",
+            "runtime"
+          ],
+          "omittedOperations": [
+            "guest_memory",
+            "guest_init"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 2,
+          "namespace": [
+            "language",
+            "runtime"
+          ],
+          "omittedOperations": [
+            "guest_memory",
+            "guest_init"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 3,
+          "namespace": [
+            "guest.exports",
+            "runtime"
+          ],
+          "omittedOperations": [
+            "module_import"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "BudoWasmRunner owns the WebAssembly instance and memory reference until shutdown/pagehide and clears the instance after network shutdown.",
+        "javascript": "JSCanvasContext owns the QuickJS runtime/context and installs a module normalizer/loader carrying the context as opaque state. Compiled modules are retained by QuickJS; pending jobs are drained by the frame host.",
+        "lua": "LuaCanvasContext owns one lua_State with the standard libraries opened; Lua owns loaded package modules until state destruction.",
+        "wasmtime": "WasmCanvasContext owns the engine, linker, store, compiled module, instance, and borrowed exported memory/function handles. Memory is wired into subsystem binding states before optional init runs."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "network": {
+      "availabilityGates": [],
+      "capabilityGate": {
+        "kind": "availability_probe",
+        "operation": "http",
+        "required_for_registration": false,
+        "subsystem": "capabilities",
+        "unavailable_behavior": "HTTP bindings are registered independently of the capability probe and app policy. The current probe is always true on supported builds; app.json network policy still decides whether each request may start."
+      },
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "Browser env imports do not throw into the guest. network_fetch returns -1 for invalid ranges, limits, JSON request headers, or slot exhaustion; request failures after slot allocation are reported only as status 2. Status uses 0 pending, 1 success, and 2 failure-or-invalid; status code, body length, and body copy return 0 when unavailable, and body copy may truncate. No response-header, final-URL, or error-text imports exist.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "javascript": {
+          "details": "Missing initialization or network policy, a missing URL, and exhausted binding-level Promise slots throw synchronously. Once a Promise is created, policy, validation, transport, redirect, size, timeout, and allocation failures reject it with Error; HTTP error status codes still resolve a Response. Response body readers throw on an invalid receiver or second consumption, and json also throws SyntaxError for invalid JSON. The public bodyUsed data property remains false even after the internal body-consumed flag is set.",
+          "kind": "throw_programmer_error_report_async_failure"
+        },
+        "lua": {
+          "details": "Missing initialization or network policy, invalid required arguments, a missing callback, exhausted binding-level callback slots, and json_parse failures raise Lua errors. Request start and asynchronous transport failures invoke callback(nil, error); success invokes callback(response, nil). Errors raised by the callback are printed to stderr and are not returned to the caller.",
+          "kind": "throw_programmer_error_report_async_failure"
+        },
+        "wasmtime": {
+          "details": "Host calls do not trap. network_fetch returns -1 before slot allocation on missing policy/context/memory, invalid ranges or limits, or slot exhaustion; an immediate request failure after allocation returns a ready slot whose status code/body accessors fail and whose error imports expose the message. Invalid or unavailable length/status queries return -1 except error length, which returns 0; copy calls return 0 and may truncate to the guest buffer.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 22,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "Android owns separate JavaScript or Lua network binding handles and polls the active handle explicitly.",
+            "Android has no Wasmtime guest runtime; managed cleanup cancels wrapper work before releasing QuickJS Promise functions or Lua registry references."
+          ],
+          "source": "private/android/android/app/src/main/cpp/android_main.cpp"
+        },
+        "desktop": {
+          "details": [
+            "JavaScript, Lua, and Wasmtime frame loops poll their own explicit network binding state.",
+            "Wasmtime network state is shut down before reverse subsystem teardown, while its callback environment allocation remains alive until the owning linker and store have been destroyed.",
+            "Managed and Wasmtime two-instance tests use a controllable mock backend and cover a completion arriving after one peer runtime has been destroyed."
+          ],
+          "source": "src/core/main.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript and Lua retain explicit binding state, expose the state-owned NetworkContext only to the browser transport bridge, and delegate transport to the browser Fetch API.",
+            "Browser-native WebAssembly exposes only fetch, status, status code, body length, body copy, and release; Wasmtime additionally exposes response headers, final URL, and error text.",
+            "The browser-WASM network_fetch ABI orders URL before method and accepts a JSON header object. Wasmtime orders method before URL and accepts name-colon-value lines, so the identically named import is not ABI-portable between them.",
+            "Browser-WASM status 2 merges request failure and invalid slot, while Wasmtime status returns -1 only for an invalid slot and exposes request errors separately.",
+            "The browser-native WebAssembly slot implementation remains independent from the managed and Wasmtime binding-state implementation."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "env",
+          "omittedOperations": [
+            "parse_json",
+            "headers_get",
+            "headers_has",
+            "headers_entries",
+            "headers_keys",
+            "headers_values",
+            "headers_for_each",
+            "response_text",
+            "response_json",
+            "response_array_buffer",
+            "fetch_response_headers_length",
+            "fetch_response_headers",
+            "fetch_response_url_length",
+            "fetch_response_url",
+            "fetch_error_length",
+            "fetch_error"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 10,
+          "namespace": [
+            "sys.net",
+            "global",
+            "Response",
+            "Headers"
+          ],
+          "omittedOperations": [
+            "parse_json",
+            "fetch_status",
+            "fetch_status_code",
+            "fetch_response_body_length",
+            "fetch_response_body",
+            "fetch_response_headers_length",
+            "fetch_response_headers",
+            "fetch_response_url_length",
+            "fetch_response_url",
+            "fetch_error_length",
+            "fetch_error",
+            "fetch_release"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 3,
+          "namespace": [
+            "sys.net",
+            "global"
+          ],
+          "omittedOperations": [
+            "headers_get",
+            "headers_has",
+            "headers_entries",
+            "headers_keys",
+            "headers_values",
+            "headers_for_each",
+            "response_text",
+            "response_json",
+            "response_array_buffer",
+            "fetch_status",
+            "fetch_status_code",
+            "fetch_response_body_length",
+            "fetch_response_body",
+            "fetch_response_headers_length",
+            "fetch_response_headers",
+            "fetch_response_url_length",
+            "fetch_response_url",
+            "fetch_error_length",
+            "fetch_error",
+            "fetch_release"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 12,
+          "namespace": "env",
+          "omittedOperations": [
+            "parse_json",
+            "headers_get",
+            "headers_has",
+            "headers_entries",
+            "headers_keys",
+            "headers_values",
+            "headers_for_each",
+            "response_text",
+            "response_json",
+            "response_array_buffer"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "cleanup": "Managed cleanup marks VM-owned state inactive and increments the binding generation before network_shutdown releases Promise functions or Lua registry references; retained fetch closures then fail without dereferencing freed transport state. Wasmtime shutdown invalidates completion records and clears memory before store teardown; final cleanup runs after linker/store destruction. Managed cleanup, Wasmtime shutdown, and registry shutdown are idempotent.",
+        "javascript": "QuickJS function-data ArrayBuffer storage owns each JsNetworkContext, including its NetworkContext, JSContext, per-runtime Response and Headers class IDs, generation, and pending Promise resolve/reject slots.",
+        "lua": "Lua closure full userdata owns each LuaNetworkContext, including its NetworkContext, lua_State, generation, and pending callback registry references.",
+        "wasmtime": "Each WasmNetworkBindingState is the Wasmtime callback environment and owns its NetworkContext, copied store and memory handles, runtime and slot generations, response slots, and stable completion records."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "neural": {
+      "availabilityGates": [
+        {
+          "behavior": "The root build adds all neural wrapper and binding sources and defines BUDO_NEURAL only while ENABLE_NEURAL remains enabled after the ONNX headers check. Without those sources there is no valid neural export surface.",
+          "kind": "compile_time",
+          "platforms": [
+            "desktop"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript",
+            "lua",
+            "wasmtime"
+          ],
+          "source": "CMakeLists.txt",
+          "source_symbols": [
+            "ENABLE_NEURAL",
+            "BUDO_NEURAL",
+            "wasm_neural_bindings"
+          ]
+        },
+        {
+          "behavior": "Android adds the managed neural sources, defines BUDO_NEURAL, and links the ABI-specific ONNX Runtime library only when the staged Android headers and shared library exist. Android exposes no Wasmtime runtime.",
+          "kind": "compile_time",
+          "platforms": [
+            "android"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "source": "private/android/android/app/src/main/cpp/CMakeLists.txt",
+          "source_symbols": [
+            "ORT_ANDROID_INCLUDE",
+            "BUDO_NEURAL",
+            "js_neural_bindings",
+            "lua_neural_bindings"
+          ]
+        },
+        {
+          "behavior": "On desktop, app.json must contain neural: true before a context is created and sys.neural is installed for JavaScript or Lua.",
+          "kind": "application_metadata",
+          "platforms": [
+            "desktop"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "source": "src/core/main.c",
+          "source_symbols": [
+            "neural_enabled",
+            "js_neural_init",
+            "lua_neural_init"
+          ]
+        },
+        {
+          "behavior": "Wasmtime env.neural_* imports are registered with instance-owned binding state while the canvas runtime is created, but app.json neural: true is required to create its NeuralContext. Without opt-in the imports remain and return failure sentinels.",
+          "kind": "application_metadata",
+          "platforms": [
+            "desktop"
+          ],
+          "registration_effect": "context_only",
+          "runtimes": [
+            "wasmtime"
+          ],
+          "source": "src/core/main.c",
+          "source_symbols": [
+            "neural_enabled",
+            "wasm_canvas_enable_neural"
+          ]
+        },
+        {
+          "behavior": "On Android, app.json must contain neural: true before a context is created and sys.neural is installed for JavaScript or Lua.",
+          "kind": "application_metadata",
+          "platforms": [
+            "android"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+          "source_symbols": [
+            "neural_enabled",
+            "js_neural_init",
+            "lua_neural_init"
+          ]
+        },
+        {
+          "behavior": "Even in a neural-enabled build and opted-in app, sys.neural is installed only if the ONNX Runtime shared library can be loaded, its API resolved, and NeuralContext initialization succeeds.",
+          "kind": "runtime_dependency",
+          "platforms": [
+            "desktop",
+            "android"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "source": "src/neural/neural_wrapper.c",
+          "source_symbols": [
+            "ort_dl_load",
+            "neural_create"
+          ]
+        },
+        {
+          "behavior": "Wasmtime imports remain registered when ONNX Runtime loading or context creation fails. neural_is_available returns 0 and context-dependent imports return their documented failure sentinels.",
+          "kind": "runtime_dependency",
+          "platforms": [
+            "desktop"
+          ],
+          "registration_effect": "context_only",
+          "runtimes": [
+            "wasmtime"
+          ],
+          "source": "src/neural/neural_wrapper.c",
+          "source_symbols": [
+            "ort_dl_load",
+            "neural_create"
+          ]
+        }
+      ],
+      "capabilityGate": null,
+      "capabilityRelationships": [
+        {
+          "applies_to": [
+            "is_available",
+            "get_error",
+            "load_model",
+            "load_model_from_buffer",
+            "unload_model",
+            "get_model_info",
+            "get_input_count",
+            "get_output_count",
+            "get_input_info",
+            "get_output_info",
+            "set_input",
+            "run",
+            "get_output",
+            "get_output_shape"
+          ],
+          "kind": "availability_probe",
+          "operation": "neural",
+          "required_for_registration": true,
+          "runtimes": [
+            "javascript",
+            "lua"
+          ],
+          "subsystem": "capabilities",
+          "unavailable_behavior": "A false capability prevents managed context creation and sys.neural registration. A true capability is necessary but not sufficient because app.json neural opt-in and successful context creation are separate gates."
+        },
+        {
+          "applies_to": [
+            "is_available",
+            "get_error",
+            "load_model",
+            "load_model_from_buffer",
+            "unload_model",
+            "get_model_info",
+            "get_input_count",
+            "get_output_count",
+            "get_input_info",
+            "get_output_info",
+            "set_input",
+            "run",
+            "get_output",
+            "get_output_shape"
+          ],
+          "kind": "availability_probe",
+          "operation": "neural",
+          "required_for_registration": false,
+          "runtimes": [
+            "wasmtime"
+          ],
+          "subsystem": "capabilities",
+          "unavailable_behavior": "In a compiled neural build the Wasmtime imports remain registered; neural_is_available and capability_neural return 0, while context-dependent imports return sentinels or no-op."
+        }
+      ],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "The namespace is installed only after compile support, app opt-in, ONNX Runtime loading, and NeuralContext creation succeed. loadModel, loadModelFromBuffer, getModelInfo, and run throw InternalError for wrapper failures; invalid buffers and run inputs throw TypeError. Missing context or required arguments return -1, null, or undefined in selected native functions, unloadModel is a no-op, staged getOutput returns undefined when no output is cached, and getError returns the context error string or empty string.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "The namespace is installed only after compile support, app opt-in, ONNX Runtime loading, and NeuralContext creation succeed. luaL argument checks, model loading, metadata lookup, and inference failures raise Lua errors; unloadModel is a no-op only when no context exists. Staged getOutput returns nil when no output is cached, and getError returns the context error string or empty string.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "When compiled, all imports register before app metadata is checked and host calls do not trap. Without an active context or valid memory/model/input/output, load operations return -1, count/info/error-copy/output-copy/shape queries return 0, run returns 0, and void operations silently do nothing. String copies are NUL-terminated and may truncate; tensor metadata and output copies can also truncate to fixed or guest-supplied capacities.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 14,
+      "platformDifferences": {
+        "android": {
+          "details": [
+            "Android packages optional ABI-specific ONNX Runtime libraries and exposes neural only to JavaScript and Lua.",
+            "Android has no Wasmtime guest runtime or env.neural_* import surface."
+          ],
+          "source": "private/android/android/app/src/main/cpp/android_main.cpp"
+        },
+        "desktop": {
+          "details": [
+            "Desktop JavaScript and Lua omit sys.neural unless both app metadata and context creation succeed.",
+            "Desktop Wasmtime registers env.neural_* before app metadata is checked, so imports can exist without an active context.",
+            "Each Wasmtime canvas owns its neural context, store/memory references, and staged model state; neural registration and memory wiring are omitted together when ENABLE_NEURAL is disabled."
+          ],
+          "source": "src/graphics/wasm_canvas_bindings.c"
+        },
+        "web": {
+          "details": [
+            "The web build includes neither managed neural bindings nor a browser-native WebAssembly neural bridge.",
+            "Type declarations and generic WebAssembly documentation are broader than the executable web surface."
+          ],
+          "source": "web/CMakeLists.txt"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 9,
+          "namespace": "sys.neural",
+          "omittedOperations": [
+            "get_input_count",
+            "get_output_count",
+            "get_input_info",
+            "get_output_info",
+            "get_output_shape"
+          ],
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 9,
+          "namespace": "sys.neural",
+          "omittedOperations": [
+            "get_input_count",
+            "get_output_count",
+            "get_input_info",
+            "get_output_info",
+            "get_output_shape"
+          ],
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 14,
+          "namespace": "env",
+          "omittedOperations": [
+            "get_model_info"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The web build includes no neural binding sources and the browser-native WebAssembly env object registers no neural_* imports.",
+          "verifiedAbsentExportPrefixes": [
+            "neural_"
+          ]
+        }
+      }
+    },
+    "scheduling": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "browser_wasm": {
+          "details": "There are no animation or timer host imports. The browser runner calls an optional guest-exported frame function every requestAnimationFrame tick; a guest exception is not converted to a sentinel by the frame closure.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "javascript": {
+          "details": "Animation registration stores at most one persistent callback and returns handle 1; missing context, callback, timer allocation, or invalid timer arguments return undefined. Callback exceptions are printed and reported to the host frame loop without throwing through C.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "lua": {
+          "details": "Animation methods require a Lua function and raise on invalid input. Only one persistent registry callback is stored; callback errors are printed and make the host call return false. Lua exposes no timer table.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "There are no animation or timer host imports. An optional guest-exported frame(f32) function is called every host frame; traps/errors are recorded and printed, and the host call returns false.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 7,
+      "platformDifferences": {
+        "desktop": {
+          "details": [
+            "The host calls managed animation callbacks and JavaScript timers explicitly; Wasmtime frame is discovered from the guest module and receives an f32 millisecond timestamp."
+          ],
+          "source": "src/core/main.c"
+        },
+        "web": {
+          "details": [
+            "Managed JavaScript timers are driven by the Budo frame timestamp, not browser setTimeout/setInterval.",
+            "Lua exposes animation.start in addition to requestFrame/cancelFrame but has no timer namespace.",
+            "Browser-native WebAssembly receives no scheduling imports and instead optionally exports frame; the same direction applies to Wasmtime.",
+            "Managed requestFrame callbacks are persistent until replaced or canceled, unlike the browser DOM requestAnimationFrame one-shot contract."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "guest.exports",
+          "omittedOperations": [
+            "animation_start",
+            "request_frame",
+            "cancel_frame",
+            "timer_once",
+            "timer_every",
+            "timer_clear"
+          ],
+          "platforms": [
+            "web"
+          ]
+        },
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 5,
+          "namespace": [
+            "sys.animation",
+            "sys.timer"
+          ],
+          "omittedOperations": [
+            "animation_start",
+            "guest_frame"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 3,
+          "namespace": "sys.animation",
+          "omittedOperations": [
+            "timer_once",
+            "timer_every",
+            "timer_clear",
+            "guest_frame"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 1,
+          "namespace": "guest.exports",
+          "omittedOperations": [
+            "animation_start",
+            "request_frame",
+            "cancel_frame",
+            "timer_once",
+            "timer_every",
+            "timer_clear"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "browser_wasm": "BudoWasmRunner owns the instantiated module reference and calls its optional frame export from the browser requestAnimationFrame loop.",
+        "javascript": "JSCanvasContext owns one duplicated animation callback and a growable timer array of duplicated callbacks. Context destruction releases every live callback; the host processes animation, timers, and pending Promise jobs once per frame.",
+        "lua": "LuaCanvasContext owns one animation callback registry reference and releases it on replacement, cancellation, or context destruction.",
+        "wasmtime": "WasmCanvasContext borrows the instantiated guest frame function and invokes it through the owning store/context; the guest module owns its exported function."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {}
+    },
+    "sqlite": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "Wrapper failures from open, execute, run, and query throw InternalError; absent context or required arguments use -1, false, an empty array, or 0 sentinels, close is a no-op, and getError returns the wrapper error string.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "lua": {
+          "details": "luaL argument checks and wrapper failures from open, execute, run, and query raise Lua errors; absent context uses -1, false, an empty table, or 0 sentinels, close is a no-op, and getError returns the wrapper error string.",
+          "kind": "throws_on_invalid_arguments_or_operation_failure"
+        },
+        "wasmtime": {
+          "details": "Host calls do not trap: open and run variants return -1, execute returns 0, and last_insert_id returns 0 when unavailable. query_json returns -1 for a SQL query error and 0 for context, memory, input, allocation, or output-buffer failures. No Wasmtime get-error import is registered.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 9,
+      "platformDifferences": {},
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 7,
+          "namespace": "sys.db",
+          "omittedOperations": [
+            "run_integer_parameter",
+            "run_string_parameter"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 7,
+          "namespace": "sys.db",
+          "omittedOperations": [
+            "run_integer_parameter",
+            "run_string_parameter"
+          ],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 8,
+          "namespace": "env",
+          "omittedOperations": [
+            "get_error"
+          ],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no db_* imports.",
+          "verifiedAbsentExportPrefixes": [
+            "db_"
+          ]
+        }
+      }
+    },
+    "udp": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [
+        {
+          "applies_to": [
+            "bind",
+            "get_port",
+            "send",
+            "receive",
+            "close"
+          ],
+          "kind": "required",
+          "operation": "udp",
+          "required_for_registration": true,
+          "subsystem": "capabilities",
+          "unavailable_behavior": "Browser builds report capability false and register neither sys.net.udp for managed JavaScript/Lua nor env.udp_* imports for browser-native WebAssembly."
+        }
+      ],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "bind and getPort return -1, send returns false, and callback registration or close becomes a no-op for missing context or rejected input. Wrapper error text is not exported; receive callback exceptions are not surfaced by this binding.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "lua": {
+          "details": "luaL checks raise Lua errors for invalid required arguments; bind and getPort return -1, send returns false, and callback registration or close becomes a no-op for unavailable context or rejected handles. Wrapper error text is not exported.",
+          "kind": "documented_sentinel_on_failure"
+        },
+        "wasmtime": {
+          "details": "Host calls do not trap. bind and getPort return -1 when unavailable or on wrapper failure; send returns 0; recv returns bytes received, 0 for no datagram or invalid bridge state, -1 on wrapper error, and -2 when the guest buffer is too small; close becomes a no-op.",
+          "kind": "documented_sentinel_on_failure"
+        }
+      },
+      "operationCount": 5,
+      "platformDifferences": {
+        "web": {
+          "details": [
+            "The web managed-runtime initialization registers no sys.net.udp namespace.",
+            "The browser-native WebAssembly env object registers no udp_* imports."
+          ],
+          "source": "src/web/web_main.c"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 5,
+          "namespace": "sys.net.udp",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 5,
+          "namespace": "sys.net.udp",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 5,
+          "namespace": "env",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {},
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The browser-native WebAssembly env object registers no udp_* imports and browser builds provide no raw datagram backend.",
+          "verifiedAbsentExportPrefixes": [
+            "udp_"
+          ]
+        }
+      }
+    }
+  },
+  "version": 1
+}

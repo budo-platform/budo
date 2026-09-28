@@ -1,0 +1,462 @@
+{
+    "version": 1,
+    "subsystem": "network",
+    "error_convention": {
+        "javascript": {
+            "kind": "throw_programmer_error_report_async_failure",
+            "details": "Missing initialization or network policy, a missing URL, and exhausted binding-level Promise slots throw synchronously. Once a Promise is created, policy, validation, transport, redirect, size, timeout, and allocation failures reject it with Error; HTTP error status codes still resolve a Response. Response body readers throw on an invalid receiver or second consumption, and json also throws SyntaxError for invalid JSON. The public bodyUsed data property remains false even after the internal body-consumed flag is set."
+        },
+        "lua": {
+            "kind": "throw_programmer_error_report_async_failure",
+            "details": "Missing initialization or network policy, invalid required arguments, a missing callback, exhausted binding-level callback slots, and json_parse failures raise Lua errors. Request start and asynchronous transport failures invoke callback(nil, error); success invokes callback(response, nil). Errors raised by the callback are printed to stderr and are not returned to the caller."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host calls do not trap. network_fetch returns -1 before slot allocation on missing policy/context/memory, invalid ranges or limits, or slot exhaustion; an immediate request failure after allocation returns a ready slot whose status code/body accessors fail and whose error imports expose the message. Invalid or unavailable length/status queries return -1 except error length, which returns 0; copy calls return 0 and may truncate to the guest buffer."
+        },
+        "browser_wasm": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Browser env imports do not throw into the guest. network_fetch returns -1 for invalid ranges, limits, JSON request headers, or slot exhaustion; request failures after slot allocation are reported only as status 2. Status uses 0 pending, 1 success, and 2 failure-or-invalid; status code, body length, and body copy return 0 when unavailable, and body copy may truncate. No response-header, final-URL, or error-text imports exist."
+        }
+    },
+    "wrapper_header": "src/network/network_wrapper.h",
+    "service_header": "src/network/network_service.h",
+    "capability_gate": {
+        "subsystem": "capabilities",
+        "operation": "http",
+        "kind": "availability_probe",
+        "required_for_registration": false,
+        "unavailable_behavior": "HTTP bindings are registered independently of the capability probe and app policy. The current probe is always true on supported builds; app.json network policy still decides whether each request may start."
+    },
+    "runtimes": {
+        "javascript": {
+            "source": "src/network/js_network_bindings.c",
+            "registration_symbol": "js_network_init",
+            "namespace": [
+                "sys.net",
+                "global",
+                "Response",
+                "Headers"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_function_property"
+        },
+        "lua": {
+            "source": "src/network/lua_network_bindings.c",
+            "registration_symbol": "lua_network_init",
+            "namespace": [
+                "sys.net",
+                "global"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": [
+                "lua_reg",
+                "lua_global_function"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/network/wasm_network_bindings.c",
+            "registration_symbol": "wasm_network_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": "env",
+            "platforms": [
+                "web"
+            ],
+            "export_extractor": "javascript_object_key",
+            "export_prefixes": [
+                "network_"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "QuickJS function-data ArrayBuffer storage owns each JsNetworkContext, including its NetworkContext, JSContext, per-runtime Response and Headers class IDs, generation, and pending Promise resolve/reject slots.",
+        "lua": "Lua closure full userdata owns each LuaNetworkContext, including its NetworkContext, lua_State, generation, and pending callback registry references.",
+        "wasmtime": "Each WasmNetworkBindingState is the Wasmtime callback environment and owns its NetworkContext, copied store and memory handles, runtime and slot generations, response slots, and stable completion records.",
+        "cleanup": "Managed cleanup marks VM-owned state inactive and increments the binding generation before network_shutdown releases Promise functions or Lua registry references; retained fetch closures then fail without dereferencing freed transport state. Wasmtime shutdown invalidates completion records and clears memory before store teardown; final cleanup runs after linker/store destruction. Managed cleanup, Wasmtime shutdown, and registry shutdown are idempotent."
+    },
+    "platform_differences": {
+        "desktop": {
+            "source": "src/core/main.c",
+            "details": [
+                "JavaScript, Lua, and Wasmtime frame loops poll their own explicit network binding state.",
+                "Wasmtime network state is shut down before reverse subsystem teardown, while its callback environment allocation remains alive until the owning linker and store have been destroyed.",
+                "Managed and Wasmtime two-instance tests use a controllable mock backend and cover a completion arriving after one peer runtime has been destroyed."
+            ]
+        },
+        "android": {
+            "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+            "details": [
+                "Android owns separate JavaScript or Lua network binding handles and polls the active handle explicitly.",
+                "Android has no Wasmtime guest runtime; managed cleanup cancels wrapper work before releasing QuickJS Promise functions or Lua registry references."
+            ]
+        },
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript and Lua retain explicit binding state, expose the state-owned NetworkContext only to the browser transport bridge, and delegate transport to the browser Fetch API.",
+                "Browser-native WebAssembly exposes only fetch, status, status code, body length, body copy, and release; Wasmtime additionally exposes response headers, final URL, and error text.",
+                "The browser-WASM network_fetch ABI orders URL before method and accepts a JSON header object. Wasmtime orders method before URL and accepts name-colon-value lines, so the identically named import is not ABI-portable between them.",
+                "Browser-WASM status 2 merges request failure and invalid slot, while Wasmtime status returns -1 only for an invalid slot and exposes request errors separately.",
+                "The browser-native WebAssembly slot implementation remains independent from the managed and Wasmtime binding-state implementation."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "fetch",
+            "wrapper_symbol": "network_request_async",
+            "service_symbol": "network_service_request_async",
+            "signature": "asynchronous policy-controlled HTTP request",
+            "binding_symbols": {
+                "javascript": "js_fetch",
+                "lua": "l_fetch",
+                "wasmtime": "host_network_fetch",
+                "browser_wasm": "budo_web_wasm_network_fetch"
+            },
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "fetch",
+                        "namespace": "sys.net",
+                        "signature": "(url: string, options?: {method?: string, headers?: object, body?: string|ArrayBuffer}) -> Promise<Response>; Response exposes status, statusText, ok, url, redirected, bodyUsed, type, headers, text, json, and arrayBuffer"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "fetch",
+                        "namespace": "sys.net",
+                        "signature": "(url: string, callback: function)|(url: string, options: table, callback: function) -> nil; callback(response_table|nil, error_string|nil)"
+                    },
+                    {
+                        "name": "fetch",
+                        "namespace": "global",
+                        "signature": "same C function as sys.net.fetch"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "network_fetch",
+                    "signature": "(method_ptr: i32, method_len: i32, url_ptr: i32, url_len: i32, headers_ptr: i32, headers_len: i32, body_ptr: i32, body_len: i32) -> i32 slot; headers are name: value lines; -1 before allocation on failure"
+                },
+                "browser_wasm": {
+                    "name": "network_fetch",
+                    "signature": "(url_ptr: i32, url_len: i32, method_ptr: i32, method_len: i32, headers_json_ptr: i32, headers_json_len: i32, body_ptr: i32, body_len: i32) -> i32 slot; -1 before allocation on failure"
+                }
+            }
+        },
+        {
+            "name": "parse_json",
+            "signature": "(json_text: string) -> Lua value",
+            "binding_symbols": {
+                "lua": "l_json_parse"
+            },
+            "exports": {
+                "lua": {
+                    "name": "json_parse",
+                    "namespace": "global",
+                    "signature": "(json_text: string) -> table|string|number|boolean|nil; raises Lua error on parse failure"
+                }
+            }
+        },
+        {
+            "name": "headers_get",
+            "signature": "(name: string) -> string|null",
+            "binding_symbols": {
+                "javascript": "js_headers_get"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "get",
+                    "namespace": "Headers"
+                }
+            }
+        },
+        {
+            "name": "headers_has",
+            "signature": "(name: string) -> bool",
+            "binding_symbols": {
+                "javascript": "js_headers_has"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "has",
+                    "namespace": "Headers"
+                }
+            }
+        },
+        {
+            "name": "headers_entries",
+            "signature": "() -> Array<[string,string]>",
+            "binding_symbols": {
+                "javascript": "js_headers_entries"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "entries",
+                    "namespace": "Headers"
+                }
+            }
+        },
+        {
+            "name": "headers_keys",
+            "signature": "() -> string[]",
+            "binding_symbols": {
+                "javascript": "js_headers_keys"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "keys",
+                    "namespace": "Headers"
+                }
+            }
+        },
+        {
+            "name": "headers_values",
+            "signature": "() -> string[]",
+            "binding_symbols": {
+                "javascript": "js_headers_values"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "values",
+                    "namespace": "Headers"
+                }
+            }
+        },
+        {
+            "name": "headers_for_each",
+            "signature": "(callback: (value: string, name: string) -> any) -> void",
+            "binding_symbols": {
+                "javascript": "js_headers_forEach"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "forEach",
+                    "namespace": "Headers"
+                }
+            }
+        },
+        {
+            "name": "response_text",
+            "signature": "() -> string; consumes the body once",
+            "binding_symbols": {
+                "javascript": "js_response_text"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "text",
+                    "namespace": "Response"
+                }
+            }
+        },
+        {
+            "name": "response_json",
+            "signature": "() -> any; consumes the body once and throws SyntaxError for invalid JSON",
+            "binding_symbols": {
+                "javascript": "js_response_json"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "json",
+                    "namespace": "Response"
+                }
+            }
+        },
+        {
+            "name": "response_array_buffer",
+            "signature": "() -> ArrayBuffer; consumes the body once",
+            "binding_symbols": {
+                "javascript": "js_response_arrayBuffer"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "arrayBuffer",
+                    "namespace": "Response"
+                }
+            }
+        },
+        {
+            "name": "fetch_status",
+            "signature": "(slot: i32) -> request state",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_status",
+                "browser_wasm": "budo_web_wasm_network_fetch_status"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_status",
+                    "signature": "(slot: i32) -> i32; 0 pending, 1 ready, -1 invalid"
+                },
+                "browser_wasm": {
+                    "name": "network_fetch_status",
+                    "signature": "(slot: i32) -> i32; 0 pending, 1 ready success, 2 failed or invalid"
+                }
+            }
+        },
+        {
+            "name": "fetch_status_code",
+            "signature": "(slot: i32) -> HTTP status sentinel",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_status_code",
+                "browser_wasm": "budo_web_wasm_network_fetch_status_code"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_status_code",
+                    "signature": "(slot: i32) -> i32 HTTP status; -1 unless a response is ready"
+                },
+                "browser_wasm": {
+                    "name": "network_fetch_status_code",
+                    "signature": "(slot: i32) -> i32 HTTP status; 0 unless a response is ready"
+                }
+            }
+        },
+        {
+            "name": "fetch_response_body_length",
+            "signature": "(slot: i32) -> body byte length sentinel",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_response_body_len",
+                "browser_wasm": "budo_web_wasm_network_fetch_response_body_len"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_response_body_len",
+                    "signature": "(slot: i32) -> i32 byte length; -1 unless a response is ready"
+                },
+                "browser_wasm": {
+                    "name": "network_fetch_response_body_len",
+                    "signature": "(slot: i32) -> i32 byte length; 0 unless a response is ready"
+                }
+            }
+        },
+        {
+            "name": "fetch_response_body",
+            "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_response_body",
+                "browser_wasm": "budo_web_wasm_network_fetch_response_body"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_response_body",
+                    "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied, possibly truncated; 0 on failure"
+                },
+                "browser_wasm": {
+                    "name": "network_fetch_response_body",
+                    "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied, possibly truncated; 0 on failure"
+                }
+            }
+        },
+        {
+            "name": "fetch_response_headers_length",
+            "signature": "(slot: i32) -> serialized header byte length",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_response_headers_len"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_response_headers_len",
+                    "signature": "(slot: i32) -> i32 byte length of name: value CRLF lines; -1 unless a response is ready"
+                }
+            }
+        },
+        {
+            "name": "fetch_response_headers",
+            "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> serialized header bytes copied",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_response_headers"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_response_headers",
+                    "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied, possibly truncated; 0 on failure"
+                }
+            }
+        },
+        {
+            "name": "fetch_response_url_length",
+            "signature": "(slot: i32) -> final URL byte length",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_response_url_len"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_response_url_len",
+                    "signature": "(slot: i32) -> i32 UTF-8 byte length; -1 unless a final URL is available"
+                }
+            }
+        },
+        {
+            "name": "fetch_response_url",
+            "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> final URL bytes copied",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_response_url"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_response_url",
+                    "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied, possibly truncated; 0 on failure"
+                }
+            }
+        },
+        {
+            "name": "fetch_error_length",
+            "signature": "(slot: i32) -> request error byte length",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_error_len"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_error_len",
+                    "signature": "(slot: i32) -> i32 UTF-8 byte length; 0 for no error or invalid slot"
+                }
+            }
+        },
+        {
+            "name": "fetch_error",
+            "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> request error bytes copied",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_error"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_error",
+                    "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied, possibly truncated; 0 for no error or failure"
+                }
+            }
+        },
+        {
+            "name": "fetch_release",
+            "signature": "(slot: i32) -> void",
+            "binding_symbols": {
+                "wasmtime": "host_network_fetch_release",
+                "browser_wasm": "budo_web_wasm_network_fetch_release"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "network_fetch_release",
+                    "signature": "(slot: i32) -> void; invalid slots are ignored"
+                },
+                "browser_wasm": {
+                    "name": "network_fetch_release",
+                    "signature": "(slot: i32) -> void; invalid slots are ignored"
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,8 @@
+{
+    "name": "Chronometer",
+    "description": "A simple chronometer application using the Budo Timer API.",
+    "author": "Budo",
+    "version": "1.0.0",
+    "date": "2026-04-08",
+    "icon": "icon.svg"
+}

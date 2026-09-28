@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="App icon">
+  <rect width="256" height="256" rx="48" fill="#16201e"/>
+  <circle cx="64" cy="92" r="13" fill="#86efac"/><circle cx="64" cy="164" r="13" fill="#86efac"/><circle cx="128" cy="72" r="13" fill="#a78bfa"/><circle cx="128" cy="128" r="13" fill="#a78bfa"/><circle cx="128" cy="184" r="13" fill="#a78bfa"/><circle cx="192" cy="92" r="13" fill="#86efac"/><circle cx="192" cy="164" r="13" fill="#86efac"/>
+  <path d="M77 92l38-20M77 92l38 36M77 164l38-36M77 164l38 20M141 72l38 20M141 128l38-36M141 128l38 36M141 184l38-20" stroke="#86efac" stroke-width="6" opacity=".75"/>
+</svg>

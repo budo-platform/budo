@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="App icon">
+  <rect width="256" height="256" rx="48" fill="#1e1531"/>
+  <path d="M128 46v164M46 128h164M70 70l116 116M186 70 70 186" stroke="#c084fc" stroke-width="7" stroke-linecap="round"/>
+  <path d="M128 58l38 70-38 70-38-70 38-70Z" fill="none" stroke="#facc15" stroke-width="10" stroke-linejoin="round"/>
+</svg>

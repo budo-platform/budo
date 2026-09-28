@@ -1,0 +1,4945 @@
+{
+  "vectors": [
+    {
+      "exports": {
+        "javascript": [
+          "start"
+        ],
+        "lua": [
+          "start"
+        ],
+        "wasmtime": [
+          "audio_start"
+        ]
+      },
+      "operation": "start",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "stop"
+        ],
+        "lua": [
+          "stop"
+        ],
+        "wasmtime": [
+          "audio_stop"
+        ]
+      },
+      "operation": "stop",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isPlaying"
+        ],
+        "lua": [
+          "isPlaying"
+        ]
+      },
+      "operation": "is_playing",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setMasterGain"
+        ],
+        "lua": [
+          "setMasterGain"
+        ],
+        "wasmtime": [
+          "audio_set_master_gain"
+        ]
+      },
+      "operation": "set_master_gain",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(gain: f32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getMasterGain"
+        ],
+        "lua": [
+          "getMasterGain"
+        ]
+      },
+      "operation": "get_master_gain",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> f32",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "createOscillator"
+        ],
+        "lua": [
+          "createOscillator"
+        ],
+        "wasmtime": [
+          "audio_create_oscillator"
+        ]
+      },
+      "operation": "create_oscillator",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> i32 oscillator_id; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "destroyOscillator"
+        ],
+        "lua": [
+          "destroyOscillator"
+        ],
+        "wasmtime": [
+          "audio_destroy_oscillator"
+        ]
+      },
+      "operation": "destroy_oscillator",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setOscillatorType"
+        ],
+        "lua": [
+          "setOscillatorType"
+        ],
+        "wasmtime": [
+          "audio_oscillator_set_type"
+        ]
+      },
+      "operation": "set_oscillator_type",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32, type: wave_type) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setOscillatorFrequency"
+        ],
+        "lua": [
+          "setOscillatorFrequency"
+        ],
+        "wasmtime": [
+          "audio_oscillator_set_frequency"
+        ]
+      },
+      "operation": "set_oscillator_frequency",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32, frequency_hz: f32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setOscillatorGain"
+        ],
+        "lua": [
+          "setOscillatorGain"
+        ],
+        "wasmtime": [
+          "audio_oscillator_set_gain"
+        ]
+      },
+      "operation": "set_oscillator_gain",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32, gain: f32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setOscillatorDetune"
+        ],
+        "lua": [
+          "setOscillatorDetune"
+        ],
+        "wasmtime": [
+          "audio_oscillator_set_detune"
+        ]
+      },
+      "operation": "set_oscillator_detune",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32, cents: f32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "startOscillator"
+        ],
+        "lua": [
+          "startOscillator"
+        ],
+        "wasmtime": [
+          "audio_oscillator_start"
+        ]
+      },
+      "operation": "start_oscillator",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "stopOscillator"
+        ],
+        "lua": [
+          "stopOscillator"
+        ],
+        "wasmtime": [
+          "audio_oscillator_stop"
+        ]
+      },
+      "operation": "stop_oscillator",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setOscillatorEnvelope"
+        ],
+        "lua": [
+          "setOscillatorEnvelope"
+        ],
+        "wasmtime": [
+          "audio_oscillator_set_envelope"
+        ]
+      },
+      "operation": "set_oscillator_envelope",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32, attack: f32, decay: f32, sustain: f32, release: f32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "noteOn"
+        ],
+        "lua": [
+          "noteOn"
+        ],
+        "wasmtime": [
+          "audio_oscillator_note_on"
+        ]
+      },
+      "operation": "note_on",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "noteOff"
+        ],
+        "lua": [
+          "noteOff"
+        ],
+        "wasmtime": [
+          "audio_oscillator_note_off"
+        ]
+      },
+      "operation": "note_off",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(oscillator_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "loadBuffer"
+        ],
+        "lua": [
+          "loadBuffer"
+        ]
+      },
+      "operation": "load_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(project_relative_path: string) -> i32 buffer_id; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "loadBufferFromBuffer"
+        ],
+        "lua": [
+          "loadBufferFromBuffer"
+        ]
+      },
+      "operation": "load_buffer_from_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(encoded_audio: bytes) -> i32 buffer_id; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "createBuffer"
+        ],
+        "lua": [
+          "createBuffer"
+        ]
+      },
+      "operation": "create_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(sample_rate: i32, channels: i32, sample_count: i32) -> i32 buffer_id; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setBufferData"
+        ],
+        "lua": [
+          "setBufferData"
+        ]
+      },
+      "operation": "set_buffer_data",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(buffer_id: i32, samples: f32[], offset?: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "destroyBuffer"
+        ],
+        "lua": [
+          "destroyBuffer"
+        ]
+      },
+      "operation": "destroy_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(buffer_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "playBuffer"
+        ],
+        "lua": [
+          "playBuffer"
+        ]
+      },
+      "operation": "play_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(buffer_id: i32, loop?: bool, gain?: f32) -> i32 playback_id; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "stopBuffer"
+        ],
+        "lua": [
+          "stopBuffer"
+        ]
+      },
+      "operation": "stop_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(playback_id: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "midiToFreq"
+        ],
+        "lua": [
+          "midiToFreq"
+        ],
+        "wasmtime": [
+          "audio_midi_to_freq"
+        ]
+      },
+      "operation": "midi_to_frequency",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(midi_note: i32) -> f32 frequency_hz",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getError"
+        ],
+        "lua": [
+          "getError"
+        ]
+      },
+      "operation": "get_error",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawPath"
+        ],
+        "lua": [
+          "drawPath"
+        ],
+        "wasmtime": [
+          "canvas_draw_path"
+        ]
+      },
+      "operation": "path_draw",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path) -> void using current paint",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawSvg"
+        ],
+        "lua": [
+          "drawSvg"
+        ],
+        "wasmtime": [
+          "canvas_draw_svg"
+        ]
+      },
+      "operation": "svg_draw",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SVG handle, x:f32, y:f32, width:f32, height:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "clear"
+        ],
+        "lua": [
+          "clear"
+        ],
+        "wasmtime": [
+          "canvas_clear"
+        ]
+      },
+      "operation": "clear",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(color: ARGB) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "readPixels"
+        ],
+        "lua": [
+          "readPixels"
+        ],
+        "wasmtime": [
+          "canvas_read_pixels"
+        ]
+      },
+      "operation": "read_pixels",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "read RGBA8 premultiplied pixels",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawRect"
+        ],
+        "lua": [
+          "drawRect"
+        ],
+        "wasmtime": [
+          "canvas_draw_rect"
+        ]
+      },
+      "operation": "draw_rect",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawRoundRect"
+        ],
+        "lua": [
+          "drawRoundRect"
+        ],
+        "wasmtime": [
+          "canvas_draw_round_rect"
+        ]
+      },
+      "operation": "draw_round_rect",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32, rx:f32, ry:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawCircle"
+        ],
+        "lua": [
+          "drawCircle"
+        ],
+        "wasmtime": [
+          "canvas_draw_circle"
+        ]
+      },
+      "operation": "draw_circle",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(cx:f32, cy:f32, radius:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawOval"
+        ],
+        "lua": [
+          "drawOval"
+        ],
+        "wasmtime": [
+          "canvas_draw_oval"
+        ]
+      },
+      "operation": "draw_oval",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawLine"
+        ],
+        "lua": [
+          "drawLine"
+        ],
+        "wasmtime": [
+          "canvas_draw_line"
+        ]
+      },
+      "operation": "draw_line",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x1:f32, y1:f32, x2:f32, y2:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawPoint"
+        ],
+        "lua": [
+          "drawPoint"
+        ],
+        "wasmtime": [
+          "canvas_draw_point"
+        ]
+      },
+      "operation": "draw_point",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawText"
+        ],
+        "lua": [
+          "drawText"
+        ],
+        "wasmtime": [
+          "canvas_draw_text"
+        ]
+      },
+      "operation": "draw_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "draw UTF-8 text and return its width",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "measureText"
+        ],
+        "lua": [
+          "measureText"
+        ],
+        "wasmtime": [
+          "canvas_measure_text"
+        ]
+      },
+      "operation": "measure_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "measure UTF-8 text width",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "measureTextRect"
+        ],
+        "lua": [
+          "measureTextRect"
+        ],
+        "wasmtime": [
+          "canvas_measure_text_rect"
+        ]
+      },
+      "operation": "measure_text_rect",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "measure UTF-8 text bounds",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawArc"
+        ],
+        "lua": [
+          "drawArc"
+        ],
+        "wasmtime": [
+          "canvas_draw_arc"
+        ]
+      },
+      "operation": "draw_arc",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32, start_degrees:f32, sweep_degrees:f32, use_center:bool) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setFont"
+        ],
+        "lua": [
+          "setFont"
+        ]
+      },
+      "operation": "font_set",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(registered name or null) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setFillColor"
+        ],
+        "lua": [
+          "setFillColor"
+        ],
+        "wasmtime": [
+          "canvas_set_fill_color"
+        ]
+      },
+      "operation": "set_fill_color",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(color: ARGB) -> void and select fill style",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setStrokeColor"
+        ],
+        "lua": [
+          "setStrokeColor"
+        ],
+        "wasmtime": [
+          "canvas_set_stroke_color"
+        ]
+      },
+      "operation": "set_stroke_color",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(color: ARGB) -> void and select stroke style",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setStrokeWidth"
+        ],
+        "lua": [
+          "setStrokeWidth"
+        ],
+        "wasmtime": [
+          "canvas_set_stroke_width"
+        ]
+      },
+      "operation": "set_stroke_width",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(width:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setAntiAlias"
+        ],
+        "lua": [
+          "setAntiAlias"
+        ],
+        "wasmtime": [
+          "canvas_set_anti_alias"
+        ]
+      },
+      "operation": "set_anti_alias",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(enabled:bool) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setAlpha"
+        ],
+        "lua": [
+          "setAlpha"
+        ],
+        "wasmtime": [
+          "canvas_set_alpha"
+        ]
+      },
+      "operation": "set_alpha",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(alpha:i32 clamped to 0..255) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setStrokeCap"
+        ],
+        "lua": [
+          "setStrokeCap"
+        ]
+      },
+      "operation": "set_stroke_cap",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(butt|round|square) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setStrokeJoin"
+        ],
+        "lua": [
+          "setStrokeJoin"
+        ]
+      },
+      "operation": "set_stroke_join",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(miter|round|bevel) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setBlendMode"
+        ],
+        "lua": [
+          "setBlendMode"
+        ],
+        "wasmtime": [
+          "canvas_set_blend_mode"
+        ]
+      },
+      "operation": "set_blend_mode",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "set a stable Skia blend-mode name or numeric ABI value",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setImageFilter"
+        ],
+        "lua": [
+          "setImageFilter"
+        ]
+      },
+      "operation": "set_image_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "set or clear a managed blur/drop-shadow image filter",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setColorFilter"
+        ],
+        "lua": [
+          "setColorFilter"
+        ]
+      },
+      "operation": "set_color_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "set or clear a managed matrix/blend color filter",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_blur_filter"
+        ]
+      },
+      "operation": "set_blur_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(sigma_x:f32, sigma_y:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_drop_shadow_filter"
+        ]
+      },
+      "operation": "set_drop_shadow_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(dx:f32, dy:f32, sigma_x:f32, sigma_y:f32, color_argb:i32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_drop_shadow_only_filter"
+        ]
+      },
+      "operation": "set_drop_shadow_only_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(dx:f32, dy:f32, sigma_x:f32, sigma_y:f32, color_argb:i32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_clear_image_filter"
+        ]
+      },
+      "operation": "clear_image_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_color_matrix_filter"
+        ]
+      },
+      "operation": "set_color_matrix_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(matrix_ptr:i32, matrix_len:i32) -> void; requires exactly 20 f32 values",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_blend_color_filter"
+        ]
+      },
+      "operation": "set_blend_color_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(color_argb:i32, blend_mode:i32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_clear_color_filter"
+        ]
+      },
+      "operation": "clear_color_filter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "save"
+        ],
+        "lua": [
+          "save"
+        ],
+        "wasmtime": [
+          "transform_save"
+        ]
+      },
+      "operation": "save",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "restore"
+        ],
+        "lua": [
+          "restore"
+        ],
+        "wasmtime": [
+          "transform_restore"
+        ]
+      },
+      "operation": "restore",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "translate"
+        ],
+        "lua": [
+          "translate"
+        ],
+        "wasmtime": [
+          "transform_translate"
+        ]
+      },
+      "operation": "translate",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(dx:f32, dy:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "rotate"
+        ],
+        "lua": [
+          "rotate"
+        ],
+        "wasmtime": [
+          "transform_rotate"
+        ]
+      },
+      "operation": "rotate",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(degrees:f32) -> void; managed bindings also accept an optional pivot",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "transform_rotate_around"
+        ]
+      },
+      "operation": "rotate_around",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(degrees:f32, px:f32, py:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "scale"
+        ],
+        "lua": [
+          "scale"
+        ],
+        "wasmtime": [
+          "transform_scale"
+        ]
+      },
+      "operation": "scale",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(sx:f32, sy:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "skew"
+        ],
+        "lua": [
+          "skew"
+        ],
+        "wasmtime": [
+          "canvas_skew"
+        ]
+      },
+      "operation": "skew",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(sx:f32, sy:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "reset"
+        ],
+        "lua": [
+          "reset"
+        ],
+        "wasmtime": [
+          "canvas_reset_transform"
+        ]
+      },
+      "operation": "reset_transform",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "clipRect"
+        ],
+        "lua": [
+          "clipRect"
+        ],
+        "wasmtime": [
+          "canvas_clip_rect"
+        ]
+      },
+      "operation": "clip_rect",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "neural"
+        ],
+        "lua": [
+          "neural"
+        ],
+        "wasmtime": [
+          "capability_neural"
+        ]
+      },
+      "operation": "neural",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "capabilities",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "llamacpp"
+        ],
+        "lua": [
+          "llamacpp"
+        ],
+        "wasmtime": [
+          "capability_llamacpp"
+        ]
+      },
+      "operation": "llamacpp",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "capabilities",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "midi"
+        ],
+        "lua": [
+          "midi"
+        ],
+        "wasmtime": [
+          "capability_midi"
+        ]
+      },
+      "operation": "midi",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "capabilities",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "udp"
+        ],
+        "lua": [
+          "udp"
+        ],
+        "wasmtime": [
+          "capability_udp"
+        ]
+      },
+      "operation": "udp",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "capabilities",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "http"
+        ],
+        "lua": [
+          "http"
+        ],
+        "wasmtime": [
+          "capability_http"
+        ]
+      },
+      "operation": "http",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "capabilities",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sensors"
+        ],
+        "lua": [
+          "sensors"
+        ],
+        "wasmtime": [
+          "capability_sensors"
+        ]
+      },
+      "operation": "sensors",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "capabilities",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "log"
+        ],
+        "lua": [
+          "log"
+        ]
+      },
+      "operation": "log",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(...values) -> void",
+      "subsystem": "console",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "log_int"
+        ]
+      },
+      "operation": "log_int",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(value:i32) -> void",
+      "subsystem": "console",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "log_float"
+        ]
+      },
+      "operation": "log_float",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(value:f32) -> void",
+      "subsystem": "console",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "keepScreenOn"
+        ],
+        "lua": [
+          "keepScreenOn"
+        ],
+        "wasmtime": [
+          "device_keep_screen_on"
+        ]
+      },
+      "operation": "keep_screen_on",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(bool enabled) -> bool",
+      "subsystem": "device",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "create"
+        ],
+        "lua": [
+          "create"
+        ],
+        "wasmtime": [
+          "path_create"
+        ]
+      },
+      "operation": "path_create",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> path handle",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "reset"
+        ],
+        "lua": [
+          "reset"
+        ],
+        "wasmtime": [
+          "path_reset"
+        ]
+      },
+      "operation": "path_reset",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "moveTo"
+        ],
+        "lua": [
+          "moveTo"
+        ],
+        "wasmtime": [
+          "path_move_to"
+        ]
+      },
+      "operation": "path_move_to",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, x:f32, y:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "lineTo"
+        ],
+        "lua": [
+          "lineTo"
+        ],
+        "wasmtime": [
+          "path_line_to"
+        ]
+      },
+      "operation": "path_line_to",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, x:f32, y:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "quadTo"
+        ],
+        "lua": [
+          "quadTo"
+        ],
+        "wasmtime": [
+          "path_quad_to"
+        ]
+      },
+      "operation": "path_quad_to",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, x1:f32, y1:f32, x2:f32, y2:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "cubicTo"
+        ],
+        "lua": [
+          "cubicTo"
+        ],
+        "wasmtime": [
+          "path_cubic_to"
+        ]
+      },
+      "operation": "path_cubic_to",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, x1:f32, y1:f32, x2:f32, y2:f32, x3:f32, y3:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "close"
+        ],
+        "lua": [
+          "close"
+        ],
+        "wasmtime": [
+          "path_close"
+        ]
+      },
+      "operation": "path_close",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "addRect"
+        ],
+        "lua": [
+          "addRect"
+        ],
+        "wasmtime": [
+          "path_add_rect"
+        ]
+      },
+      "operation": "path_add_rect",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, x:f32, y:f32, width:f32, height:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "addCircle"
+        ],
+        "lua": [
+          "addCircle"
+        ],
+        "wasmtime": [
+          "path_add_circle"
+        ]
+      },
+      "operation": "path_add_circle",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, cx:f32, cy:f32, radius:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "load"
+        ],
+        "lua": [
+          "load"
+        ],
+        "wasmtime": [
+          "svg_load"
+        ]
+      },
+      "operation": "svg_load",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(safe project-relative path) -> SVG handle or -1",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "loadFromBuffer"
+        ],
+        "lua": [
+          "loadFromBuffer"
+        ],
+        "wasmtime": [
+          "svg_load_from_buffer"
+        ]
+      },
+      "operation": "svg_load_from_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SVG XML bytes) -> SVG handle or -1",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "destroy"
+        ],
+        "lua": [
+          "destroy"
+        ],
+        "wasmtime": [
+          "svg_destroy"
+        ]
+      },
+      "operation": "svg_destroy",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SVG handle) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getWidth"
+        ],
+        "lua": [
+          "getWidth"
+        ],
+        "wasmtime": [
+          "svg_get_width"
+        ]
+      },
+      "operation": "svg_get_width",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SVG handle) -> f32",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getHeight"
+        ],
+        "lua": [
+          "getHeight"
+        ],
+        "wasmtime": [
+          "svg_get_height"
+        ]
+      },
+      "operation": "svg_get_height",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SVG handle) -> f32",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "load"
+        ],
+        "lua": [
+          "load"
+        ]
+      },
+      "operation": "font_load",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(safe project-relative path, optional name) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "loadFromBuffer"
+        ],
+        "lua": [
+          "loadFromBuffer"
+        ]
+      },
+      "operation": "font_load_from_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(font bytes, optional name) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "list",
+          "list"
+        ],
+        "lua": [
+          "list",
+          "list"
+        ],
+        "wasmtime": [
+          "files_list_json"
+        ]
+      },
+      "operation": "list",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path?: string) -> file_entry[]|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "readText",
+          "readText"
+        ],
+        "lua": [
+          "readText",
+          "readText"
+        ],
+        "wasmtime": [
+          "files_read_text"
+        ]
+      },
+      "operation": "read_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: string) -> string|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "readBinary",
+          "readBinary"
+        ],
+        "lua": [
+          "readBinary",
+          "readBinary"
+        ],
+        "wasmtime": [
+          "files_read_binary"
+        ]
+      },
+      "operation": "read_binary",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: string) -> bytes|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "exists",
+          "exists"
+        ],
+        "lua": [
+          "exists",
+          "exists"
+        ],
+        "wasmtime": [
+          "files_exists"
+        ]
+      },
+      "operation": "exists",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: string) -> bool",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isDirectory",
+          "isDirectory"
+        ],
+        "lua": [
+          "isDirectory",
+          "isDirectory"
+        ],
+        "wasmtime": [
+          "files_is_directory"
+        ]
+      },
+      "operation": "is_directory",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: string) -> bool",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "size",
+          "size"
+        ],
+        "lua": [
+          "size",
+          "size"
+        ],
+        "wasmtime": [
+          "files_size"
+        ]
+      },
+      "operation": "size",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: string) -> integer|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "writeText"
+        ],
+        "lua": [
+          "writeText"
+        ]
+      },
+      "operation": "write_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: files/ virtual path, text: string) -> absolute_path|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "writeBinary"
+        ],
+        "lua": [
+          "writeBinary"
+        ]
+      },
+      "operation": "write_binary",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: files/ virtual path, data: bytes) -> absolute_path|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "appendBinary"
+        ]
+      },
+      "operation": "append_binary",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: files/ virtual path, data: bytes) -> absolute_path|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "pickText"
+        ]
+      },
+      "operation": "pick_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(callback, extension?: string) -> bool",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "saveText"
+        ]
+      },
+      "operation": "save_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(name: string, text: string, callback) -> bool",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getError",
+          "getError"
+        ],
+        "lua": [
+          "getError",
+          "getError"
+        ]
+      },
+      "operation": "get_error",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "get"
+        ],
+        "lua": [
+          "get"
+        ]
+      },
+      "operation": "input_snapshot",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> per-frame input snapshot containing mouse, pointer(s), modifiers, text/edit/composition, timing, frame count, and focus",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isKeyDown"
+        ],
+        "lua": [
+          "isKeyDown"
+        ],
+        "wasmtime": [
+          "input_get_key_down"
+        ]
+      },
+      "operation": "key_down",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SDL scancode:i32) -> bool currently held",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isKeyPressed"
+        ],
+        "lua": [
+          "isKeyPressed"
+        ]
+      },
+      "operation": "key_pressed",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(SDL scancode:i32) -> bool pressed during current frame",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "startTextInput"
+        ],
+        "lua": [
+          "startTextInput"
+        ]
+      },
+      "operation": "start_text_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(text, UTF-16 selection start/end, multiline) -> bool",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "updateTextInput"
+        ],
+        "lua": [
+          "updateTextInput"
+        ]
+      },
+      "operation": "update_text_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(text, UTF-16 selection start/end, caret x/y/width/height) -> bool",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "stopTextInput"
+        ],
+        "lua": [
+          "stopTextInput"
+        ]
+      },
+      "operation": "stop_text_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void; finish composition and platform editing session",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getWidth"
+        ],
+        "lua": [
+          "getWidth"
+        ],
+        "wasmtime": [
+          "window_get_width"
+        ]
+      },
+      "operation": "window_width",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> physical canvas width in pixels",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getHeight"
+        ],
+        "lua": [
+          "getHeight"
+        ],
+        "wasmtime": [
+          "window_get_height"
+        ]
+      },
+      "operation": "window_height",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> physical canvas height in pixels",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getDisplayDensity"
+        ],
+        "lua": [
+          "getDisplayDensity"
+        ],
+        "wasmtime": [
+          "window_get_display_density"
+        ]
+      },
+      "operation": "display_density",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> f32 drawable-pixel density; defaults to 1",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "input_get_mouse_x"
+        ]
+      },
+      "operation": "mouse_x",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> i32 current mouse x",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "input_get_mouse_y"
+        ]
+      },
+      "operation": "mouse_y",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> i32 current mouse y",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "input_get_mouse_button"
+        ]
+      },
+      "operation": "mouse_button",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(button:i32) -> i32 boolean",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "input_get_delta_time"
+        ]
+      },
+      "operation": "delta_time",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> f32 elapsed seconds since previous frame or 0",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "input_get_total_time"
+        ]
+      },
+      "operation": "total_time",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> f32 elapsed seconds since runtime start or 0",
+      "subsystem": "input_window",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isAvailable"
+        ],
+        "lua": [
+          "isAvailable"
+        ],
+        "wasmtime": [
+          "magneto_is_available"
+        ]
+      },
+      "operation": "is_available",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "hasAccelerometer"
+        ],
+        "lua": [
+          "hasAccelerometer"
+        ],
+        "wasmtime": [
+          "magneto_has_accelerometer"
+        ]
+      },
+      "operation": "has_accelerometer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "hasCompass"
+        ],
+        "lua": [
+          "hasCompass"
+        ],
+        "wasmtime": [
+          "magneto_has_compass"
+        ]
+      },
+      "operation": "has_compass",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "start"
+        ],
+        "lua": [
+          "start"
+        ],
+        "wasmtime": [
+          "magneto_start"
+        ]
+      },
+      "operation": "start",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "stop"
+        ],
+        "lua": [
+          "stop"
+        ],
+        "wasmtime": [
+          "magneto_stop"
+        ]
+      },
+      "operation": "stop",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isActive"
+        ],
+        "lua": [
+          "isActive"
+        ],
+        "wasmtime": [
+          "magneto_is_active"
+        ]
+      },
+      "operation": "is_active",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getAccel"
+        ],
+        "lua": [
+          "getAccel"
+        ],
+        "wasmtime": [
+          "magneto_get_accel_x",
+          "magneto_get_accel_y",
+          "magneto_get_accel_z"
+        ]
+      },
+      "operation": "get_accel",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> {x: f32, y: f32, z: f32}|null",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getCompass"
+        ],
+        "lua": [
+          "getCompass"
+        ],
+        "wasmtime": [
+          "magneto_get_compass_x",
+          "magneto_get_compass_y",
+          "magneto_get_compass_z",
+          "magneto_get_compass_heading"
+        ]
+      },
+      "operation": "get_compass",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> {x: f32, y: f32, z: f32, heading: f32}|null",
+      "subsystem": "magneto",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Identity"
+        ],
+        "lua": [
+          "mat4Identity"
+        ],
+        "wasmtime": [
+          "math_mat4_identity"
+        ]
+      },
+      "operation": "mat4_identity",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Multiply"
+        ],
+        "lua": [
+          "mat4Multiply"
+        ],
+        "wasmtime": [
+          "math_mat4_multiply"
+        ]
+      },
+      "operation": "mat4_multiply",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4, b: mat4) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Perspective"
+        ],
+        "lua": [
+          "mat4Perspective"
+        ],
+        "wasmtime": [
+          "math_mat4_perspective"
+        ]
+      },
+      "operation": "mat4_perspective",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, fovy: f32, aspect: f32, near: f32, far: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Ortho"
+        ],
+        "lua": [
+          "mat4Ortho"
+        ],
+        "wasmtime": [
+          "math_mat4_ortho"
+        ]
+      },
+      "operation": "mat4_ortho",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4LookAt"
+        ],
+        "lua": [
+          "mat4LookAt"
+        ],
+        "wasmtime": [
+          "math_mat4_lookat"
+        ]
+      },
+      "operation": "mat4_lookat",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, eye: vec3, target: vec3, up: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Translate"
+        ],
+        "lua": [
+          "mat4Translate"
+        ],
+        "wasmtime": [
+          "math_mat4_translate"
+        ]
+      },
+      "operation": "mat4_translate",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4, translation: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4RotateX"
+        ],
+        "lua": [
+          "mat4RotateX"
+        ],
+        "wasmtime": [
+          "math_mat4_rotate_x"
+        ]
+      },
+      "operation": "mat4_rotate_x",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4, angle: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4RotateY"
+        ],
+        "lua": [
+          "mat4RotateY"
+        ],
+        "wasmtime": [
+          "math_mat4_rotate_y"
+        ]
+      },
+      "operation": "mat4_rotate_y",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4, angle: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4RotateZ"
+        ],
+        "lua": [
+          "mat4RotateZ"
+        ],
+        "wasmtime": [
+          "math_mat4_rotate_z"
+        ]
+      },
+      "operation": "mat4_rotate_z",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4, angle: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Scale"
+        ],
+        "lua": [
+          "mat4Scale"
+        ],
+        "wasmtime": [
+          "math_mat4_scale"
+        ]
+      },
+      "operation": "mat4_scale",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4, scale: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Invert"
+        ],
+        "lua": [
+          "mat4Invert"
+        ],
+        "wasmtime": [
+          "math_mat4_invert"
+        ]
+      },
+      "operation": "mat4_invert",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4) -> bool",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "mat4Transpose"
+        ],
+        "lua": [
+          "mat4Transpose"
+        ],
+        "wasmtime": [
+          "math_mat4_transpose"
+        ]
+      },
+      "operation": "mat4_transpose",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, a: mat4) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Add"
+        ],
+        "lua": [
+          "vec3Add"
+        ],
+        "wasmtime": [
+          "math_vec3_add"
+        ]
+      },
+      "operation": "vec3_add",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3, a: vec3, b: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Sub"
+        ],
+        "lua": [
+          "vec3Sub"
+        ],
+        "wasmtime": [
+          "math_vec3_sub"
+        ]
+      },
+      "operation": "vec3_sub",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3, a: vec3, b: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Scale"
+        ],
+        "lua": [
+          "vec3Scale"
+        ],
+        "wasmtime": [
+          "math_vec3_scale"
+        ]
+      },
+      "operation": "vec3_scale",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3, a: vec3, scale: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Normalize"
+        ],
+        "lua": [
+          "vec3Normalize"
+        ],
+        "wasmtime": [
+          "math_vec3_normalize"
+        ]
+      },
+      "operation": "vec3_normalize",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3, a: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Cross"
+        ],
+        "lua": [
+          "vec3Cross"
+        ],
+        "wasmtime": [
+          "math_vec3_cross"
+        ]
+      },
+      "operation": "vec3_cross",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3, a: vec3, b: vec3) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Dot"
+        ],
+        "lua": [
+          "vec3Dot"
+        ],
+        "wasmtime": [
+          "math_vec3_dot"
+        ]
+      },
+      "operation": "vec3_dot",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(a: vec3, b: vec3) -> f32",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3Length"
+        ],
+        "lua": [
+          "vec3Length"
+        ],
+        "wasmtime": [
+          "math_vec3_length"
+        ]
+      },
+      "operation": "vec3_length",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(a: vec3) -> f32",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3TransformMat4"
+        ],
+        "lua": [
+          "vec3TransformMat4"
+        ],
+        "wasmtime": [
+          "math_vec3_transform_mat4"
+        ]
+      },
+      "operation": "vec3_transform_mat4",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3, value: vec3, matrix: mat4) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3NormalizeMany"
+        ],
+        "lua": [
+          "vec3NormalizeMany"
+        ]
+      },
+      "operation": "vec3_normalize_many",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3[], values: vec3[], count: i32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "vec3TransformMat4Many"
+        ],
+        "lua": [
+          "vec3TransformMat4Many"
+        ]
+      },
+      "operation": "vec3_transform_mat4_many",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: vec3[], values: vec3[], matrix: mat4, count: i32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "quatFromAxisAngle"
+        ],
+        "lua": [
+          "quatFromAxisAngle"
+        ],
+        "wasmtime": [
+          "math_quat_from_axis_angle"
+        ]
+      },
+      "operation": "quat_from_axis_angle",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: quat, axis: vec3, angle: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "quatMultiply"
+        ],
+        "lua": [
+          "quatMultiply"
+        ],
+        "wasmtime": [
+          "math_quat_multiply"
+        ]
+      },
+      "operation": "quat_multiply",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: quat, a: quat, b: quat) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "quatSlerp"
+        ],
+        "lua": [
+          "quatSlerp"
+        ],
+        "wasmtime": [
+          "math_quat_slerp"
+        ]
+      },
+      "operation": "quat_slerp",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: quat, a: quat, b: quat, t: f32) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "quatToMat4"
+        ],
+        "lua": [
+          "quatToMat4"
+        ],
+        "wasmtime": [
+          "math_quat_to_mat4"
+        ]
+      },
+      "operation": "quat_to_mat4",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(out: mat4, value: quat) -> void",
+      "subsystem": "math",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getInputCount"
+        ],
+        "lua": [
+          "getInputCount"
+        ],
+        "wasmtime": [
+          "midi_get_input_count"
+        ]
+      },
+      "operation": "get_input_count",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> integer; 0 when unavailable or no devices",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getOutputCount"
+        ],
+        "lua": [
+          "getOutputCount"
+        ],
+        "wasmtime": [
+          "midi_get_output_count"
+        ]
+      },
+      "operation": "get_output_count",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> integer; 0 when unavailable or no devices",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getInputDevices"
+        ],
+        "lua": [
+          "getInputDevices"
+        ]
+      },
+      "operation": "get_input_devices",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> Array<{id: integer, name: string}>; [] when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getOutputDevices"
+        ],
+        "lua": [
+          "getOutputDevices"
+        ]
+      },
+      "operation": "get_output_devices",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> Array<{id: integer, name: string}>; [] when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "refreshDevices"
+        ],
+        "lua": [
+          "refreshDevices"
+        ]
+      },
+      "operation": "refresh_devices",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void; no-op when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "onDevicesChanged"
+        ],
+        "lua": [
+          "onDevicesChanged"
+        ]
+      },
+      "operation": "on_devices_changed",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(callback: (event: {inputs, outputs, generation}) -> void | null) -> void",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "openInput"
+        ],
+        "lua": [
+          "openInput"
+        ]
+      },
+      "operation": "open_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(device_index: integer, callback: (message) -> void) -> integer handle; -1 on failure",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "closeInput"
+        ],
+        "lua": [
+          "closeInput"
+        ]
+      },
+      "operation": "close_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer) -> void; no-op when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "openOutput"
+        ],
+        "lua": [
+          "openOutput"
+        ],
+        "wasmtime": [
+          "midi_open_output"
+        ]
+      },
+      "operation": "open_output",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(device_index: integer) -> integer handle; -1 on failure",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "closeOutput"
+        ],
+        "lua": [
+          "closeOutput"
+        ],
+        "wasmtime": [
+          "midi_close_output"
+        ]
+      },
+      "operation": "close_output",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer) -> void; no-op when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sendMessage"
+        ],
+        "lua": [
+          "sendMessage"
+        ],
+        "wasmtime": [
+          "midi_send_message"
+        ]
+      },
+      "operation": "send_message",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, status: byte, data1: byte, data2: byte) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sendRaw"
+        ],
+        "lua": [
+          "sendRaw"
+        ],
+        "wasmtime": [
+          "midi_send_raw"
+        ]
+      },
+      "operation": "send_raw",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, data: bytes[1..4096]) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "noteOn"
+        ],
+        "lua": [
+          "noteOn"
+        ],
+        "wasmtime": [
+          "midi_note_on"
+        ]
+      },
+      "operation": "note_on",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, note: integer, velocity: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "noteOff"
+        ],
+        "lua": [
+          "noteOff"
+        ],
+        "wasmtime": [
+          "midi_note_off"
+        ]
+      },
+      "operation": "note_off",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, note: integer, velocity: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "controlChange"
+        ],
+        "lua": [
+          "controlChange"
+        ],
+        "wasmtime": [
+          "midi_control_change"
+        ]
+      },
+      "operation": "control_change",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, control: integer, value: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "programChange"
+        ],
+        "lua": [
+          "programChange"
+        ],
+        "wasmtime": [
+          "midi_program_change"
+        ]
+      },
+      "operation": "program_change",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, program: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "pitchBend"
+        ],
+        "lua": [
+          "pitchBend"
+        ],
+        "wasmtime": [
+          "midi_pitch_bend"
+        ]
+      },
+      "operation": "pitch_bend",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, value: integer[-8192..8191]) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "channelPressure"
+        ],
+        "lua": [
+          "channelPressure"
+        ]
+      },
+      "operation": "channel_pressure",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, pressure: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "polyPressure"
+        ],
+        "lua": [
+          "polyPressure"
+        ]
+      },
+      "operation": "poly_pressure",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: integer, channel: integer, note: integer, pressure: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getType"
+        ],
+        "lua": [
+          "getType"
+        ]
+      },
+      "operation": "get_type",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(status: byte) -> integer message_type",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getChannel"
+        ],
+        "lua": [
+          "getChannel"
+        ]
+      },
+      "operation": "get_channel",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(status: byte) -> integer[0..15] | -1 for system messages",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "createSession"
+        ],
+        "lua": [
+          "createSession"
+        ],
+        "wasmtime": [
+          "rtpmidi_create_session"
+        ]
+      },
+      "operation": "create_session",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(name: string, control_port?: integer = 0) -> integer handle; -1 on failure or unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "connectSession"
+        ],
+        "lua": [
+          "connectSession"
+        ],
+        "wasmtime": [
+          "rtpmidi_connect"
+        ]
+      },
+      "operation": "connect_session",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, host: string, control_port: integer) -> bool invitation_sent",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "destroySession"
+        ],
+        "lua": [
+          "destroySession"
+        ],
+        "wasmtime": [
+          "rtpmidi_destroy_session"
+        ]
+      },
+      "operation": "destroy_session",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer) -> void; no-op when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "onSessionMessage"
+        ],
+        "lua": [
+          "onSessionMessage"
+        ]
+      },
+      "operation": "on_session_message",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, callback: (message) -> void) -> void; no-op when unavailable or session is outside 0..7",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sessionSend"
+        ],
+        "lua": [
+          "sessionSend"
+        ],
+        "wasmtime": [
+          "rtpmidi_send_message"
+        ]
+      },
+      "operation": "session_send",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, status: byte, data1: byte, data2: byte) -> bool; true only when sent to at least one peer",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sessionNoteOn"
+        ],
+        "lua": [
+          "sessionNoteOn"
+        ]
+      },
+      "operation": "session_note_on",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, channel: integer, note: integer, velocity: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sessionNoteOff"
+        ],
+        "lua": [
+          "sessionNoteOff"
+        ]
+      },
+      "operation": "session_note_off",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, channel: integer, note: integer, velocity: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sessionControlChange"
+        ],
+        "lua": [
+          "sessionControlChange"
+        ]
+      },
+      "operation": "session_control_change",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, channel: integer, control: integer, value: integer) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "sessionSendRaw"
+        ],
+        "lua": [
+          "sessionSendRaw"
+        ]
+      },
+      "operation": "session_send_raw",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(session: integer, data: bytes[1..512]) -> bool",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getSessions"
+        ],
+        "lua": [
+          "getSessions"
+        ]
+      },
+      "operation": "get_sessions",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> Array<{handle, name, port, state, peerCount}>; [] when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "rtpmidi_get_session_count"
+        ]
+      },
+      "operation": "get_session_count",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> integer; 0 when unavailable",
+      "subsystem": "midi",
+      "test": "midi_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "import"
+        ],
+        "lua": [
+          "require"
+        ]
+      },
+      "operation": "module_import",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "load another language module",
+      "subsystem": "module_lifecycle",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "entrypoint"
+        ],
+        "lua": [
+          "entrypoint"
+        ],
+        "wasmtime": [
+          "entrypoint"
+        ]
+      },
+      "operation": "load_entrypoint",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "load and execute the configured application entrypoint",
+      "subsystem": "module_lifecycle",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "memory"
+        ]
+      },
+      "operation": "guest_memory",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "guest-exported linear memory used by pointer/buffer host ABIs",
+      "subsystem": "module_lifecycle",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "init"
+        ]
+      },
+      "operation": "guest_init",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "optional guest export init() called once after instantiation and memory wiring",
+      "subsystem": "module_lifecycle",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "fetch"
+        ],
+        "lua": [
+          "fetch",
+          "fetch"
+        ],
+        "wasmtime": [
+          "network_fetch"
+        ]
+      },
+      "operation": "fetch",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "asynchronous policy-controlled HTTP request",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "lua": [
+          "json_parse"
+        ]
+      },
+      "operation": "parse_json",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(json_text: string) -> Lua value",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "get"
+        ]
+      },
+      "operation": "headers_get",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(name: string) -> string|null",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "has"
+        ]
+      },
+      "operation": "headers_has",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(name: string) -> bool",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "entries"
+        ]
+      },
+      "operation": "headers_entries",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> Array<[string,string]>",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "keys"
+        ]
+      },
+      "operation": "headers_keys",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string[]",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "values"
+        ]
+      },
+      "operation": "headers_values",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string[]",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "forEach"
+        ]
+      },
+      "operation": "headers_for_each",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(callback: (value: string, name: string) -> any) -> void",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "text"
+        ]
+      },
+      "operation": "response_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string; consumes the body once",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "json"
+        ]
+      },
+      "operation": "response_json",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> any; consumes the body once and throws SyntaxError for invalid JSON",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "arrayBuffer"
+        ]
+      },
+      "operation": "response_array_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> ArrayBuffer; consumes the body once",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_status"
+        ]
+      },
+      "operation": "fetch_status",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> request state",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_status_code"
+        ]
+      },
+      "operation": "fetch_status_code",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> HTTP status sentinel",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_response_body_len"
+        ]
+      },
+      "operation": "fetch_response_body_length",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> body byte length sentinel",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_response_body"
+        ]
+      },
+      "operation": "fetch_response_body",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> i32 bytes copied",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_response_headers_len"
+        ]
+      },
+      "operation": "fetch_response_headers_length",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> serialized header byte length",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_response_headers"
+        ]
+      },
+      "operation": "fetch_response_headers",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> serialized header bytes copied",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_response_url_len"
+        ]
+      },
+      "operation": "fetch_response_url_length",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> final URL byte length",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_response_url"
+        ]
+      },
+      "operation": "fetch_response_url",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> final URL bytes copied",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_error_len"
+        ]
+      },
+      "operation": "fetch_error_length",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> request error byte length",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_error"
+        ]
+      },
+      "operation": "fetch_error",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32, destination_ptr: i32, max_len: i32) -> request error bytes copied",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "network_fetch_release"
+        ]
+      },
+      "operation": "fetch_release",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(slot: i32) -> void",
+      "subsystem": "network",
+      "test": "network_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "isAvailable"
+        ],
+        "lua": [
+          "isAvailable"
+        ],
+        "wasmtime": [
+          "neural_is_available"
+        ]
+      },
+      "operation": "is_available",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> bool indicating whether the ONNX Runtime library can be loaded",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getError"
+        ],
+        "lua": [
+          "getError"
+        ],
+        "wasmtime": [
+          "neural_get_error"
+        ]
+      },
+      "operation": "get_error",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> last context error string",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "loadModel"
+        ],
+        "lua": [
+          "loadModel"
+        ],
+        "wasmtime": [
+          "neural_load_model"
+        ]
+      },
+      "operation": "load_model",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(safe project-relative .onnx path) -> model_id",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "loadModelFromBuffer"
+        ],
+        "lua": [
+          "loadModelFromBuffer"
+        ],
+        "wasmtime": [
+          "neural_load_model_from_buffer"
+        ]
+      },
+      "operation": "load_model_from_buffer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(ONNX model bytes) -> model_id",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "unloadModel"
+        ],
+        "lua": [
+          "unloadModel"
+        ],
+        "wasmtime": [
+          "neural_unload_model"
+        ]
+      },
+      "operation": "unload_model",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(model_id) -> void",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getModelInfo"
+        ],
+        "lua": [
+          "getModelInfo"
+        ]
+      },
+      "operation": "get_model_info",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(model_id) -> model metadata",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "neural_get_input_count"
+        ]
+      },
+      "operation": "get_input_count",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(model_id) -> input tensor count",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "neural_get_output_count"
+        ]
+      },
+      "operation": "get_output_count",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(model_id) -> output tensor count",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "neural_get_input_info"
+        ]
+      },
+      "operation": "get_input_info",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(model_id, input_index) -> input name, shape, and rank",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "neural_get_output_info"
+        ]
+      },
+      "operation": "get_output_info",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(model_id, output_index) -> output name, shape, and rank",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setInput"
+        ],
+        "lua": [
+          "setInput"
+        ],
+        "wasmtime": [
+          "neural_set_input_f32"
+        ]
+      },
+      "operation": "set_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "stage a named tensor for the next inference",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "run"
+        ],
+        "lua": [
+          "run"
+        ],
+        "wasmtime": [
+          "neural_run"
+        ]
+      },
+      "operation": "run",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "run synchronous model inference",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getOutput"
+        ],
+        "lua": [
+          "getOutput"
+        ],
+        "wasmtime": [
+          "neural_copy_output_f32",
+          "neural_get_output_f32"
+        ]
+      },
+      "operation": "get_output",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "retrieve a named output from the most recent run",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "neural_get_output_shape"
+        ]
+      },
+      "operation": "get_output_shape",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "retrieve the resolved shape of a named output",
+      "subsystem": "neural",
+      "test": "neural_runtime_conformance"
+    },
+    {
+      "exports": {
+        "lua": [
+          "start"
+        ]
+      },
+      "operation": "animation_start",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(callback(timestamp_ms)) -> void; replace the persistent Lua frame callback",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "requestFrame"
+        ],
+        "lua": [
+          "requestFrame"
+        ]
+      },
+      "operation": "request_frame",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(callback(timestamp_ms)) -> handle 1; replace the persistent managed frame callback",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "cancelFrame"
+        ],
+        "lua": [
+          "cancelFrame"
+        ]
+      },
+      "operation": "cancel_frame",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle ignored) -> void; clear the single managed frame callback",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "once"
+        ]
+      },
+      "operation": "timer_once",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(delay_ms:number, callback) -> timer id or undefined; non-positive delay fires on a later timer-processing pass",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "every"
+        ]
+      },
+      "operation": "timer_every",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(interval_ms:number, callback) -> timer id or undefined; interval is clamped to at least 1 ms",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "clear"
+        ]
+      },
+      "operation": "timer_clear",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(timer_id:i32) -> void; unknown or inactive ids are ignored",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "frame"
+        ]
+      },
+      "operation": "guest_frame",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "optional guest export frame(timestamp_ms); invoked once per host frame",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "open"
+        ],
+        "lua": [
+          "open"
+        ],
+        "wasmtime": [
+          "db_open"
+        ]
+      },
+      "operation": "open",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(name: string) -> database_handle",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "close"
+        ],
+        "lua": [
+          "close"
+        ],
+        "wasmtime": [
+          "db_close"
+        ]
+      },
+      "operation": "close",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle) -> void",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "execute"
+        ],
+        "lua": [
+          "execute"
+        ],
+        "wasmtime": [
+          "db_execute"
+        ]
+      },
+      "operation": "execute",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle, sql: string) -> bool",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "run"
+        ],
+        "lua": [
+          "run"
+        ],
+        "wasmtime": [
+          "db_run"
+        ]
+      },
+      "operation": "run",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle, sql: string, ...params: null|bool|number|string) -> i32 changes",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "db_run_int"
+        ]
+      },
+      "operation": "run_integer_parameter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle, sql: string, parameter: i32) -> i32 changes",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "db_run_str"
+        ]
+      },
+      "operation": "run_string_parameter",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle, sql: string, parameter: string) -> i32 changes",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "query"
+        ],
+        "lua": [
+          "query"
+        ],
+        "wasmtime": [
+          "db_query_json"
+        ]
+      },
+      "operation": "query",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle, sql: string, ...params: null|bool|number|string) -> rows",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "lastInsertId"
+        ],
+        "lua": [
+          "lastInsertId"
+        ],
+        "wasmtime": [
+          "db_last_insert_id"
+        ]
+      },
+      "operation": "last_insert_id",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: database_handle) -> integer",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getError"
+        ],
+        "lua": [
+          "getError"
+        ]
+      },
+      "operation": "get_error",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string",
+      "subsystem": "sqlite",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "bind"
+        ],
+        "lua": [
+          "bind"
+        ],
+        "wasmtime": [
+          "udp_bind"
+        ]
+      },
+      "operation": "bind",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(local_port: i32; 0 requests auto-assignment) -> i32 socket_handle; -1 on failure",
+      "subsystem": "udp",
+      "test": "udp_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getPort"
+        ],
+        "lua": [
+          "getPort"
+        ],
+        "wasmtime": [
+          "udp_get_port"
+        ]
+      },
+      "operation": "get_port",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(socket_handle: i32) -> i32 local_port; -1 on failure",
+      "subsystem": "udp",
+      "test": "udp_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "send"
+        ],
+        "lua": [
+          "send"
+        ],
+        "wasmtime": [
+          "udp_send"
+        ]
+      },
+      "operation": "send",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(socket_handle: i32, host: string, port: i32, data: bytes) -> bool",
+      "subsystem": "udp",
+      "test": "udp_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "onMessage"
+        ],
+        "lua": [
+          "onMessage"
+        ],
+        "wasmtime": [
+          "udp_recv"
+        ]
+      },
+      "operation": "receive",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "receive datagrams with sender host and port",
+      "subsystem": "udp",
+      "test": "udp_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "close"
+        ],
+        "lua": [
+          "close"
+        ],
+        "wasmtime": [
+          "udp_close"
+        ]
+      },
+      "operation": "close",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(socket_handle: i32) -> void",
+      "subsystem": "udp",
+      "test": "udp_runtime_conformance"
+    }
+  ],
+  "version": 1
+}

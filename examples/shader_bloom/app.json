@@ -1,0 +1,5 @@
+{
+    "name": "Shader Bloom",
+    "description": "Post-processing bloom shader example using Budo GL.",
+    "icon": "icon.svg"
+}

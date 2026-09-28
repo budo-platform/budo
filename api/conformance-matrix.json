@@ -1,0 +1,257 @@
+{
+    "version": 1,
+    "subsystems": {
+        "audio": {
+            "mode": "normalized_trace",
+            "test": "magneto_audio_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "audio.createOscillator"
+            ]
+        },
+        "canvas": {
+            "mode": "normalized_trace",
+            "test": "canvas_host_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "canvas.resourceIsolation"
+            ]
+        },
+        "canvas_texture": {
+            "mode": "backend_sequence",
+            "tests": [
+                "js_canvas_binding_state",
+                "gpu_boundary_invariants"
+            ],
+            "reason": "CanvasTexture is a JavaScript-only managed API; Lua, Wasmtime, and browser-WASM are explicitly unsupported."
+        },
+        "capabilities": {
+            "mode": "normalized_trace",
+            "test": "basic_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "capabilities.neural",
+                "capabilities.llamacpp",
+                "capabilities.midi",
+                "capabilities.udp",
+                "capabilities.http",
+                "capabilities.sensors"
+            ]
+        },
+        "console": {
+            "mode": "normalized_trace",
+            "test": "canvas_host_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "console.call"
+            ]
+        },
+        "device": {
+            "mode": "normalized_trace",
+            "test": "basic_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "device.keepScreenOn"
+            ]
+        },
+        "drawing_resources": {
+            "mode": "normalized_trace",
+            "test": "canvas_host_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "canvas.resourceIsolation"
+            ]
+        },
+        "file": {
+            "mode": "normalized_trace",
+            "test": "sqlite_file_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "file.readText",
+                "file.exists",
+                "file.missing",
+                "file.invalidPath"
+            ]
+        },
+        "gl": {
+            "mode": "backend_sequence",
+            "tests": [
+                "gl_state_guard",
+                "gpu_resource_state",
+                "gpu_boundary_invariants",
+                "native_gpu_contract"
+            ],
+            "reason": "GL behavior is backend- and pixel-sequence-dependent; shared state restoration and resource identity are checked structurally and through native/backend tests."
+        },
+        "input_window": {
+            "mode": "normalized_trace",
+            "test": "canvas_host_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "window.instanceState"
+            ]
+        },
+        "llamacpp": {
+            "mode": "backend_sequence",
+            "tests": [
+                "managed_llamacpp_binding_state",
+                "file_sandbox_security"
+            ],
+            "reason": "JavaScript and Lua share the managed worker/service implementation while Wasmtime and web are explicitly unsupported; runtime device registration and two-instance ownership are tested without requiring a redistributable GGUF fixture."
+        },
+        "magneto": {
+            "mode": "normalized_trace",
+            "test": "magneto_audio_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "magneto.available",
+                "magneto.start",
+                "magneto.accelShape",
+                "magneto.stop"
+            ]
+        },
+        "math": {
+            "mode": "normalized_trace",
+            "test": "basic_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "math.vec3Scale",
+                "math.mat4Identity",
+                "math.vec3Scale.invalidBuffer"
+            ]
+        },
+        "midi": {
+            "mode": "normalized_trace",
+            "test": "midi_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "midi.localIsolation",
+                "midi.rtpmidiIsolation",
+                "midi.cleanup"
+            ]
+        },
+        "module_lifecycle": {
+            "mode": "normalized_trace",
+            "test": "canvas_host_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "runtime.peerCleanup"
+            ]
+        },
+        "network": {
+            "mode": "normalized_trace",
+            "test": "network_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "network.complete",
+                "network.staleCompletionDiscarded",
+                "network.cleanup"
+            ]
+        },
+        "neural": {
+            "mode": "normalized_trace",
+            "test": "neural_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "neural.available",
+                "neural.loadModel",
+                "neural.instanceIsolation"
+            ]
+        },
+        "scheduling": {
+            "mode": "normalized_trace",
+            "test": "canvas_host_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "scheduling.callback"
+            ]
+        },
+        "sqlite": {
+            "mode": "normalized_trace",
+            "test": "sqlite_file_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "sqlite.insertChanges",
+                "sqlite.query",
+                "sqlite.invalidQuery"
+            ]
+        },
+        "udp": {
+            "mode": "normalized_trace",
+            "test": "udp_runtime_conformance",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "operations": [
+                "udp.bind",
+                "udp.receive"
+            ]
+        }
+    }
+}

@@ -1,0 +1,5 @@
+{
+    "name": "Shader Demo",
+    "description": "Introductory shader example using Budo GL fullscreen drawing.",
+    "icon": "icon.svg"
+}

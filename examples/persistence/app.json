@@ -1,0 +1,5 @@
+{
+    "name": "Persistence",
+    "description": "SQLite persistence example for storing application state.",
+    "icon": "icon.svg"
+}

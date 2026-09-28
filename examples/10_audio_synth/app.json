@@ -1,0 +1,8 @@
+{
+    "name": "Piano synth",
+    "description": "Small piano synth that use Budo Audio API to generate sound.",
+    "author": "Budo",
+    "version": "1.0.0",
+    "date": "2026-04-08",
+    "icon": "icon.svg"
+}

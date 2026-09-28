@@ -1,0 +1,178 @@
+{
+    "version": 1,
+    "subsystem": "llamacpp",
+    "error_convention": {
+        "javascript": {
+            "kind": "throw_programmer_error_report_async_failure",
+            "details": "Invalid arguments and synchronous sandbox or queue failures throw. Asynchronous model-load and generation failures are delivered through callbacks on the owning runtime thread."
+        },
+        "lua": {
+            "kind": "throw_programmer_error_report_async_failure",
+            "details": "Invalid arguments and synchronous sandbox or queue failures raise Lua errors. Asynchronous model-load failures are delivered through the callback on the owning runtime thread."
+        }
+    },
+    "wrapper_headers": [
+        "src/llamacpp/llamacpp_wrapper.h",
+        "src/llamacpp/llamacpp_service.h"
+    ],
+    "state_ownership": {
+        "javascript": "Each runtime owns one JsLlamaCppContext, service, worker, handle tables, queue, and copied callback references. Polling is the only path that invokes QuickJS.",
+        "lua": "Each runtime owns one LuaLlamaCppContext, service, worker, handle tables, queue, and Lua registry callback references. Polling is the only path that invokes Lua.",
+        "cleanup": "Cleanup rejects stale events, cancels work, joins the worker, releases chats before models, drains event payloads, releases VM callbacks, and shuts down the process-counted llama backend reference."
+    },
+    "runtimes": {
+        "javascript": {
+            "source": "src/llamacpp/js_llamacpp_bindings.cpp",
+            "registration_symbol": "js_llamacpp_init",
+            "namespace": "sys.llamacpp",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "export_extractor": "quickjs_function_data"
+        },
+        "lua": {
+            "source": "src/llamacpp/lua_llamacpp_bindings.cpp",
+            "registration_symbol": "lua_llamacpp_init",
+            "namespace": "sys.llamacpp",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "export_extractor": "lua_reg"
+        }
+    },
+    "unsupported_runtimes": {
+        "wasmtime": {
+            "source": "src/core/main.c",
+            "registration_symbol": "runtime_wasm_subsystems",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "reason": "The managed object and callback API has no Wasmtime handle/polling contract."
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "llama.cpp is intentionally omitted from the web build."
+        }
+    },
+    "availability_gates": [
+        {
+            "kind": "compile_time",
+            "registration_effect": "required",
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "platforms": [
+                "desktop"
+            ],
+            "source": "CMakeLists.txt",
+            "source_symbols": [
+                "ENABLE_LLAMACPP",
+                "BUDO_LLAMACPP",
+                "llama"
+            ],
+            "behavior": "ENABLE_LLAMACPP is OFF by default on desktop and enabled by the private Android pack. The pinned revision builds CPU support everywhere and Metal on macOS; Budo registers sys.llamacpp after the file service."
+        }
+    ],
+    "operations": [
+        {
+            "name": "is_available",
+            "wrapper_symbol": "llamacpp_service_is_available",
+            "signature": "() -> bool",
+            "exports": {
+                "javascript": "isAvailable",
+                "lua": "isAvailable"
+            }
+        },
+        {
+            "name": "get_devices",
+            "wrapper_symbol": "budo_llama_is_available",
+            "signature": "() -> device[]",
+            "exports": {
+                "javascript": "getDevices",
+                "lua": "getDevices"
+            }
+        },
+        {
+            "name": "load_model",
+            "wrapper_symbol": "llamacpp_service_load_model",
+            "signature": "(path, options, callback) -> void",
+            "exports": {
+                "javascript": "loadModel",
+                "lua": "loadModel"
+            }
+        },
+        {
+            "name": "get_error",
+            "wrapper_symbol": "llamacpp_service_get_error",
+            "signature": "() -> string",
+            "exports": {
+                "javascript": "getError",
+                "lua": "getError"
+            }
+        }
+    ],
+    "capability_relationships": [
+        {
+            "subsystem": "capabilities",
+            "operation": "llamacpp",
+            "kind": "availability_probe",
+            "required_for_registration": true,
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "applies_to": [
+                "is_available",
+                "get_devices",
+                "load_model"
+            ],
+            "unavailable_behavior": "sys.capabilities.llamacpp.available is false and sys.llamacpp is absent when BUDO_LLAMACPP is not compiled."
+        }
+    ],
+    "limits": {
+        "model_bytes": 68719476736,
+        "prompt_bytes": 1048576,
+        "generated_tokens": 8192,
+        "context_tokens": 131072,
+        "job_queue": 32,
+        "text_event_queue": 128
+    },
+    "conformance": {
+        "managed_binding_state": "tests/managed_llamacpp_binding_state_test.cpp",
+        "sandbox_native_reference": "tests/file_sandbox_test.c",
+        "android_build": "make android-build ANDROID_APP=examples/demo"
+    },
+    "platform_differences": {
+        "desktop": {
+            "source": "src/core/main.c",
+            "details": [
+                "CPU is mandatory; Metal is compiled on macOS.",
+                "Models are opened through FileContext using no-follow traversal and passed to llama.cpp as caller-owned FILE streams.",
+                "A single worker serializes model loading and generation; callbacks run only during subsystem polling.",
+                "Automatic placement cache records are keyed by the pinned llama.cpp revision, sandbox file identity and size, context size, and batch size; explicit placement bypasses the cache.",
+                "CUDA and Vulkan are opt-in dynamic ggml backend profiles requiring their vendor SDK and shared-library staging beside budo."
+            ]
+        },
+        "android": {
+            "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+            "details": [
+                "The private arm64-v8a feature pack builds the pinned CPU backend and registers JavaScript and Lua after the file service.",
+                "Models load from the files/ mount without APK duplication; runtime pause cooperatively cancels active generation while retaining loaded models."
+            ]
+        },
+        "web": {
+            "source": "web/CMakeLists.txt",
+            "details": [
+                "No sources or API are compiled for web."
+            ]
+        }
+    }
+}

@@ -1,0 +1,5 @@
+{
+    "name": "TypeScript Hello",
+    "description": "Minimal TypeScript Budo example loaded directly by the runtime.",
+    "icon": "icon.svg"
+}

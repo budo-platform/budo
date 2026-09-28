@@ -1,0 +1,5 @@
+{
+    "name": "Hello World Animated",
+    "description": "Animated hello world example demonstrating Budo frame callbacks.",
+    "icon": "icon.svg"
+}

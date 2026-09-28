@@ -1,0 +1,5 @@
+{
+    "name": "Ruler",
+    "description": "Interactive ruler example using display density and canvas measurements.",
+    "icon": "icon.svg"
+}

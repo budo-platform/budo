@@ -1,0 +1,5 @@
+{
+    "name": "Layout Demo",
+    "description": "Canvas layout example showing responsive UI placement in Budo.",
+    "icon": "icon.svg"
+}

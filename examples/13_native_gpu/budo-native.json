@@ -1,0 +1,15 @@
+{
+    "schema_version": 1,
+    "name": "Budo Native GPU Example",
+    "sources": [
+        "main.c"
+    ],
+    "include_directories": [],
+    "assets": [],
+    "definitions": [],
+    "modules": [
+        "core"
+    ],
+    "c_standard": 11,
+    "sdk_version": "0.4.3"
+}

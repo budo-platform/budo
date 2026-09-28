@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Budo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            touch-action: none;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Fullscreen button */
+        #fullscreen-btn {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 200;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 8px;
+            color: #ccc;
+            font-size: 18px;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        body:hover #fullscreen-btn,
+        body:active #fullscreen-btn {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #fullscreen-btn:hover {
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        /* Loading spinner shown while WASM loads */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #888;
+            font-family: system-ui, sans-serif;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+
+        #loading .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.15);
+            border-top-color: #888;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading…</div>
+    </div>
+
+    <button id="fullscreen-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen">&#x26F6;</button>
+
+    <script>
+        // Hide loading indicator once the WASM module is ready
+        var Module = typeof Module !== 'undefined' ? Module : {};
+        Module.onRuntimeInitialized = function () {
+            var el = document.getElementById('loading');
+            if (el) el.style.display = 'none';
+        };
+        // Route stdout/stderr to the browser console
+        Module.print = function (text) { console.log(text); };
+        Module.printErr = function (text) { console.warn(text); };
+
+        // Fullscreen toggle
+        document.getElementById('fullscreen-btn').addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(function () { });
+            } else {
+                document.exitFullscreen().catch(function () { });
+            }
+        });
+    </script>
+
+    {{{ SCRIPT }}}
+</body>
+
+</html>

@@ -1,0 +1,161 @@
+{
+    "version": 1,
+    "subsystem": "udp",
+    "error_convention": {
+        "javascript": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "bind and getPort return -1, send returns false, and callback registration or close becomes a no-op for missing context or rejected input. Wrapper error text is not exported; receive callback exceptions are not surfaced by this binding."
+        },
+        "lua": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "luaL checks raise Lua errors for invalid required arguments; bind and getPort return -1, send returns false, and callback registration or close becomes a no-op for unavailable context or rejected handles. Wrapper error text is not exported."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host calls do not trap. bind and getPort return -1 when unavailable or on wrapper failure; send returns 0; recv returns bytes received, 0 for no datagram or invalid bridge state, -1 on wrapper error, and -2 when the guest buffer is too small; close becomes a no-op."
+        }
+    },
+    "wrapper_header": "src/network/udp_wrapper.h",
+    "capability_relationships": [
+        {
+            "subsystem": "capabilities",
+            "operation": "udp",
+            "kind": "required",
+            "required_for_registration": true,
+            "applies_to": [
+                "bind",
+                "get_port",
+                "send",
+                "receive",
+                "close"
+            ],
+            "unavailable_behavior": "Browser builds report capability false and register neither sys.net.udp for managed JavaScript/Lua nor env.udp_* imports for browser-native WebAssembly."
+        }
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/network/js_udp_bindings.c",
+            "registration_symbol": "js_udp_init",
+            "namespace": "sys.net.udp",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "export_extractor": "quickjs_function_data"
+        },
+        "lua": {
+            "source": "src/network/lua_udp_bindings.c",
+            "registration_symbol": "lua_udp_init",
+            "namespace": "sys.net.udp",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "export_extractor": "lua_reg"
+        },
+        "wasmtime": {
+            "source": "src/network/wasm_udp_bindings.c",
+            "registration_symbol": "wasm_udp_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no udp_* imports and browser builds provide no raw datagram backend.",
+            "absent_export_prefixes": [
+                "udp_"
+            ]
+        }
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "The web managed-runtime initialization registers no sys.net.udp namespace.",
+                "The browser-native WebAssembly env object registers no udp_* imports."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "bind",
+            "wrapper_symbol": "udp_bind",
+            "signature": "(local_port: i32; 0 requests auto-assignment) -> i32 socket_handle; -1 on failure",
+            "exports": {
+                "javascript": "bind",
+                "lua": "bind",
+                "wasmtime": {
+                    "name": "udp_bind",
+                    "signature": "(local_port: i32) -> i32 socket_handle; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "get_port",
+            "wrapper_symbol": "udp_get_port",
+            "signature": "(socket_handle: i32) -> i32 local_port; -1 on failure",
+            "exports": {
+                "javascript": "getPort",
+                "lua": "getPort",
+                "wasmtime": "udp_get_port"
+            }
+        },
+        {
+            "name": "send",
+            "wrapper_symbol": "udp_send",
+            "signature": "(socket_handle: i32, host: string, port: i32, data: bytes) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "send",
+                    "signature": "(socket_handle: number, host: string, port: number, data: array-like bytes) -> bool"
+                },
+                "lua": {
+                    "name": "send",
+                    "signature": "(socket_handle: integer, host: string, port: integer, data: byte[]) -> bool"
+                },
+                "wasmtime": {
+                    "name": "udp_send",
+                    "signature": "(socket_handle: i32, host_ptr: i32, host_len: i32, port: i32, data_ptr: i32, data_len: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "receive",
+            "wrapper_symbol": "udp_recv",
+            "signature": "receive datagrams with sender host and port",
+            "exports": {
+                "javascript": {
+                    "name": "onMessage",
+                    "signature": "(socket_handle: number, callback: ({data: number[], host: string, port: number}) -> void) -> void; nullish or non-function callback clears registration"
+                },
+                "lua": {
+                    "name": "onMessage",
+                    "signature": "(socket_handle: integer, callback: function|nil) -> nil; nil or non-function callback clears registration"
+                },
+                "wasmtime": {
+                    "name": "udp_recv",
+                    "signature": "(socket_handle: i32, data_ptr: i32, data_capacity: i32, info_ptr: i32) -> i32; writes port i32 plus a 64-byte NUL-terminated host field at info_ptr"
+                }
+            }
+        },
+        {
+            "name": "close",
+            "wrapper_symbol": "udp_close",
+            "signature": "(socket_handle: i32) -> void",
+            "exports": {
+                "javascript": "close",
+                "lua": "close",
+                "wasmtime": "udp_close"
+            }
+        }
+    ]
+}

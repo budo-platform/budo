@@ -1,0 +1,5 @@
+{
+    "name": "Shapes Demo",
+    "description": "Canvas shape drawing example covering basic Budo primitives.",
+    "icon": "icon.svg"
+}

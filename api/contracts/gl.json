@@ -1,0 +1,819 @@
+{
+    "version": 1,
+    "subsystem": "gl",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "QuickJS validates object receivers, buffers, enum strings, dimensions, and required arguments, and throws TypeError, RangeError, or InternalError on invalid input or wrapper failure. getLastError returns the window GL error string without adding a Wasm-style copy ABI."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "luaL checks raise for invalid arguments; resource creation and most immediate GL failures raise Lua errors using the window GL error. Destruction functions are generally tolerant of missing context or stale ids."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host imports do not trap. Resource creation and attribute lookup return -1 on missing context, invalid guest memory, or wrapper failure; upload and resize imports return 0 on failure; void imports become no-ops and retain the last error only inside WasmCanvasContext."
+        },
+        "browser_wasm": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Browser env imports do not throw into the guest. Creation returns -1 and buffer upload returns 0 on failure; void imports are no-ops without a window or valid temporary-memory range. Only eleven GL imports are exposed."
+        }
+    },
+    "wrapper_header": "src/core/window.h",
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "export_sources": [
+                "src/graphics/js_gl_bindings.c"
+            ],
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "sys.gl",
+                "sys.gl.screen"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_sys_gl_funcs"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "export_sources": [
+                "src/graphics/lua_gl_bindings.c"
+            ],
+            "registration_symbol": "lua_canvas_create",
+            "namespace": "sys.gl",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg",
+            "export_scopes": [
+                "gl_funcs"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "export_sources": [
+                "src/graphics/wasm_gl_bindings.c"
+            ],
+            "registration_symbol": "wasm_canvas_create",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host",
+            "export_prefixes": [
+                "gl_"
+            ]
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": "env",
+            "platforms": [
+                "web"
+            ],
+            "export_extractor": "javascript_object_key",
+            "export_prefixes": [
+                "gl_"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "Window owns app-created GL programs, targets, buffers, textures, and vertex layouts and resets them with the app runtime.",
+        "lua": "Lua exposes numeric resource ids only; all calls use the active LuaCanvasContext's borrowed Window, which owns and resets app-created GL resources.",
+        "wasmtime": "Wasmtime exposes numeric resource ids and reads strings/buffers from the guest memory export; the borrowed Window owns the underlying GL resources.",
+        "browser_wasm": "The web bridge copies guest strings and byte/float ranges into Emscripten memory for C wrappers; the WebAppState Window owns the resulting GL resources."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript and Lua expose their complete registered GL tables through the web host.",
+                "Browser-native WebAssembly exposes only program creation, fullscreen draw, two scalar uniforms, mat4 arrays, buffer create/upload, vertex-layout create/configuration, and mesh draw.",
+                "Browser-native WebAssembly omits destruction, render targets, textures, cubemaps, most uniforms, buffer sub-data, vertex-layout destruction, and attribute lookup.",
+                "Wasmtime and browser-WASM use the same name for several imports but browser-WASM implements a strict subset and copies guest data through temporary Emscripten allocations."
+            ]
+        },
+        "desktop": {
+            "source": "src/graphics/js_canvas_bindings.c",
+            "details": [
+                "JavaScript alone exposes object-style sys.gl.screen methods in addition to numeric sys.gl calls.",
+                "Lua and Wasmtime route drawFullscreen, drawRegion, bindTexture, texture binding, and drawMesh through immediate wrappers; JavaScript separately exposes queued and immediate forms where registered.",
+                "The TypeScript declaration advertises createTextureCube and drawMeshInstanced, but neither name appears in the JavaScript registration table; the source-backed callable surface contains loadTextureCube and drawMesh instead."
+            ]
+        },
+        "android": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "details": [
+                "Android exposes managed JavaScript and Lua GL tables but no Wasmtime or browser-native WebAssembly runtime."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "create_program",
+            "wrapper_symbol": "window_gl_create_program",
+            "signature": "compile/link vertex and fragment shader files -> positive program id or -1",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "createProgram",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "createProgram",
+                "wasmtime": "gl_create_program",
+                "browser_wasm": "gl_create_program"
+            }
+        },
+        {
+            "name": "create_program_from_buffer",
+            "wrapper_symbol": "window_gl_create_program_from_source",
+            "signature": "compile/link in-memory vertex and fragment source -> positive program id or -1",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "createProgramFromBuffer",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "createProgramFromBuffer",
+                "wasmtime": "gl_create_program_from_buffer"
+            }
+        },
+        {
+            "name": "destroy_program",
+            "wrapper_symbol": "window_gl_destroy_program",
+            "signature": "(program_id:i32) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "destroyProgram",
+                    "namespace": "sys.gl"
+                },
+                "lua": "destroyProgram",
+                "wasmtime": "gl_destroy_program"
+            }
+        },
+        {
+            "name": "use_program",
+            "wrapper_symbol": "window_gl_use_program",
+            "signature": "(program_id:i32) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "useProgram",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "useProgram",
+                "wasmtime": "gl_use_program"
+            }
+        },
+        {
+            "name": "bind_screen",
+            "wrapper_symbol": "window_gl_bind_screen",
+            "signature": "() -> bool; bind default framebuffer and viewport",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "bindScreen",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "bindScreen",
+                "wasmtime": "gl_bind_screen"
+            }
+        },
+        {
+            "name": "bind_render_target",
+            "wrapper_symbol": "window_gl_bind_render_target_immediate",
+            "signature": "(target_id:i32) -> bool; zero binds screen",
+            "exports": {
+                "javascript": {
+                    "name": "bindRenderTarget",
+                    "namespace": "sys.gl"
+                },
+                "lua": "bindRenderTarget",
+                "wasmtime": "gl_bind_render_target"
+            }
+        },
+        {
+            "name": "draw_fullscreen",
+            "wrapper_symbol": "window_gl_draw_fullscreen",
+            "signature": "(program_id:i32) -> bool using the queued/default-canvas path",
+            "exports": {
+                "javascript": {
+                    "name": "drawFullscreen",
+                    "namespace": "sys.gl"
+                },
+                "browser_wasm": "gl_draw_fullscreen"
+            }
+        },
+        {
+            "name": "draw_fullscreen_immediate",
+            "wrapper_symbol": "window_gl_draw_fullscreen_immediate",
+            "signature": "(program_id:i32, source_texture:u32) -> bool against current target",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "drawFullscreenImmediate",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "drawFullscreen",
+                "wasmtime": "gl_draw_fullscreen"
+            }
+        },
+        {
+            "name": "set_uniform_1i",
+            "wrapper_symbol": "window_gl_set_uniform_1i",
+            "signature": "(program_id, name, i32) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "setUniform1i",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "setUniform1i",
+                "wasmtime": "gl_set_uniform_1i"
+            }
+        },
+        {
+            "name": "set_uniform_1f",
+            "wrapper_symbol": "window_gl_set_uniform_1f",
+            "signature": "(program_id, name, f32) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "setUniform1f",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "setUniform1f",
+                "wasmtime": "gl_set_uniform_1f",
+                "browser_wasm": "gl_set_uniform_1f"
+            }
+        },
+        {
+            "name": "set_uniform_2f",
+            "wrapper_symbol": "window_gl_set_uniform_2f",
+            "signature": "(program_id, name, f32, f32) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "setUniform2f",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "setUniform2f",
+                "wasmtime": "gl_set_uniform_2f",
+                "browser_wasm": "gl_set_uniform_2f"
+            }
+        },
+        {
+            "name": "set_uniform_3f",
+            "wrapper_symbol": "window_gl_set_uniform_3f",
+            "signature": "(program_id, name, f32, f32, f32) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "setUniform3f",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "setUniform3f",
+                "wasmtime": "gl_set_uniform_3f"
+            }
+        },
+        {
+            "name": "set_uniform_4f",
+            "wrapper_symbol": "window_gl_set_uniform_4f",
+            "signature": "(program_id, name, f32, f32, f32, f32) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "setUniform4f",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "setUniform4f",
+                "wasmtime": "gl_set_uniform_4f"
+            }
+        },
+        {
+            "name": "get_last_error",
+            "wrapper_symbol": "window_gl_get_error",
+            "signature": "() -> last GL error string or empty",
+            "exports": {
+                "javascript": {
+                    "name": "getLastError",
+                    "namespace": "sys.gl"
+                },
+                "lua": "getLastError"
+            }
+        },
+        {
+            "name": "get_project_dir",
+            "wrapper_symbol": "window_get_project_dir",
+            "signature": "() -> loaded project directory",
+            "exports": {
+                "javascript": {
+                    "name": "getProjectDir",
+                    "namespace": "sys.gl"
+                },
+                "lua": "getProjectDir"
+            }
+        },
+        {
+            "name": "create_render_target",
+            "wrapper_symbol": "window_gl_create_render_target",
+            "signature": "(width:i32, height:i32, depth:bool) -> target id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "createRenderTarget",
+                    "namespace": "sys.gl"
+                },
+                "lua": "createRenderTarget",
+                "wasmtime": "gl_create_render_target"
+            }
+        },
+        {
+            "name": "destroy_render_target",
+            "wrapper_symbol": "window_gl_destroy_render_target",
+            "signature": "(target_id:i32) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "destroyRenderTarget",
+                    "namespace": "sys.gl"
+                },
+                "lua": "destroyRenderTarget",
+                "wasmtime": "gl_destroy_render_target"
+            }
+        },
+        {
+            "name": "resize_render_target",
+            "wrapper_symbol": "window_gl_resize_render_target",
+            "signature": "(target_id:i32, width:i32, height:i32) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "resizeRenderTarget",
+                    "namespace": "sys.gl"
+                },
+                "lua": "resizeRenderTarget",
+                "wasmtime": "gl_resize_render_target"
+            }
+        },
+        {
+            "name": "draw_region",
+            "wrapper_symbol": "window_gl_draw_region",
+            "signature": "queued region draw using program and optional target",
+            "exports": {
+                "javascript": {
+                    "name": "drawRegion",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "draw_region_immediate",
+            "wrapper_symbol": "window_gl_draw_region_immediate",
+            "signature": "immediate region draw against current or explicit target",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "drawRegionImmediate",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "drawRegion",
+                "wasmtime": "gl_draw_region"
+            }
+        },
+        {
+            "name": "bind_render_target_texture",
+            "wrapper_symbol": "window_gl_bind_texture",
+            "signature": "queued bind of render-target color texture to sampler",
+            "exports": {
+                "javascript": {
+                    "name": "bindTexture",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "bind_render_target_texture_immediate",
+            "wrapper_symbol": "window_gl_bind_texture_immediate",
+            "signature": "immediate bind of render-target color texture to sampler",
+            "exports": {
+                "javascript": {
+                    "name": "renderTargetTexture",
+                    "namespace": "sys.gl"
+                },
+                "lua": "bindTexture",
+                "wasmtime": "gl_bind_texture"
+            }
+        },
+        {
+            "name": "bind_canvas_texture",
+            "wrapper_symbol": "window_gl_bind_canvas_texture",
+            "signature": "queued bind of flushed CanvasTexture to sampler",
+            "exports": {
+                "javascript": {
+                    "name": "bindCanvasTexture",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "program_texture",
+            "signature": "polymorphic immediate binding of numeric 2D texture or CanvasTexture",
+            "binding_symbols": {
+                "javascript": "js_gl_texture"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "texture",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "create_buffer",
+            "wrapper_symbol": "window_gl_create_buffer",
+            "signature": "() -> buffer id or -1; managed forms optionally upload initial data",
+            "exports": {
+                "javascript": {
+                    "name": "createBuffer",
+                    "namespace": "sys.gl"
+                },
+                "lua": "createBuffer",
+                "wasmtime": "gl_create_buffer",
+                "browser_wasm": "gl_create_buffer"
+            }
+        },
+        {
+            "name": "buffer_data",
+            "wrapper_symbol": "window_gl_buffer_data",
+            "signature": "(buffer_id, target, data, byte_len, usage) -> bool",
+            "exports": {
+                "wasmtime": "gl_buffer_data",
+                "browser_wasm": "gl_buffer_data"
+            }
+        },
+        {
+            "name": "update_buffer",
+            "wrapper_symbol": "window_gl_buffer_sub_data",
+            "signature": "(buffer_id, byte_offset, data, byte_len) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "updateBuffer",
+                    "namespace": "sys.gl"
+                },
+                "lua": "updateBuffer",
+                "wasmtime": "gl_buffer_sub_data"
+            }
+        },
+        {
+            "name": "destroy_buffer",
+            "wrapper_symbol": "window_gl_destroy_buffer",
+            "signature": "(buffer_id:i32) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "destroyBuffer",
+                    "namespace": "sys.gl"
+                },
+                "lua": "destroyBuffer",
+                "wasmtime": "gl_destroy_buffer"
+            }
+        },
+        {
+            "name": "create_texture_2d",
+            "wrapper_symbol": "window_gl_create_texture_2d",
+            "signature": "(width, height, format, optional RGBA bytes) -> texture id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "createTexture2D",
+                    "namespace": "sys.gl"
+                },
+                "lua": "createTexture2D",
+                "wasmtime": "gl_create_texture_2d"
+            }
+        },
+        {
+            "name": "load_texture_2d",
+            "wrapper_symbol": "window_gl_create_texture_2d_from_file",
+            "signature": "(safe project-relative image path) -> texture id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "loadTexture2D",
+                    "namespace": "sys.gl"
+                },
+                "lua": "loadTexture2D",
+                "wasmtime": "gl_load_texture_2d"
+            }
+        },
+        {
+            "name": "load_texture_2d_from_buffer",
+            "wrapper_symbol": "window_gl_create_texture_2d_from_buffer",
+            "signature": "(encoded image bytes) -> texture id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "loadTexture2DFromBuffer",
+                    "namespace": "sys.gl"
+                },
+                "lua": "loadTexture2DFromBuffer",
+                "wasmtime": "gl_load_texture_2d_from_buffer"
+            }
+        },
+        {
+            "name": "load_texture_cube",
+            "wrapper_symbol": "window_gl_create_texture_cube_from_files",
+            "signature": "(six safe project-relative image paths) -> cubemap id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "loadTextureCube",
+                    "namespace": "sys.gl"
+                },
+                "lua": "loadTextureCube",
+                "wasmtime": "gl_load_texture_cube"
+            }
+        },
+        {
+            "name": "load_texture_cube_from_buffer",
+            "wrapper_symbol": "window_gl_create_texture_cube_from_buffers",
+            "signature": "(six encoded image buffers) -> cubemap id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "loadTextureCubeFromBuffer",
+                    "namespace": "sys.gl"
+                },
+                "lua": "loadTextureCubeFromBuffer",
+                "wasmtime": "gl_load_texture_cube_from_buffer"
+            }
+        },
+        {
+            "name": "update_texture_2d",
+            "wrapper_symbol": "window_gl_update_texture_2d",
+            "signature": "(texture_id, x, y, width, height, pixels) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "updateTexture2D",
+                    "namespace": "sys.gl"
+                },
+                "lua": "updateTexture2D",
+                "wasmtime": "gl_update_texture_2d"
+            }
+        },
+        {
+            "name": "destroy_texture",
+            "wrapper_symbol": "window_gl_destroy_texture",
+            "signature": "(texture_id:i32) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "destroyTexture",
+                    "namespace": "sys.gl"
+                },
+                "lua": "destroyTexture",
+                "wasmtime": "gl_destroy_texture"
+            }
+        },
+        {
+            "name": "create_vertex_layout",
+            "wrapper_symbol": "window_gl_create_vertex_layout",
+            "signature": "() -> layout id or -1",
+            "exports": {
+                "javascript": {
+                    "name": "createVertexLayout",
+                    "namespace": "sys.gl"
+                },
+                "lua": "createVertexLayout",
+                "wasmtime": "gl_create_vertex_layout",
+                "browser_wasm": "gl_create_vertex_layout"
+            }
+        },
+        {
+            "name": "destroy_vertex_layout",
+            "wrapper_symbol": "window_gl_destroy_vertex_layout",
+            "signature": "(layout_id:i32) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "destroyVertexLayout",
+                    "namespace": "sys.gl"
+                },
+                "lua": "destroyVertexLayout",
+                "wasmtime": "gl_destroy_vertex_layout"
+            }
+        },
+        {
+            "name": "set_attribute",
+            "wrapper_symbol": "window_gl_set_attribute",
+            "signature": "configure one vertex attribute slot",
+            "exports": {
+                "javascript": {
+                    "name": "setAttribute",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setAttribute",
+                "wasmtime": "gl_set_attribute",
+                "browser_wasm": "gl_set_attribute"
+            }
+        },
+        {
+            "name": "set_index_buffer",
+            "wrapper_symbol": "window_gl_set_index_buffer",
+            "signature": "attach an index buffer and u16/u32 type to a layout",
+            "exports": {
+                "javascript": {
+                    "name": "setIndexBuffer",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setIndexBuffer",
+                "wasmtime": "gl_set_index_buffer",
+                "browser_wasm": "gl_set_index_buffer"
+            }
+        },
+        {
+            "name": "set_uniform_matrix3",
+            "wrapper_symbol": "window_gl_set_uniform_matrix3fv",
+            "signature": "set one or more column-major mat3 values",
+            "exports": {
+                "javascript": {
+                    "name": "setUniformMatrix3",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setUniformMatrix3",
+                "wasmtime": "gl_set_uniform_matrix3fv"
+            }
+        },
+        {
+            "name": "set_uniform_matrix4",
+            "wrapper_symbol": "window_gl_set_uniform_matrix4fv",
+            "signature": "set one or more column-major mat4 values",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "setUniformMatrix4",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "setUniformMatrix4",
+                "wasmtime": "gl_set_uniform_matrix4fv",
+                "browser_wasm": "gl_set_uniform_matrix4fv"
+            }
+        },
+        {
+            "name": "set_uniform_1iv",
+            "wrapper_symbol": "window_gl_set_uniform_1iv",
+            "signature": "set i32 uniform array",
+            "exports": {
+                "javascript": {
+                    "name": "setUniform1iv",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setUniform1iv",
+                "wasmtime": "gl_set_uniform_1iv"
+            }
+        },
+        {
+            "name": "set_uniform_1fv",
+            "wrapper_symbol": "window_gl_set_uniform_1fv",
+            "signature": "set scalar f32 uniform array",
+            "exports": {
+                "javascript": {
+                    "name": "setUniform1fv",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setUniform1fv",
+                "wasmtime": "gl_set_uniform_1fv"
+            }
+        },
+        {
+            "name": "set_uniform_2fv",
+            "wrapper_symbol": "window_gl_set_uniform_2fv",
+            "signature": "set vec2 f32 uniform array",
+            "exports": {
+                "javascript": {
+                    "name": "setUniform2fv",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setUniform2fv",
+                "wasmtime": "gl_set_uniform_2fv"
+            }
+        },
+        {
+            "name": "set_uniform_3fv",
+            "wrapper_symbol": "window_gl_set_uniform_3fv",
+            "signature": "set vec3 f32 uniform array",
+            "exports": {
+                "javascript": {
+                    "name": "setUniform3fv",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setUniform3fv",
+                "wasmtime": "gl_set_uniform_3fv"
+            }
+        },
+        {
+            "name": "set_uniform_4fv",
+            "wrapper_symbol": "window_gl_set_uniform_4fv",
+            "signature": "set vec4 f32 uniform array",
+            "exports": {
+                "javascript": {
+                    "name": "setUniform4fv",
+                    "namespace": "sys.gl"
+                },
+                "lua": "setUniform4fv",
+                "wasmtime": "gl_set_uniform_4fv"
+            }
+        },
+        {
+            "name": "bind_texture_2d",
+            "wrapper_symbol": "window_gl_bind_texture_2d",
+            "signature": "queued bind of app 2D texture to sampler",
+            "exports": {
+                "javascript": {
+                    "name": "bindTexture2D",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "bind_texture_2d_immediate",
+            "wrapper_symbol": "window_gl_bind_texture_2d_immediate",
+            "signature": "immediate bind of app 2D texture to sampler",
+            "exports": {
+                "lua": "bindTexture2D",
+                "wasmtime": "gl_bind_texture_2d"
+            }
+        },
+        {
+            "name": "bind_texture_cube",
+            "wrapper_symbol": "window_gl_bind_texture_cube",
+            "signature": "queued bind of app cubemap to sampler",
+            "exports": {
+                "javascript": {
+                    "name": "bindTextureCube",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "bind_texture_cube_immediate",
+            "wrapper_symbol": "window_gl_bind_texture_cube_immediate",
+            "signature": "immediate bind of app cubemap to sampler",
+            "exports": {
+                "lua": "bindTextureCube",
+                "wasmtime": "gl_bind_texture_cube"
+            }
+        },
+        {
+            "name": "draw_mesh",
+            "wrapper_symbol": "window_gl_draw_mesh",
+            "signature": "queued mesh draw with layout and draw state",
+            "exports": {
+                "javascript": {
+                    "name": "drawMesh",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
+            "name": "draw_mesh_immediate",
+            "wrapper_symbol": "window_gl_draw_mesh_immediate",
+            "signature": "immediate mesh draw with optional target, depth/cull/blend state, and instance count",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "drawMeshImmediate",
+                        "namespace": "sys.gl"
+                    }
+                ],
+                "lua": "drawMesh",
+                "wasmtime": "gl_draw_mesh",
+                "browser_wasm": "gl_draw_mesh"
+            }
+        },
+        {
+            "name": "get_attrib_location",
+            "wrapper_symbol": "window_gl_get_attrib_location",
+            "signature": "(program_id, name) -> location or -1",
+            "exports": {
+                "javascript": {
+                    "name": "getAttribLocation",
+                    "namespace": "sys.gl"
+                },
+                "lua": "getAttribLocation",
+                "wasmtime": "gl_get_attrib_location"
+            }
+        }
+    ]
+}

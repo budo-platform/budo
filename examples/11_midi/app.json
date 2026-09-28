@@ -1,0 +1,5 @@
+{
+    "name": "MIDI",
+    "description": "MIDI example for listing devices and sending or receiving messages.",
+    "icon": "icon.svg"
+}

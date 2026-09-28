@@ -1,0 +1,5 @@
+{
+    "name": "WASM Animation",
+    "description": "WebAssembly animation example using Budo host drawing imports.",
+    "icon": "icon.svg"
+}

@@ -1,0 +1,5 @@
+{
+    "name": "3D Cube",
+    "description": "Basic rotating 3D cube example using Budo GL rendering.",
+    "icon": "icon.svg"
+}

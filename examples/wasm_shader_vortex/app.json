@@ -1,0 +1,5 @@
+{
+    "name": "WASM Shader Vortex",
+    "description": "WebAssembly shader example rendering an animated vortex effect.",
+    "icon": "icon.svg"
+}

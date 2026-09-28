@@ -1,0 +1,12 @@
+{
+    "name": "MIDI Preset Saver",
+    "description": "Store and recall per-song MIDI device presets for live performance. You can also record small MIDI sequences and play them back on demand.",
+    "icon": "icon.svg",
+    "package_name": "com.budo.midipresetsaver",
+    "package_ignore": [
+        "midi_preset_saver.db",
+        "midi_preset_saver.db-wal",
+        "midi_preset_saver.db-shm",
+        "midi_preset_saver.db-journal"
+    ]
+}

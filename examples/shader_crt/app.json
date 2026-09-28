@@ -1,0 +1,5 @@
+{
+    "name": "Shader CRT",
+    "description": "CRT-style post-processing shader example using Budo GL.",
+    "icon": "icon.svg"
+}

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "subsystem": "device",
+  "error_convention": "transient_returns_false",
+  "wrapper_headers": [
+    "src/device/device_wrapper.h",
+    "src/device/device_service.h"
+  ],
+  "state_ownership": {
+    "javascript": "Each runtime owns one DeviceContext captured through QuickJS function data. Desktop and web register it in SubsystemRegistry; Android destroys it from the managed driver shutdown. Cleanup releases keepScreenOn before the VM is destroyed.",
+    "lua": "Each runtime owns one DeviceContext captured through a Lua closure upvalue. Desktop and web register it in SubsystemRegistry; Android destroys it from the managed driver shutdown. Cleanup releases keepScreenOn before the VM is destroyed.",
+    "wasmtime": "WasmCanvasContext owns one DeviceContext passed as the host callback environment and destroys it during context teardown. Cleanup releases keepScreenOn before the store is destroyed."
+  },
+  "typescript": {
+    "interface": "SysDevice",
+    "kind": "methods",
+    "description": "Device-level controls owned by the current application runtime."
+  },
+  "runtimes": {
+    "javascript": {
+      "source": "src/device/js_device_bindings.c",
+      "registration_symbol": "js_device_init",
+      "namespace": "sys.device",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "lua": {
+      "source": "src/device/lua_device_bindings.c",
+      "registration_symbol": "lua_device_init",
+      "namespace": "sys.device",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "wasmtime": {
+      "source": "src/device/wasm_device_bindings.c",
+      "registration_symbol": "wasm_device_register",
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ]
+    }
+  },
+  "operations": [
+    {
+      "name": "keep_screen_on",
+      "wrapper_symbol": "device_binding_state_keep_screen_on",
+      "signature": "(bool enabled) -> bool",
+      "typescript_description": "Request that the screen stays on, or release this application's request. Returns false when the platform cannot apply the change.",
+      "exports": {
+        "javascript": "keepScreenOn",
+        "lua": "keepScreenOn",
+        "wasmtime": "device_keep_screen_on"
+      }
+    }
+  ]
+}

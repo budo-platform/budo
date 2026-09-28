@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "subsystem": "capabilities",
+  "error_convention": "never_fails",
+  "state_ownership": {
+    "javascript": "No lifecycle: registration reads one caller-owned CapabilitySnapshot through capabilities_get_snapshot, retains no state, requires no polling or cleanup, and the VM owns the registered objects.",
+    "lua": "No lifecycle: registration reads one caller-owned CapabilitySnapshot through capabilities_get_snapshot, retains no state, requires no polling or cleanup, and the VM owns the registered tables.",
+    "wasmtime": "No independent lifecycle: each host call reads a caller-owned CapabilitySnapshot and retains no state; linker functions are owned by WasmCanvasContext."
+  },
+  "wrapper_header": "src/core/capabilities.h",
+  "typescript": {
+    "interface": "SysCapabilities",
+    "kind": "capability_entries",
+    "description": "Stable per-feature availability probes for the current process and platform."
+  },
+  "runtimes": {
+    "javascript": {
+      "source": "src/core/js_capabilities_bindings.c",
+      "registration_symbol": "js_capabilities_init",
+      "namespace": "sys.capabilities",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "lua": {
+      "source": "src/core/lua_capabilities_bindings.c",
+      "registration_symbol": "lua_capabilities_init",
+      "namespace": "sys.capabilities",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "wasmtime": {
+      "source": "src/core/wasm_capabilities_bindings.c",
+      "registration_symbol": "wasm_capabilities_register",
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ]
+    }
+  },
+  "operations": [
+    {
+      "name": "neural",
+      "wrapper_symbol": "capability_neural_available",
+      "signature": "() -> bool",
+      "typescript_description": "ONNX Runtime neural inference availability.",
+      "exports": {
+        "javascript": "neural",
+        "lua": "neural",
+        "wasmtime": "capability_neural"
+      }
+    },
+    {
+      "name": "llamacpp",
+      "wrapper_symbol": "capability_llamacpp_available",
+      "signature": "() -> bool",
+      "typescript_description": "Local GGUF inference through the optional llama.cpp subsystem.",
+      "exports": {
+        "javascript": "llamacpp",
+        "lua": "llamacpp",
+        "wasmtime": "capability_llamacpp"
+      },
+      "runtime_notes": {
+        "wasmtime": "Always false because the managed object/callback API is intentionally not exposed to Wasmtime."
+      }
+    },
+    {
+      "name": "midi",
+      "wrapper_symbol": "capability_midi_available",
+      "signature": "() -> bool",
+      "typescript_description": "Local MIDI and RTP-MIDI availability.",
+      "exports": {
+        "javascript": "midi",
+        "lua": "midi",
+        "wasmtime": "capability_midi"
+      }
+    },
+    {
+      "name": "udp",
+      "wrapper_symbol": "capability_udp_available",
+      "signature": "() -> bool",
+      "typescript_description": "Raw UDP datagram availability.",
+      "exports": {
+        "javascript": "udp",
+        "lua": "udp",
+        "wasmtime": "capability_udp"
+      }
+    },
+    {
+      "name": "http",
+      "wrapper_symbol": "capability_http_available",
+      "signature": "() -> bool",
+      "typescript_description": "HTTP fetch availability.",
+      "exports": {
+        "javascript": "http",
+        "lua": "http",
+        "wasmtime": "capability_http"
+      }
+    },
+    {
+      "name": "sensors",
+      "wrapper_symbol": "capability_sensors_available",
+      "signature": "() -> bool",
+      "typescript_description": "Accelerometer and compass availability.",
+      "exports": {
+        "javascript": "sensors",
+        "lua": "sensors",
+        "wasmtime": "capability_sensors"
+      }
+    }
+  ]
+}

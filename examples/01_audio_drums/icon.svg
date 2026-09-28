@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="App icon">
+  <rect width="256" height="256" rx="48" fill="#28151b"/>
+  <ellipse cx="90" cy="150" rx="34" ry="16" fill="none" stroke="#fb7185" stroke-width="10"/>
+  <path d="M56 150v36c0 9 15 16 34 16s34-7 34-16v-36" fill="none" stroke="#fb7185" stroke-width="10"/>
+  <ellipse cx="166" cy="132" rx="38" ry="18" fill="none" stroke="#fbbf24" stroke-width="10"/>
+  <path d="M128 132v44c0 10 17 18 38 18s38-8 38-18v-44M76 78l94 48M178 78l-92 48" fill="none" stroke="#fbbf24" stroke-width="8" stroke-linecap="round"/>
+</svg>

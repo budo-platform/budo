@@ -1,0 +1,75 @@
+@PACKAGE_INIT@
+
+# Budo native SDK package. All non-system inputs are resolved relative to this
+# file so an unpacked SDK can be moved without changing its identity.
+get_filename_component(_BUDO_NATIVE_SDK_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+
+if(NOT TARGET skia)
+  add_library(skia STATIC IMPORTED)
+  set_target_properties(skia PROPERTIES
+    IMPORTED_LOCATION "${_BUDO_NATIVE_SDK_ROOT}/lib/budo/deps/@BUDO_SDK_SKIA_NAME@")
+endif()
+@BUDO_SDK_SKRESOURCES_TARGET@
+@BUDO_SDK_EXPAT_TARGET@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads REQUIRED)
+
+if(NOT TARGET SDL2::SDL2)
+  add_library(SDL2::SDL2 SHARED IMPORTED)
+  set_target_properties(SDL2::SDL2 PROPERTIES
+    IMPORTED_LOCATION "${_BUDO_NATIVE_SDK_ROOT}/@BUDO_SDK_SDL_RELATIVE_PATH@")
+endif()
+
+if(UNIX AND NOT APPLE)
+  find_dependency(OpenGL REQUIRED)
+  find_dependency(Freetype REQUIRED)
+  find_dependency(Fontconfig REQUIRED)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/BudoNativeTargets.cmake")
+
+set(BUDO_NATIVE_SDK_VERSION "@BUDO_VERSION_STRING@")
+set(BUDO_NATIVE_SDK_BUILD_ID "@BUDO_NATIVE_SDK_BUILD_ID@")
+set(BUDO_NATIVE_TARGET_TUPLE "@BUDO_NATIVE_TARGET_TUPLE@")
+set(BUDO_NATIVE_COMPILER_FAMILY "@BUDO_NATIVE_COMPILER_FAMILY@")
+set(BUDO_NATIVE_PLATFORM_BASELINE "@BUDO_NATIVE_PLATFORM_BASELINE@")
+
+function(budo_native_configure_application target)
+  if(NOT TARGET "${target}")
+    message(FATAL_ERROR "Unknown Budo native application target: ${target}")
+  endif()
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "@CMAKE_SYSTEM_NAME@")
+    message(FATAL_ERROR
+      "Budo native SDK target mismatch.\n"
+      "  SDK: ${BUDO_NATIVE_TARGET_TUPLE} (${BUDO_NATIVE_PLATFORM_BASELINE})\n"
+      "  SDK directory: ${_BUDO_NATIVE_SDK_ROOT}\n"
+      "  Expected OS: @CMAKE_SYSTEM_NAME@\n"
+      "  Found OS: ${CMAKE_SYSTEM_NAME}\n"
+      "Select an SDK for this host tuple and recompile.")
+  endif()
+  if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "@BUDO_NATIVE_PROCESSOR_REGEX@")
+    message(FATAL_ERROR
+      "Budo native SDK architecture mismatch.\n"
+      "  SDK: ${BUDO_NATIVE_TARGET_TUPLE} (${BUDO_NATIVE_PLATFORM_BASELINE})\n"
+      "  Expected processor: @CMAKE_SYSTEM_PROCESSOR@\n"
+      "  Found processor: ${CMAKE_SYSTEM_PROCESSOR}\n"
+      "Select an SDK for this processor and recompile.")
+  endif()
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "@BUDO_NATIVE_COMPILER_REGEX@")
+    message(FATAL_ERROR
+      "Budo native SDK compiler mismatch.\n"
+      "  SDK: ${BUDO_NATIVE_TARGET_TUPLE} (${BUDO_NATIVE_PLATFORM_BASELINE})\n"
+      "  Required compiler family: @BUDO_NATIVE_COMPILER_FAMILY@\n"
+      "  Found compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\n"
+      "Use a compatible compiler or select the matching SDK and recompile.")
+  endif()
+@BUDO_NATIVE_APPLICATION_PLATFORM_SETTINGS@
+  add_custom_command(TARGET "${target}" POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+      "${_BUDO_NATIVE_SDK_ROOT}/@BUDO_SDK_SDL_RELATIVE_PATH@"
+      "$<TARGET_FILE_DIR:${target}>"
+    VERBATIM)
+endfunction()
+
+check_required_components(BudoNative)

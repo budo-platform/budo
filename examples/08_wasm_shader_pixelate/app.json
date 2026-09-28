@@ -1,0 +1,5 @@
+{
+    "name": "WASM Shader Pixelate",
+    "description": "WebAssembly shader example applying a pixelation effect.",
+    "icon": "icon.svg"
+}

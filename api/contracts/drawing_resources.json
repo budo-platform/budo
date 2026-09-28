@@ -1,0 +1,370 @@
+{
+    "version": 1,
+    "subsystem": "drawing_resources",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Path calls ignore invalid handles, while failed path/SVG/font allocation or loading and invalid managed buffer arguments can throw or return -1 according to the binding. Runtime-owned handles are released when the canvas context is destroyed."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "luaL checks raise for invalid arguments and resource load failures. Invalid path/SVG handles generally become no-ops or zero dimensions; runtime-owned handles are released with the canvas context."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host imports do not trap. Creation/loading returns -1 on capacity, memory, path, or decode failure; invalid handles make void calls no-ops and SVG dimensions return 0."
+        },
+        "browser_wasm": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "The browser bridge exposes only path create, move, line, close, and draw. Creation returns -1 after the fixed registry is full or allocation fails; invalid handles are ignored."
+        }
+    },
+    "wrapper_header": "src/graphics/skia_wrapper.h",
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "export_sources": [
+                "src/graphics/js_canvas_bindings.c"
+            ],
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "sys.path",
+                "sys.svg",
+                "sys.font"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_sys_path_funcs",
+                "js_sys_svg_funcs",
+                "js_sys_font_funcs"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "namespace": [
+                "sys.path",
+                "sys.svg",
+                "sys.font"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg",
+            "export_scopes": [
+                "path_funcs",
+                "svg_funcs",
+                "font_funcs"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_create",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host",
+            "export_prefixes": [
+                "path_",
+                "svg_"
+            ]
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": "env",
+            "platforms": [
+                "web"
+            ],
+            "export_extractor": "javascript_object_key",
+            "export_prefixes": [
+                "path_",
+                "svg_"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "JSCanvasContext owns all path, SVG, and font handles and the copied font names; explicit SVG destroy clears a slot, while paths and fonts otherwise live until context destruction.",
+        "lua": "LuaCanvasContext owns all path, SVG, and font handles and copied font names; explicit SVG destroy clears a slot, while paths and fonts otherwise live until context destruction.",
+        "wasmtime": "WasmCanvasContext owns fixed-capacity path and SVG handle registries; there is no Wasmtime font-management import surface.",
+        "browser_wasm": "WebAppState owns a fixed-capacity path registry for the active browser-WASM app and destroys it during web shutdown."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript and Lua expose the complete path, SVG, and font tables on web.",
+                "Browser-native WebAssembly exposes only five path imports and has no SVG or font imports.",
+                "Browser-native paths cannot be reset, curved, or extended with rectangle/circle helpers; Wasmtime exposes the complete path and SVG import sets but no font imports."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "path_create",
+            "wrapper_symbol": "skia_path_create",
+            "signature": "() -> path handle",
+            "exports": {
+                "javascript": {
+                    "name": "create",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "create",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_create",
+                "browser_wasm": "path_create"
+            }
+        },
+        {
+            "name": "path_reset",
+            "wrapper_symbol": "skia_path_reset",
+            "signature": "(path) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "reset",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "reset",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_reset"
+            }
+        },
+        {
+            "name": "path_move_to",
+            "wrapper_symbol": "skia_path_move_to",
+            "signature": "(path, x:f32, y:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "moveTo",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "moveTo",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_move_to",
+                "browser_wasm": "path_move_to"
+            }
+        },
+        {
+            "name": "path_line_to",
+            "wrapper_symbol": "skia_path_line_to",
+            "signature": "(path, x:f32, y:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "lineTo",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "lineTo",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_line_to",
+                "browser_wasm": "path_line_to"
+            }
+        },
+        {
+            "name": "path_quad_to",
+            "wrapper_symbol": "skia_path_quad_to",
+            "signature": "(path, x1:f32, y1:f32, x2:f32, y2:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "quadTo",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "quadTo",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_quad_to"
+            }
+        },
+        {
+            "name": "path_cubic_to",
+            "wrapper_symbol": "skia_path_cubic_to",
+            "signature": "(path, x1:f32, y1:f32, x2:f32, y2:f32, x3:f32, y3:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "cubicTo",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "cubicTo",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_cubic_to"
+            }
+        },
+        {
+            "name": "path_close",
+            "wrapper_symbol": "skia_path_close",
+            "signature": "(path) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "close",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "close",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_close",
+                "browser_wasm": "path_close"
+            }
+        },
+        {
+            "name": "path_add_rect",
+            "wrapper_symbol": "skia_path_add_rect",
+            "signature": "(path, x:f32, y:f32, width:f32, height:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "addRect",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "addRect",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_add_rect"
+            }
+        },
+        {
+            "name": "path_add_circle",
+            "wrapper_symbol": "skia_path_add_circle",
+            "signature": "(path, cx:f32, cy:f32, radius:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "addCircle",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "addCircle",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_add_circle"
+            }
+        },
+        {
+            "name": "svg_load",
+            "wrapper_symbol": "skia_svg_load_file",
+            "signature": "(safe project-relative path) -> SVG handle or -1",
+            "exports": {
+                "javascript": {
+                    "name": "load",
+                    "namespace": "sys.svg"
+                },
+                "lua": {
+                    "name": "load",
+                    "namespace": "sys.svg"
+                },
+                "wasmtime": "svg_load"
+            }
+        },
+        {
+            "name": "svg_load_from_buffer",
+            "wrapper_symbol": "skia_svg_load_buffer",
+            "signature": "(SVG XML bytes) -> SVG handle or -1",
+            "exports": {
+                "javascript": {
+                    "name": "loadFromBuffer",
+                    "namespace": "sys.svg"
+                },
+                "lua": {
+                    "name": "loadFromBuffer",
+                    "namespace": "sys.svg"
+                },
+                "wasmtime": "svg_load_from_buffer"
+            }
+        },
+        {
+            "name": "svg_destroy",
+            "wrapper_symbol": "skia_svg_destroy",
+            "signature": "(SVG handle) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "destroy",
+                    "namespace": "sys.svg"
+                },
+                "lua": {
+                    "name": "destroy",
+                    "namespace": "sys.svg"
+                },
+                "wasmtime": "svg_destroy"
+            }
+        },
+        {
+            "name": "svg_get_width",
+            "wrapper_symbol": "skia_svg_get_width",
+            "signature": "(SVG handle) -> f32",
+            "exports": {
+                "javascript": {
+                    "name": "getWidth",
+                    "namespace": "sys.svg"
+                },
+                "lua": {
+                    "name": "getWidth",
+                    "namespace": "sys.svg"
+                },
+                "wasmtime": "svg_get_width"
+            }
+        },
+        {
+            "name": "svg_get_height",
+            "wrapper_symbol": "skia_svg_get_height",
+            "signature": "(SVG handle) -> f32",
+            "exports": {
+                "javascript": {
+                    "name": "getHeight",
+                    "namespace": "sys.svg"
+                },
+                "lua": {
+                    "name": "getHeight",
+                    "namespace": "sys.svg"
+                },
+                "wasmtime": "svg_get_height"
+            }
+        },
+        {
+            "name": "font_load",
+            "wrapper_symbol": "skia_font_load_file",
+            "signature": "(safe project-relative path, optional name) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "load",
+                    "namespace": "sys.font"
+                },
+                "lua": {
+                    "name": "load",
+                    "namespace": "sys.font"
+                }
+            }
+        },
+        {
+            "name": "font_load_from_buffer",
+            "wrapper_symbol": "skia_font_load_buffer",
+            "signature": "(font bytes, optional name) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "loadFromBuffer",
+                    "namespace": "sys.font"
+                },
+                "lua": {
+                    "name": "loadFromBuffer",
+                    "namespace": "sys.font"
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,196 @@
+{
+    "version": 1,
+    "subsystem": "scheduling",
+    "error_convention": {
+        "javascript": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Animation registration stores at most one persistent callback and returns handle 1; missing context, callback, timer allocation, or invalid timer arguments return undefined. Callback exceptions are printed and reported to the host frame loop without throwing through C."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Animation methods require a Lua function and raise on invalid input. Only one persistent registry callback is stored; callback errors are printed and make the host call return false. Lua exposes no timer table."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "There are no animation or timer host imports. An optional guest-exported frame(f32) function is called every host frame; traps/errors are recorded and printed, and the host call returns false."
+        },
+        "browser_wasm": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "There are no animation or timer host imports. The browser runner calls an optional guest-exported frame function every requestAnimationFrame tick; a guest exception is not converted to a sentinel by the frame closure."
+        }
+    },
+    "wrapper_headers": [
+        "src/graphics/js_canvas_bindings.h",
+        "src/graphics/lua_canvas_bindings.h",
+        "src/graphics/wasm_canvas_bindings.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "export_sources": [
+                "src/graphics/js_canvas_bindings.c"
+            ],
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "sys.animation",
+                "sys.timer"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_sys_animation_funcs",
+                "js_sys_timer_funcs"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "namespace": "sys.animation",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg",
+            "export_scopes": [
+                "animation_funcs"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_load_wasm_file",
+            "namespace": "guest.exports",
+            "platforms": [
+                "desktop"
+            ]
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": "guest.exports",
+            "platforms": [
+                "web"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "JSCanvasContext owns one duplicated animation callback and a growable timer array of duplicated callbacks. Context destruction releases every live callback; the host processes animation, timers, and pending Promise jobs once per frame.",
+        "lua": "LuaCanvasContext owns one animation callback registry reference and releases it on replacement, cancellation, or context destruction.",
+        "wasmtime": "WasmCanvasContext borrows the instantiated guest frame function and invokes it through the owning store/context; the guest module owns its exported function.",
+        "browser_wasm": "BudoWasmRunner owns the instantiated module reference and calls its optional frame export from the browser requestAnimationFrame loop."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript timers are driven by the Budo frame timestamp, not browser setTimeout/setInterval.",
+                "Lua exposes animation.start in addition to requestFrame/cancelFrame but has no timer namespace.",
+                "Browser-native WebAssembly receives no scheduling imports and instead optionally exports frame; the same direction applies to Wasmtime.",
+                "Managed requestFrame callbacks are persistent until replaced or canceled, unlike the browser DOM requestAnimationFrame one-shot contract."
+            ]
+        },
+        "desktop": {
+            "source": "src/core/main.c",
+            "details": [
+                "The host calls managed animation callbacks and JavaScript timers explicitly; Wasmtime frame is discovered from the guest module and receives an f32 millisecond timestamp."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "animation_start",
+            "signature": "(callback(timestamp_ms)) -> void; replace the persistent Lua frame callback",
+            "binding_symbols": {
+                "lua": "l_animation_start"
+            },
+            "exports": {
+                "lua": "start"
+            }
+        },
+        {
+            "name": "request_frame",
+            "signature": "(callback(timestamp_ms)) -> handle 1; replace the persistent managed frame callback",
+            "binding_symbols": {
+                "javascript": "js_request_animation_frame",
+                "lua": "l_animation_request_frame"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "requestFrame",
+                    "namespace": "sys.animation"
+                },
+                "lua": "requestFrame"
+            }
+        },
+        {
+            "name": "cancel_frame",
+            "signature": "(handle ignored) -> void; clear the single managed frame callback",
+            "binding_symbols": {
+                "javascript": "js_cancel_animation_frame",
+                "lua": "l_animation_cancel_frame"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "cancelFrame",
+                    "namespace": "sys.animation"
+                },
+                "lua": "cancelFrame"
+            }
+        },
+        {
+            "name": "timer_once",
+            "signature": "(delay_ms:number, callback) -> timer id or undefined; non-positive delay fires on a later timer-processing pass",
+            "binding_symbols": {
+                "javascript": "js_timer_once"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "once",
+                    "namespace": "sys.timer"
+                }
+            }
+        },
+        {
+            "name": "timer_every",
+            "signature": "(interval_ms:number, callback) -> timer id or undefined; interval is clamped to at least 1 ms",
+            "binding_symbols": {
+                "javascript": "js_timer_every"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "every",
+                    "namespace": "sys.timer"
+                }
+            }
+        },
+        {
+            "name": "timer_clear",
+            "signature": "(timer_id:i32) -> void; unknown or inactive ids are ignored",
+            "binding_symbols": {
+                "javascript": "js_timer_clear"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "clear",
+                    "namespace": "sys.timer"
+                }
+            }
+        },
+        {
+            "name": "guest_frame",
+            "signature": "optional guest export frame(timestamp_ms); invoked once per host frame",
+            "binding_symbols": {
+                "wasmtime": "wasm_canvas_call_animation",
+                "browser_wasm": "js_web_wasm_frame"
+            },
+            "exports": {
+                "wasmtime": "frame",
+                "browser_wasm": "frame"
+            }
+        }
+    ]
+}

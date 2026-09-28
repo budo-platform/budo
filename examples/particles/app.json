@@ -1,0 +1,5 @@
+{
+    "name": "Particles",
+    "description": "Animated particle system example using Budo canvas rendering.",
+    "icon": "icon.svg"
+}

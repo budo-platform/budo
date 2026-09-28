@@ -1,0 +1,339 @@
+{
+    "version": 1,
+    "subsystem": "input_window",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Snapshot and window queries return undefined, false, zero-like defaults, or density 1 when context is unavailable. Text-input methods require a structured options object and can throw TypeError or conversion exceptions; valid platform requests return a boolean."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Snapshot and window queries return nil, false, zero, or density 1 when context is unavailable. luaL checks raise for invalid scancodes or text-input option tables; valid platform requests return a boolean."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Scalar host imports never trap. Missing context/input returns zero, false, or density 1; out-of-range mouse buttons and scancodes return false. No snapshot, touch, text-input, key-pressed, focus, or frame-count imports exist."
+        },
+        "browser_wasm": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Scalar browser env imports never throw into the guest. Width, height, and mouse coordinates return zero without host state; invalid mouse buttons return false. No density, keyboard, timing, touch, focus, or text-input imports exist."
+        }
+    },
+    "wrapper_headers": [
+        "src/core/input.h",
+        "src/core/window.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "export_sources": [
+                "src/graphics/js_canvas_bindings.c"
+            ],
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "sys.input",
+                "sys.window"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_sys_input_funcs",
+                "js_sys_window_funcs"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "namespace": [
+                "sys.input",
+                "sys.window"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg",
+            "export_scopes": [
+                "input_funcs",
+                "window_funcs"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_create",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host",
+            "export_prefixes": [
+                "input_",
+                "window_"
+            ]
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": "env",
+            "platforms": [
+                "web"
+            ],
+            "export_extractor": "javascript_object_key",
+            "export_prefixes": [
+                "input_",
+                "window_"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "JSCanvasContext borrows the frame host's InputState and Window and copies current dimensions and display density before loading and before each frame callback. Returned input snapshots are new QuickJS objects.",
+        "lua": "LuaCanvasContext borrows the frame host's InputState and Window and copies current dimensions and display density before loading and before each frame callback. Returned input snapshots are new Lua tables.",
+        "wasmtime": "WasmCanvasContext borrows the current InputState and Window and stores copied dimensions/density; scalar imports read that state synchronously.",
+        "browser_wasm": "WebAppState owns InputState and Window directly; browser env closures read them synchronously."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript and Lua expose the complete snapshot, key, IME, dimensions, and density tables on web.",
+                "Browser-native WebAssembly exposes only width, height, mouse x/y, and mouse-button state; Wasmtime additionally exposes density, key-down, delta time, and total time.",
+                "Browser-native mouse-button validation accepts the host INPUT_MOUSE_MAX range, while Wasmtime explicitly accepts only indices 0 through 2.",
+                "Managed snapshots include mouse, unified pointer, active pointers, modifiers, committed text, replacement edits, composition state, timing, frame count, and focus."
+            ]
+        },
+        "android": {
+            "source": "src/core/input.h",
+            "details": [
+                "Android exposes managed JavaScript and Lua only; text-input methods route through platform callbacks and the snapshot carries UTF-8 committed text plus UTF-16 selection indices.",
+                "There is no Android Wasmtime or browser-native WebAssembly runtime."
+            ]
+        },
+        "desktop": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "details": [
+                "Wasmtime input is scalar and omits the managed touch arrays, per-frame key-pressed query, IME editing state, frame count, and focus state."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "input_snapshot",
+            "signature": "() -> per-frame input snapshot containing mouse, pointer(s), modifiers, text/edit/composition, timing, frame count, and focus",
+            "binding_symbols": {
+                "javascript": "js_get_input",
+                "lua": "l_input_get"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "get",
+                    "namespace": "sys.input"
+                },
+                "lua": {
+                    "name": "get",
+                    "namespace": "sys.input"
+                }
+            }
+        },
+        {
+            "name": "key_down",
+            "wrapper_symbol": "input_key_down",
+            "signature": "(SDL scancode:i32) -> bool currently held",
+            "exports": {
+                "javascript": {
+                    "name": "isKeyDown",
+                    "namespace": "sys.input"
+                },
+                "lua": {
+                    "name": "isKeyDown",
+                    "namespace": "sys.input"
+                },
+                "wasmtime": "input_get_key_down"
+            }
+        },
+        {
+            "name": "key_pressed",
+            "wrapper_symbol": "input_key_pressed",
+            "signature": "(SDL scancode:i32) -> bool pressed during current frame",
+            "exports": {
+                "javascript": {
+                    "name": "isKeyPressed",
+                    "namespace": "sys.input"
+                },
+                "lua": {
+                    "name": "isKeyPressed",
+                    "namespace": "sys.input"
+                }
+            }
+        },
+        {
+            "name": "start_text_input",
+            "wrapper_symbol": "input_text_start",
+            "signature": "(text, UTF-16 selection start/end, multiline) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "startTextInput",
+                    "namespace": "sys.input"
+                },
+                "lua": {
+                    "name": "startTextInput",
+                    "namespace": "sys.input"
+                }
+            }
+        },
+        {
+            "name": "update_text_input",
+            "wrapper_symbol": "input_text_update",
+            "signature": "(text, UTF-16 selection start/end, caret x/y/width/height) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "updateTextInput",
+                    "namespace": "sys.input"
+                },
+                "lua": {
+                    "name": "updateTextInput",
+                    "namespace": "sys.input"
+                }
+            }
+        },
+        {
+            "name": "stop_text_input",
+            "wrapper_symbol": "input_text_stop",
+            "signature": "() -> void; finish composition and platform editing session",
+            "exports": {
+                "javascript": {
+                    "name": "stopTextInput",
+                    "namespace": "sys.input"
+                },
+                "lua": {
+                    "name": "stopTextInput",
+                    "namespace": "sys.input"
+                }
+            }
+        },
+        {
+            "name": "window_width",
+            "signature": "() -> physical canvas width in pixels",
+            "binding_symbols": {
+                "javascript": "js_get_width",
+                "lua": "l_get_width",
+                "wasmtime": "host_get_width",
+                "browser_wasm": "budo_web_wasm_window_get_width"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "getWidth",
+                    "namespace": "sys.window"
+                },
+                "lua": {
+                    "name": "getWidth",
+                    "namespace": "sys.window"
+                },
+                "wasmtime": "window_get_width",
+                "browser_wasm": "window_get_width"
+            }
+        },
+        {
+            "name": "window_height",
+            "signature": "() -> physical canvas height in pixels",
+            "binding_symbols": {
+                "javascript": "js_get_height",
+                "lua": "l_get_height",
+                "wasmtime": "host_get_height",
+                "browser_wasm": "budo_web_wasm_window_get_height"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "getHeight",
+                    "namespace": "sys.window"
+                },
+                "lua": {
+                    "name": "getHeight",
+                    "namespace": "sys.window"
+                },
+                "wasmtime": "window_get_height",
+                "browser_wasm": "window_get_height"
+            }
+        },
+        {
+            "name": "display_density",
+            "signature": "() -> f32 drawable-pixel density; defaults to 1",
+            "binding_symbols": {
+                "javascript": "js_get_display_density",
+                "lua": "l_get_display_density",
+                "wasmtime": "host_get_display_density"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "getDisplayDensity",
+                    "namespace": "sys.window"
+                },
+                "lua": {
+                    "name": "getDisplayDensity",
+                    "namespace": "sys.window"
+                },
+                "wasmtime": "window_get_display_density"
+            }
+        },
+        {
+            "name": "mouse_x",
+            "signature": "() -> i32 current mouse x",
+            "binding_symbols": {
+                "wasmtime": "host_get_mouse_x",
+                "browser_wasm": "budo_web_wasm_input_get_mouse_x"
+            },
+            "exports": {
+                "wasmtime": "input_get_mouse_x",
+                "browser_wasm": "input_get_mouse_x"
+            }
+        },
+        {
+            "name": "mouse_y",
+            "signature": "() -> i32 current mouse y",
+            "binding_symbols": {
+                "wasmtime": "host_get_mouse_y",
+                "browser_wasm": "budo_web_wasm_input_get_mouse_y"
+            },
+            "exports": {
+                "wasmtime": "input_get_mouse_y",
+                "browser_wasm": "input_get_mouse_y"
+            }
+        },
+        {
+            "name": "mouse_button",
+            "signature": "(button:i32) -> i32 boolean",
+            "binding_symbols": {
+                "wasmtime": "host_get_mouse_button",
+                "browser_wasm": "budo_web_wasm_input_get_mouse_button"
+            },
+            "exports": {
+                "wasmtime": "input_get_mouse_button",
+                "browser_wasm": "input_get_mouse_button"
+            }
+        },
+        {
+            "name": "delta_time",
+            "signature": "() -> f32 elapsed seconds since previous frame or 0",
+            "binding_symbols": {
+                "wasmtime": "host_get_delta_time"
+            },
+            "exports": {
+                "wasmtime": "input_get_delta_time"
+            }
+        },
+        {
+            "name": "total_time",
+            "signature": "() -> f32 elapsed seconds since runtime start or 0",
+            "binding_symbols": {
+                "wasmtime": "host_get_total_time"
+            },
+            "exports": {
+                "wasmtime": "input_get_total_time"
+            }
+        }
+    ]
+}

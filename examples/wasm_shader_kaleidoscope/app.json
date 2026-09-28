@@ -1,0 +1,5 @@
+{
+    "name": "WASM Shader Kaleidoscope",
+    "description": "WebAssembly shader example rendering a kaleidoscope effect.",
+    "icon": "icon.svg"
+}

@@ -1,0 +1,204 @@
+{
+    "version": 1,
+    "subsystem": "module_lifecycle",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Entrypoint and imported-module read, TypeScript stripping, compile, resolution, or evaluation failures print the QuickJS exception and fail runtime initialization. The custom normalizer rejects empty and absolute specifiers and any canonical path outside the project root."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "The runtime opens the standard Lua libraries, including package/require. Entrypoint load or execution errors are printed and fail initialization; required-module behavior follows the opened Lua package searchers rather than the JavaScript project-root normalizer."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Module read, WAT conversion, compilation, instantiation, or linker failures make loading return false with a stored error. Exported memory is optional at instantiation but memory-dependent imports then return sentinels; optional init traps/errors are warned and do not make module loading fail."
+        },
+        "browser_wasm": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "The runner requires /main.wasm and a guest memory export. Missing bytes, a staged WAT without compiled WASM, instantiation failure, missing memory, or an exception from optional init rejects startup and is logged by the runner catch block."
+        }
+    },
+    "wrapper_headers": [
+        "src/graphics/js_canvas_bindings.h",
+        "src/graphics/lua_canvas_bindings.h",
+        "src/graphics/wasm_canvas_bindings.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "language",
+                "runtime"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "namespace": [
+                "language",
+                "runtime"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_load_wasm_file",
+            "namespace": [
+                "guest.exports",
+                "runtime"
+            ],
+            "platforms": [
+                "desktop"
+            ]
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": [
+                "guest.exports",
+                "runtime"
+            ],
+            "platforms": [
+                "web"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "JSCanvasContext owns the QuickJS runtime/context and installs a module normalizer/loader carrying the context as opaque state. Compiled modules are retained by QuickJS; pending jobs are drained by the frame host.",
+        "lua": "LuaCanvasContext owns one lua_State with the standard libraries opened; Lua owns loaded package modules until state destruction.",
+        "wasmtime": "WasmCanvasContext owns the engine, linker, store, compiled module, instance, and borrowed exported memory/function handles. Memory is wired into subsystem binding states before optional init runs.",
+        "browser_wasm": "BudoWasmRunner owns the WebAssembly instance and memory reference until shutdown/pagehide and clears the instance after network shutdown."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript loads the configured JS/TS entrypoint from the virtual filesystem and supports project-root-sandboxed ES module imports.",
+                "Managed Lua opens all standard libraries and loads /main.lua; require uses Lua package searchers rather than the QuickJS realpath sandbox.",
+                "Browser-native WebAssembly requires /main.wasm and exported memory, optionally calls init, and rejects a staged main.wat when no compiled main.wasm exists.",
+                "Wasmtime accepts .wasm and .wat and tolerates a missing memory export until a memory-dependent host import is used."
+            ]
+        },
+        "desktop": {
+            "source": "src/core/main.c",
+            "details": [
+                "Desktop chooses JavaScript, Lua, or Wasmtime from the configured entrypoint; Wasmtime wires guest memory before optional init so init may safely call memory-dependent imports."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "module_import",
+            "signature": "load another language module",
+            "binding_symbols": {
+                "javascript": "js_module_loader_func",
+                "lua": "lua_canvas_create"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "import",
+                    "namespace": "language",
+                    "source_token": "JS_SetModuleLoaderFunc",
+                    "signature": "ES module import resolved relative to importer or project root; .js then .ts extension fallback"
+                },
+                "lua": {
+                    "name": "require",
+                    "namespace": "language",
+                    "source_token": "luaL_openlibs",
+                    "signature": "standard Lua require/package behavior"
+                }
+            }
+        },
+        {
+            "name": "load_entrypoint",
+            "signature": "load and execute the configured application entrypoint",
+            "binding_symbols": {
+                "javascript": "js_runtime_load_file",
+                "lua": "lua_canvas_load_file",
+                "wasmtime": "wasm_canvas_load_wasm_file",
+                "browser_wasm": "js_web_wasm_start"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "entrypoint",
+                    "namespace": "runtime",
+                    "source_token": "js_runtime_load_file",
+                    "signature": "configured JavaScript or stripped TypeScript file; module syntax is detected"
+                },
+                "lua": {
+                    "name": "entrypoint",
+                    "namespace": "runtime",
+                    "source_token": "lua_canvas_load_file",
+                    "signature": "configured Lua file"
+                },
+                "wasmtime": {
+                    "name": "entrypoint",
+                    "namespace": "runtime",
+                    "source_token": "wasm_canvas_load_wasm_file",
+                    "signature": "configured .wasm or .wat file"
+                },
+                "browser_wasm": {
+                    "name": "entrypoint",
+                    "namespace": "runtime",
+                    "source_token": "WebAssembly.instantiate",
+                    "signature": "/main.wasm only"
+                }
+            }
+        },
+        {
+            "name": "guest_memory",
+            "signature": "guest-exported linear memory used by pointer/buffer host ABIs",
+            "binding_symbols": {
+                "wasmtime": "initialize_wasm_memory_exports",
+                "browser_wasm": "js_web_wasm_start"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "memory",
+                    "namespace": "guest.exports",
+                    "source_token": "\"memory\"",
+                    "signature": "optional; memory-dependent imports return failure sentinels when absent"
+                },
+                "browser_wasm": {
+                    "name": "memory",
+                    "namespace": "guest.exports",
+                    "source_token": "exports.memory",
+                    "signature": "required for runner startup"
+                }
+            }
+        },
+        {
+            "name": "guest_init",
+            "signature": "optional guest export init() called once after instantiation and memory wiring",
+            "binding_symbols": {
+                "wasmtime": "wasm_canvas_load_wasm_file",
+                "browser_wasm": "js_web_wasm_start"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "init",
+                    "namespace": "guest.exports",
+                    "source_token": "\"init\"",
+                    "signature": "optional () -> void; trap is warned without failing load"
+                },
+                "browser_wasm": {
+                    "name": "init",
+                    "namespace": "guest.exports",
+                    "source_token": "exports.init",
+                    "signature": "optional () -> void; exception rejects runner startup"
+                }
+            }
+        }
+    ]
+}

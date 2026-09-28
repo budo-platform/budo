@@ -1,0 +1,5 @@
+{
+    "name": "Text Demo",
+    "description": "Text rendering and measurement example using Budo canvas APIs.",
+    "icon": "icon.svg"
+}

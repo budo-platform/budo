@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="App icon">
+  <rect width="256" height="256" rx="48" fill="#171827"/>
+  <rect x="72" y="56" width="36" height="36" rx="6" fill="#60a5fa"/><rect x="108" y="56" width="36" height="36" rx="6" fill="#60a5fa"/><rect x="108" y="92" width="36" height="36" rx="6" fill="#60a5fa"/><rect x="144" y="92" width="36" height="36" rx="6" fill="#facc15"/><rect x="72" y="148" width="36" height="36" rx="6" fill="#facc15"/><rect x="108" y="148" width="36" height="36" rx="6" fill="#facc15"/><rect x="144" y="148" width="36" height="36" rx="6" fill="#facc15"/>
+</svg>

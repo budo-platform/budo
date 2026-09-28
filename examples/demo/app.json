@@ -1,0 +1,5 @@
+{
+    "name": "Demo",
+    "description": "General Budo demo combining canvas drawing and animation.",
+    "icon": "icon.svg"
+}

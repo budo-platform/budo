@@ -1,0 +1,194 @@
+{
+    "version": 1,
+    "subsystem": "sqlite",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Wrapper failures from open, execute, run, and query throw InternalError; absent context or required arguments use -1, false, an empty array, or 0 sentinels, close is a no-op, and getError returns the wrapper error string."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "luaL argument checks and wrapper failures from open, execute, run, and query raise Lua errors; absent context uses -1, false, an empty table, or 0 sentinels, close is a no-op, and getError returns the wrapper error string."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host calls do not trap: open and run variants return -1, execute returns 0, and last_insert_id returns 0 when unavailable. query_json returns -1 for a SQL query error and 0 for context, memory, input, allocation, or output-buffer failures. No Wasmtime get-error import is registered."
+        }
+    },
+    "wrapper_header": "src/sqlite/sqlite_wrapper.h",
+    "service_header": "src/sqlite/sqlite_service.h",
+    "runtimes": {
+        "javascript": {
+            "source": "src/sqlite/js_sqlite_bindings.c",
+            "registration_symbol": "js_sqlite_init",
+            "namespace": "sys.db",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_function_data"
+        },
+        "lua": {
+            "source": "src/sqlite/lua_sqlite_bindings.c",
+            "registration_symbol": "lua_sqlite_init",
+            "namespace": "sys.db",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg"
+        },
+        "wasmtime": {
+            "source": "src/sqlite/wasm_sqlite_bindings.c",
+            "registration_symbol": "wasm_sqlite_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no db_* imports.",
+            "absent_export_prefixes": [
+                "db_"
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "open",
+            "wrapper_symbol": "sqlite_open",
+            "service_symbol": "sqlite_service_open",
+            "signature": "(name: string) -> database_handle",
+            "exports": {
+                "javascript": "open",
+                "lua": "open",
+                "wasmtime": {
+                    "name": "db_open",
+                    "signature": "(name_ptr: i32, name_len: i32) -> i32 handle; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "close",
+            "wrapper_symbol": "sqlite_close",
+            "signature": "(handle: database_handle) -> void",
+            "exports": {
+                "javascript": "close",
+                "lua": "close",
+                "wasmtime": {
+                    "name": "db_close",
+                    "signature": "(handle: i32) -> void"
+                }
+            }
+        },
+        {
+            "name": "execute",
+            "wrapper_symbol": "sqlite_execute",
+            "signature": "(handle: database_handle, sql: string) -> bool",
+            "exports": {
+                "javascript": "execute",
+                "lua": "execute",
+                "wasmtime": {
+                    "name": "db_execute",
+                    "signature": "(handle: i32, sql_ptr: i32, sql_len: i32) -> i32; 1 success, 0 failure"
+                }
+            }
+        },
+        {
+            "name": "run",
+            "wrapper_symbol": "sqlite_run",
+            "signature": "(handle: database_handle, sql: string, ...params: null|bool|number|string) -> i32 changes",
+            "exports": {
+                "javascript": "run",
+                "lua": "run",
+                "wasmtime": {
+                    "name": "db_run",
+                    "signature": "(handle: i32, sql_ptr: i32, sql_len: i32) -> i32 changes; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "run_integer_parameter",
+            "signature": "(handle: database_handle, sql: string, parameter: i32) -> i32 changes",
+            "binding_symbols": {
+                "wasmtime": "host_db_run_int"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "db_run_int",
+                    "signature": "(handle: i32, sql_ptr: i32, sql_len: i32, parameter: i32) -> i32 changes; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "run_string_parameter",
+            "signature": "(handle: database_handle, sql: string, parameter: string) -> i32 changes",
+            "binding_symbols": {
+                "wasmtime": "host_db_run_str"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "db_run_str",
+                    "signature": "(handle: i32, sql_ptr: i32, sql_len: i32, parameter_ptr: i32, parameter_len: i32) -> i32 changes; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "query",
+            "wrapper_symbol": "sqlite_query",
+            "signature": "(handle: database_handle, sql: string, ...params: null|bool|number|string) -> rows",
+            "exports": {
+                "javascript": {
+                    "name": "query",
+                    "signature": "(handle: number, sql: string, ...params) -> Array<Record<string, null|number|string>>"
+                },
+                "lua": {
+                    "name": "query",
+                    "signature": "(handle: integer, sql: string, ...params) -> table[]"
+                },
+                "wasmtime": {
+                    "name": "db_query_json",
+                    "signature": "(handle: i32, sql_ptr: i32, sql_len: i32, out_ptr: i32, out_max_len: i32) -> i32 JSON bytes copied, possibly truncated; -1 on SQL query error; 0 on input/output/allocation failure"
+                }
+            }
+        },
+        {
+            "name": "last_insert_id",
+            "wrapper_symbol": "sqlite_last_insert_id",
+            "signature": "(handle: database_handle) -> integer",
+            "exports": {
+                "javascript": {
+                    "name": "lastInsertId",
+                    "signature": "(handle: number) -> number"
+                },
+                "lua": {
+                    "name": "lastInsertId",
+                    "signature": "(handle: integer) -> integer"
+                },
+                "wasmtime": {
+                    "name": "db_last_insert_id",
+                    "signature": "(handle: i32) -> i32; wrapper i64 is narrowed, 0 when unavailable"
+                }
+            }
+        },
+        {
+            "name": "get_error",
+            "wrapper_symbol": "sqlite_get_error",
+            "signature": "() -> string",
+            "exports": {
+                "javascript": "getError",
+                "lua": "getError"
+            }
+        }
+    ]
+}

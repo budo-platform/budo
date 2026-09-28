@@ -1,0 +1,5 @@
+{
+    "name": "Module",
+    "description": "JavaScript module loading example for Budo applications.",
+    "icon": "icon.svg"
+}

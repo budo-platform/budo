@@ -1,0 +1,8 @@
+{
+    "name": "Canvas Texture",
+    "description": "Generate dynamic textures using the Budo Canvas API.",
+    "author": "Budo",
+    "version": "1.0.0",
+    "date": "2026-04-08",
+    "icon": "icon.svg"
+}

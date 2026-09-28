@@ -1,0 +1,5 @@
+{
+    "name": "Shader Plasma",
+    "description": "Animated plasma shader example using Budo GL.",
+    "icon": "icon.svg"
+}

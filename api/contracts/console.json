@@ -1,0 +1,123 @@
+{
+    "version": 1,
+    "subsystem": "console",
+    "error_convention": {
+        "javascript": {
+            "kind": "never_fails",
+            "details": "console.log stringifies each argument when possible, skips failed conversions, and returns undefined. Desktop/web print a space-separated line to stdout; Android writes one line to logcat."
+        },
+        "lua": {
+            "kind": "never_fails",
+            "details": "console.log prints every Lua argument using tostring-style conversion and returns no values; output goes through the C runtime stream used by the host."
+        },
+        "wasmtime": {
+            "kind": "never_fails",
+            "details": "The two scalar logging imports print one signed i32 or f32 followed by a newline and never trap."
+        }
+    },
+    "wrapper_headers": [
+        "src/graphics/js_canvas_bindings.h",
+        "src/graphics/lua_canvas_bindings.h",
+        "src/graphics/wasm_canvas_bindings.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "registration_symbol": "js_runtime_create",
+            "namespace": "console",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_console_funcs"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "namespace": "console",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_function_field"
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_create",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host",
+            "export_prefixes": [
+                "log_"
+            ]
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no log_* imports; the runner itself uses the browser console only for host status/error messages.",
+            "absent_export_prefixes": [
+                "log_"
+            ]
+        }
+    },
+    "platform_differences": {
+        "android": {
+            "source": "src/graphics/js_canvas_bindings.c",
+            "details": [
+                "JavaScript console.log writes a bounded combined line through Android logcat; Lua follows its C stream implementation."
+            ]
+        },
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript and Lua expose console.log, while browser-native WebAssembly has no guest logging import despite host-side BudoWasmRunner console messages."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "log",
+            "signature": "(...values) -> void",
+            "binding_symbols": {
+                "javascript": "js_console_log",
+                "lua": "l_console_log"
+            },
+            "exports": {
+                "javascript": "log",
+                "lua": "log"
+            }
+        },
+        {
+            "name": "log_int",
+            "signature": "(value:i32) -> void",
+            "binding_symbols": {
+                "wasmtime": "host_log_int"
+            },
+            "exports": {
+                "wasmtime": "log_int"
+            }
+        },
+        {
+            "name": "log_float",
+            "signature": "(value:f32) -> void",
+            "binding_symbols": {
+                "wasmtime": "host_log_float"
+            },
+            "exports": {
+                "wasmtime": "log_float"
+            }
+        }
+    ]
+}

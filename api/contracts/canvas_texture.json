@@ -1,0 +1,418 @@
+{
+    "version": 1,
+    "subsystem": "canvas_texture",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "Creation and resize require positive dimensions and throw on invalid arguments or allocation failure. Methods throw TypeError for an invalid/destroyed receiver where checked; destroy is idempotent after clearing the object metadata."
+        }
+    },
+    "wrapper_headers": [
+        "src/core/window_canvas_texture.h",
+        "src/graphics/skia_wrapper.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "export_sources": [
+                "src/graphics/js_canvas_bindings.c"
+            ],
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "sys.graphics",
+                "CanvasTexture",
+                "CanvasTexture.canvas"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_sys_graphics_funcs",
+                "js_canvas_texture_funcs",
+                "js_canvas_texture_canvas_funcs"
+            ]
+        }
+    },
+    "unsupported_runtimes": {
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "reason": "Lua registers no sys.graphics table and exposes no CanvasTexture object methods."
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_create",
+            "platforms": [
+                "desktop"
+            ],
+            "reason": "Wasmtime registers no canvas_texture_* or graphics_* host imports."
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no CanvasTexture creation or object API.",
+            "absent_export_prefixes": [
+                "canvas_texture_",
+                "graphics_"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "JSCanvasContext owns every created CanvasTexture and destroys any live entries during context teardown. Each object exposes copied id/size/GL metadata plus methods that resolve the id back through that owning context."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/graphics/js_canvas_bindings.c",
+            "details": [
+                "Managed JavaScript exposes CanvasTexture on web through the Skia-WASM GL backend.",
+                "Managed Lua and browser-native WebAssembly expose no equivalent surface.",
+                "The public object has id, width, height, texture, target, and canvas data properties; callable registration coverage is tracked here separately from those constructed fields."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "create",
+            "wrapper_symbol": "window_canvas_texture_create",
+            "signature": "(width:i32, height:i32) -> CanvasTexture object with id, width, height, texture, target, and canvas",
+            "exports": {
+                "javascript": {
+                    "name": "createCanvasTexture",
+                    "namespace": "sys.graphics"
+                }
+            }
+        },
+        {
+            "name": "resize",
+            "wrapper_symbol": "window_canvas_texture_resize",
+            "signature": "(width:i32, height:i32) -> void and refresh public GL metadata",
+            "exports": {
+                "javascript": {
+                    "name": "resize",
+                    "namespace": "CanvasTexture"
+                }
+            }
+        },
+        {
+            "name": "destroy",
+            "wrapper_symbol": "window_canvas_texture_destroy",
+            "signature": "() -> void and invalidate the object handle",
+            "exports": {
+                "javascript": {
+                    "name": "destroy",
+                    "namespace": "CanvasTexture"
+                }
+            }
+        },
+        {
+            "name": "canvas_clear",
+            "signature": "(color?:ARGB) -> void",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_clear"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "clear",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_rect",
+            "signature": "(x:f32, y:f32, width:f32, height:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_rect"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawRect",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_arc",
+            "signature": "(x:f32, y:f32, width:f32, height:f32, start_angle:f32, sweep_angle:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_arc"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawArc",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_line",
+            "signature": "(x1:f32, y1:f32, x2:f32, y2:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_line"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawLine",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_oval",
+            "signature": "(x:f32, y:f32, width:f32, height:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_oval"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawOval",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_point",
+            "signature": "(x:f32, y:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_point"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawPoint",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_round_rect",
+            "signature": "(x:f32, y:f32, width:f32, height:f32, radiusX:f32, radiusY:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_round_rect"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawRoundRect",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_measure_text",
+            "signature": "(text:string, font_size?:f32) -> number width using the owner active font",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_measure_text"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "measureText",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_measure_text_rect",
+            "signature": "(text:string, font_size?:f32) -> { width: number, height: number } using the owner active font",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_measure_text_rect"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "measureTextRect",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_read_pixels",
+            "signature": "() -> Uint8Array using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_read_pixels"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "readPixels",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_circle",
+            "signature": "(cx:f32, cy:f32, radius:f32) -> void using the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_circle"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawCircle",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_text",
+            "signature": "(text:string, x:f32, y:f32, font_size?:f32) -> number width using the owner active font and default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_text"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawText",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_fill_color",
+            "signature": "(color: ARGB) -> void and select fill style",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_fill_color"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setFillColor",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_stroke_color",
+            "signature": "(color: ARGB) -> void and select stroke style",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_stroke_color"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeColor",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_stroke_width",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_stroke_width"
+            },
+            "signature": "(width:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeWidth",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_anti_alias",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_anti_alias"
+            },
+            "signature": "(enabled:bool) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setAntiAlias",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_alpha",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_alpha"
+            },
+            "signature": "(alpha:i32 clamped to 0..255) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setAlpha",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_stroke_cap",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_stroke_cap"
+            },
+            "signature": "(butt|round|square) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeCap",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_stroke_join",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_stroke_join"
+            },
+            "signature": "(miter|round|bevel) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeJoin",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_blend_mode",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_blend_mode"
+            },
+            "signature": "set a stable Skia blend-mode name or numeric ABI value",
+            "exports": {
+                "javascript": {
+                    "name": "setBlendMode",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_image_filter",
+            "signature": "set or clear a managed blur/drop-shadow image filter",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_image_filter"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setImageFilter",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_color_filter",
+            "signature": "set or clear a managed matrix/blend color filter",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_color_filter"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setColorFilter",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "font_set",
+            "signature": "(registered name or null) -> void",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_font"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setFont",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        }
+    ]
+}

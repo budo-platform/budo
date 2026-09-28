@@ -1,0 +1,646 @@
+{
+    "version": 1,
+    "subsystem": "midi",
+    "error_convention": {
+        "javascript": {
+            "kind": "throw_programmer_error_return_falsy_transient",
+            "details": "The API remains registered when no MIDI or RTP context can be created. Local counts and lists return 0 or [], opens return -1, sends return false, and closes or callback registration become no-ops as indicated by each signature. onDevicesChanged throws TypeError for a value other than a function or null; most other short-arity and operational failures use sentinels. RTP-MIDI uses -1, false, [], or no-op when its UDP-backed context is absent. No managed getError export is provided."
+        },
+        "lua": {
+            "kind": "throw_programmer_error_return_falsy_transient",
+            "details": "luaL argument checks raise errors for invalid arguments after the applicable context exists. An absent local or RTP context can short-circuit first to 0, an empty table, -1, false, or no result as indicated by each signature. Operational device and session failures use the same sentinels. No managed getError export is provided."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host imports do not deliberately trap. Missing contexts, invalid handles, and failed sends return 0; opens and RTP session creation return -1. Guest-memory imports return 0 or -1 when memory is unavailable or a pointer/length range is invalid. Close and destroy imports are no-ops when unavailable. No MIDI or RTP error-string import is provided."
+        }
+    },
+    "wrapper_headers": [
+        "src/midi/midi_wrapper.h",
+        "src/midi/rtpmidi.h"
+    ],
+    "service_header": "src/midi/midi_service.h",
+    "state_ownership": {
+        "javascript": "Each JsMidiContext owns its QuickJS context pointer, lazy local MidiContext, local and RTP callback references, topology observer, bounded regular MIDI/RTP queues, bounded inline SysEx storage, queue mutexes, and borrowed RtpMidiContext reference. Cleanup closes delivery queues, detaches RTP callbacks, destroys local MIDI delivery, releases VM references, and then frees queue state.",
+        "lua": "Each LuaMidiContext owns its lua_State pointer, lazy local MidiContext, local and RTP registry references, topology observer, bounded regular MIDI/RTP queues, bounded inline SysEx storage, queue mutexes, and borrowed RtpMidiContext reference. Cleanup closes delivery queues, detaches RTP callbacks, destroys local MIDI delivery, releases VM references, and then frees queue state.",
+        "wasmtime": "Each WasmMidiBindingState is the host-function env for one linker and owns its lazy local MidiContext plus borrowed RtpMidiContext, store, and memory references. WasmCanvasContext clears memory and detaches the RTP reference before destroying the MIDI env, destroys RTP-MIDI next, and destroys the UDP binding last.",
+        "cleanup": "Runtime ownership is ordered UDP then RTP-MIDI then managed MIDI so reverse registry shutdown makes binding callbacks inert before RtpMidiContext destruction and destroys RTP-MIDI before UDP. WasmCanvasContext enforces the same binding, RTP-MIDI, UDP teardown order internally."
+    },
+    "capability_gate": {
+        "subsystem": "capabilities",
+        "operation": "midi",
+        "kind": "availability_probe",
+        "required_for_registration": false,
+        "unavailable_behavior": "The managed API remains registered. The probe describes whether the build ships a MIDI backend, not whether a device is attached, browser permission has completed, or RTP-MIDI is available."
+    },
+    "capability_relationships": [
+        {
+            "subsystem": "capabilities",
+            "operation": "udp",
+            "kind": "required",
+            "required_for_registration": false,
+            "applies_to": [
+                "create_session",
+                "connect_session",
+                "destroy_session",
+                "on_session_message",
+                "session_send",
+                "session_note_on",
+                "session_note_off",
+                "session_control_change",
+                "session_send_raw",
+                "get_sessions",
+                "get_session_count"
+            ],
+            "unavailable_behavior": "RTP-MIDI exports remain registered, but without the UDP-backed RTP context create returns -1, connect and sends return false, enumeration returns [] or 0, and callback or destroy operations are no-ops."
+        }
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/midi/js_midi_bindings.c",
+            "registration_symbol": "js_midi_init",
+            "namespace": "sys.midi",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": [
+                "quickjs_function_data",
+                "quickjs_int_property"
+            ],
+            "constant_export_scope": "js_midi_add_constants"
+        },
+        "lua": {
+            "source": "src/midi/lua_midi_bindings.c",
+            "registration_symbol": "lua_midi_init",
+            "namespace": "sys.midi",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": [
+                "lua_reg",
+                "lua_integer_field"
+            ],
+            "constant_export_scope": "lua_midi_init"
+        },
+        "wasmtime": {
+            "source": "src/midi/wasm_midi_bindings.c",
+            "registration_symbol": "wasm_midi_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no midi_* or rtpmidi_* imports; Web MIDI is exposed only through the JavaScript and Lua sys.midi bindings.",
+            "absent_export_prefixes": [
+                "midi_",
+                "rtpmidi_"
+            ]
+        }
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_midi.c",
+            "details": [
+                "Local MIDI uses navigator.requestMIDIAccess asynchronously. Enumeration is initially empty and opens or sends fail until access is ready; lack of browser support or denied permission does not remove sys.midi and does not make the build-level sys.capabilities.midi probe false.",
+                "The backend first requests SysEx permission and retries without SysEx if that request fails, so local non-SysEx MIDI can remain available while SysEx receive or send is unavailable.",
+                "Device topology changes originate from MIDIAccess.onstatechange and are delivered by the JavaScript or Lua frame-thread polling path.",
+                "Browsers have no raw UDP backend. All rtpmidi_* wrapper functions are stubs, and the JavaScript or Lua RTP exports remain present but return -1, false, [], or no result without invoking network I/O.",
+                "Browser-native WebAssembly receives no MIDI host imports."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "get_input_count",
+            "wrapper_symbol": "midi_get_input_count",
+            "signature": "() -> integer; 0 when unavailable or no devices",
+            "exports": {
+                "javascript": "getInputCount",
+                "lua": "getInputCount",
+                "wasmtime": {
+                    "name": "midi_get_input_count",
+                    "signature": "() -> i32; 0 when unavailable or no devices"
+                }
+            }
+        },
+        {
+            "name": "get_output_count",
+            "wrapper_symbol": "midi_get_output_count",
+            "signature": "() -> integer; 0 when unavailable or no devices",
+            "exports": {
+                "javascript": "getOutputCount",
+                "lua": "getOutputCount",
+                "wasmtime": {
+                    "name": "midi_get_output_count",
+                    "signature": "() -> i32; 0 when unavailable or no devices"
+                }
+            }
+        },
+        {
+            "name": "get_input_devices",
+            "wrapper_symbol": "midi_get_input_info",
+            "signature": "() -> Array<{id: integer, name: string}>; [] when unavailable",
+            "exports": {
+                "javascript": "getInputDevices",
+                "lua": "getInputDevices"
+            }
+        },
+        {
+            "name": "get_output_devices",
+            "wrapper_symbol": "midi_get_output_info",
+            "signature": "() -> Array<{id: integer, name: string}>; [] when unavailable",
+            "exports": {
+                "javascript": "getOutputDevices",
+                "lua": "getOutputDevices"
+            }
+        },
+        {
+            "name": "refresh_devices",
+            "wrapper_symbol": "midi_refresh_devices",
+            "signature": "() -> void; no-op when unavailable",
+            "exports": {
+                "javascript": "refreshDevices",
+                "lua": "refreshDevices"
+            }
+        },
+        {
+            "name": "on_devices_changed",
+            "signature": "(callback: (event: {inputs, outputs, generation}) -> void | null) -> void",
+            "binding_symbols": {
+                "javascript": "js_midi_on_devices_changed",
+                "lua": "l_midi_on_devices_changed"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "onDevicesChanged",
+                    "signature": "(callback: function|null) -> void; TypeError for other values"
+                },
+                "lua": {
+                    "name": "onDevicesChanged",
+                    "signature": "(callback: function|nil) -> void; luaL error for other values"
+                }
+            }
+        },
+        {
+            "name": "open_input",
+            "wrapper_symbol": "midi_open_input",
+            "signature": "(device_index: integer, callback: (message) -> void) -> integer handle; -1 on failure",
+            "exports": {
+                "javascript": "openInput",
+                "lua": "openInput"
+            }
+        },
+        {
+            "name": "close_input",
+            "wrapper_symbol": "midi_close_input",
+            "signature": "(handle: integer) -> void; no-op when unavailable",
+            "exports": {
+                "javascript": "closeInput",
+                "lua": "closeInput"
+            }
+        },
+        {
+            "name": "open_output",
+            "wrapper_symbol": "midi_open_output",
+            "service_symbol": "midi_service_open_output",
+            "signature": "(device_index: integer) -> integer handle; -1 on failure",
+            "exports": {
+                "javascript": "openOutput",
+                "lua": "openOutput",
+                "wasmtime": {
+                    "name": "midi_open_output",
+                    "signature": "(device_index: i32) -> i32 handle; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "close_output",
+            "wrapper_symbol": "midi_close_output",
+            "signature": "(handle: integer) -> void; no-op when unavailable",
+            "exports": {
+                "javascript": "closeOutput",
+                "lua": "closeOutput",
+                "wasmtime": {
+                    "name": "midi_close_output",
+                    "signature": "(handle: i32) -> void"
+                }
+            }
+        },
+        {
+            "name": "send_message",
+            "wrapper_symbol": "midi_send_message",
+            "signature": "(handle: integer, status: byte, data1: byte, data2: byte) -> bool",
+            "exports": {
+                "javascript": "sendMessage",
+                "lua": "sendMessage",
+                "wasmtime": {
+                    "name": "midi_send_message",
+                    "signature": "(handle: i32, status: i32, data1: i32, data2: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "send_raw",
+            "wrapper_symbol": "midi_send_raw",
+            "signature": "(handle: integer, data: bytes[1..4096]) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "sendRaw",
+                    "signature": "(handle: number, data: array-like bytes[1..4096]) -> bool"
+                },
+                "lua": {
+                    "name": "sendRaw",
+                    "signature": "(handle: integer, data: byte table[1..4096]) -> bool"
+                },
+                "wasmtime": {
+                    "name": "midi_send_raw",
+                    "signature": "(handle: i32, data_ptr: i32, data_len: i32) -> i32 bool; 0 for invalid guest memory"
+                }
+            }
+        },
+        {
+            "name": "note_on",
+            "wrapper_symbol": "midi_note_on",
+            "signature": "(handle: integer, channel: integer, note: integer, velocity: integer) -> bool",
+            "exports": {
+                "javascript": "noteOn",
+                "lua": "noteOn",
+                "wasmtime": {
+                    "name": "midi_note_on",
+                    "signature": "(handle: i32, channel: i32, note: i32, velocity: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "note_off",
+            "wrapper_symbol": "midi_note_off",
+            "signature": "(handle: integer, channel: integer, note: integer, velocity: integer) -> bool",
+            "exports": {
+                "javascript": "noteOff",
+                "lua": "noteOff",
+                "wasmtime": {
+                    "name": "midi_note_off",
+                    "signature": "(handle: i32, channel: i32, note: i32, velocity: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "control_change",
+            "wrapper_symbol": "midi_control_change",
+            "signature": "(handle: integer, channel: integer, control: integer, value: integer) -> bool",
+            "exports": {
+                "javascript": "controlChange",
+                "lua": "controlChange",
+                "wasmtime": {
+                    "name": "midi_control_change",
+                    "signature": "(handle: i32, channel: i32, control: i32, value: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "program_change",
+            "wrapper_symbol": "midi_program_change",
+            "signature": "(handle: integer, channel: integer, program: integer) -> bool",
+            "exports": {
+                "javascript": "programChange",
+                "lua": "programChange",
+                "wasmtime": {
+                    "name": "midi_program_change",
+                    "signature": "(handle: i32, channel: i32, program: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "pitch_bend",
+            "wrapper_symbol": "midi_pitch_bend",
+            "signature": "(handle: integer, channel: integer, value: integer[-8192..8191]) -> bool",
+            "exports": {
+                "javascript": "pitchBend",
+                "lua": "pitchBend",
+                "wasmtime": {
+                    "name": "midi_pitch_bend",
+                    "signature": "(handle: i32, channel: i32, value: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "channel_pressure",
+            "wrapper_symbol": "midi_channel_pressure",
+            "signature": "(handle: integer, channel: integer, pressure: integer) -> bool",
+            "exports": {
+                "javascript": "channelPressure",
+                "lua": "channelPressure"
+            }
+        },
+        {
+            "name": "poly_pressure",
+            "wrapper_symbol": "midi_poly_pressure",
+            "signature": "(handle: integer, channel: integer, note: integer, pressure: integer) -> bool",
+            "exports": {
+                "javascript": "polyPressure",
+                "lua": "polyPressure"
+            }
+        },
+        {
+            "name": "get_type",
+            "wrapper_symbol": "midi_get_type",
+            "signature": "(status: byte) -> integer message_type",
+            "exports": {
+                "javascript": "getType",
+                "lua": "getType"
+            }
+        },
+        {
+            "name": "get_channel",
+            "wrapper_symbol": "midi_get_channel",
+            "signature": "(status: byte) -> integer[0..15] | -1 for system messages",
+            "exports": {
+                "javascript": "getChannel",
+                "lua": "getChannel"
+            }
+        },
+        {
+            "name": "create_session",
+            "wrapper_symbol": "rtpmidi_create_session",
+            "signature": "(name: string, control_port?: integer = 0) -> integer handle; -1 on failure or unavailable",
+            "exports": {
+                "javascript": "createSession",
+                "lua": "createSession",
+                "wasmtime": {
+                    "name": "rtpmidi_create_session",
+                    "signature": "(name_ptr: i32, name_len: i32, control_port: i32) -> i32 handle; -1 for unavailable, invalid memory, empty name, name_len >= 128, or wrapper failure"
+                }
+            }
+        },
+        {
+            "name": "connect_session",
+            "wrapper_symbol": "rtpmidi_connect",
+            "signature": "(session: integer, host: string, control_port: integer) -> bool invitation_sent",
+            "exports": {
+                "javascript": "connectSession",
+                "lua": "connectSession",
+                "wasmtime": {
+                    "name": "rtpmidi_connect",
+                    "signature": "(session: i32, host_ptr: i32, host_len: i32, control_port: i32) -> i32 bool; 0 for invalid guest memory or host_len outside 1..255"
+                }
+            }
+        },
+        {
+            "name": "destroy_session",
+            "wrapper_symbol": "rtpmidi_destroy_session",
+            "signature": "(session: integer) -> void; no-op when unavailable",
+            "exports": {
+                "javascript": "destroySession",
+                "lua": "destroySession",
+                "wasmtime": {
+                    "name": "rtpmidi_destroy_session",
+                    "signature": "(session: i32) -> void"
+                }
+            }
+        },
+        {
+            "name": "on_session_message",
+            "wrapper_symbol": "rtpmidi_set_callback",
+            "signature": "(session: integer, callback: (message) -> void) -> void; no-op when unavailable or session is outside 0..7",
+            "exports": {
+                "javascript": "onSessionMessage",
+                "lua": "onSessionMessage"
+            }
+        },
+        {
+            "name": "session_send",
+            "wrapper_symbol": "rtpmidi_send_message",
+            "signature": "(session: integer, status: byte, data1: byte, data2: byte) -> bool; true only when sent to at least one peer",
+            "exports": {
+                "javascript": "sessionSend",
+                "lua": "sessionSend",
+                "wasmtime": {
+                    "name": "rtpmidi_send_message",
+                    "signature": "(session: i32, status: i32, data1: i32, data2: i32) -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "session_note_on",
+            "signature": "(session: integer, channel: integer, note: integer, velocity: integer) -> bool",
+            "binding_symbols": {
+                "javascript": "js_midi_session_note_on",
+                "lua": "l_midi_session_note_on"
+            },
+            "exports": {
+                "javascript": "sessionNoteOn",
+                "lua": "sessionNoteOn"
+            }
+        },
+        {
+            "name": "session_note_off",
+            "signature": "(session: integer, channel: integer, note: integer, velocity: integer) -> bool",
+            "binding_symbols": {
+                "javascript": "js_midi_session_note_off",
+                "lua": "l_midi_session_note_off"
+            },
+            "exports": {
+                "javascript": "sessionNoteOff",
+                "lua": "sessionNoteOff"
+            }
+        },
+        {
+            "name": "session_control_change",
+            "signature": "(session: integer, channel: integer, control: integer, value: integer) -> bool",
+            "binding_symbols": {
+                "javascript": "js_midi_session_cc",
+                "lua": "l_midi_session_cc"
+            },
+            "exports": {
+                "javascript": "sessionControlChange",
+                "lua": "sessionControlChange"
+            }
+        },
+        {
+            "name": "session_send_raw",
+            "wrapper_symbol": "rtpmidi_send_raw",
+            "signature": "(session: integer, data: bytes[1..512]) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "sessionSendRaw",
+                    "signature": "(session: number, data: array-like bytes[1..512]) -> bool"
+                },
+                "lua": {
+                    "name": "sessionSendRaw",
+                    "signature": "(session: integer, data: byte table[1..512]) -> bool"
+                }
+            }
+        },
+        {
+            "name": "get_sessions",
+            "wrapper_symbol": "rtpmidi_get_session_info",
+            "signature": "() -> Array<{handle, name, port, state, peerCount}>; [] when unavailable",
+            "exports": {
+                "javascript": "getSessions",
+                "lua": "getSessions"
+            }
+        },
+        {
+            "name": "get_session_count",
+            "wrapper_symbol": "rtpmidi_get_session_count",
+            "signature": "() -> integer; 0 when unavailable",
+            "exports": {
+                "wasmtime": {
+                    "name": "rtpmidi_get_session_count",
+                    "signature": "() -> i32; 0 when unavailable"
+                }
+            }
+        }
+    ],
+    "constants": [
+        {
+            "name": "NOTE_OFF",
+            "value": 128,
+            "exports": {
+                "javascript": "NOTE_OFF",
+                "lua": "NOTE_OFF"
+            }
+        },
+        {
+            "name": "NOTE_ON",
+            "value": 144,
+            "exports": {
+                "javascript": "NOTE_ON",
+                "lua": "NOTE_ON"
+            }
+        },
+        {
+            "name": "POLY_PRESSURE",
+            "value": 160,
+            "exports": {
+                "javascript": "POLY_PRESSURE",
+                "lua": "POLY_PRESSURE"
+            }
+        },
+        {
+            "name": "CONTROL_CHANGE",
+            "value": 176,
+            "exports": {
+                "javascript": "CONTROL_CHANGE",
+                "lua": "CONTROL_CHANGE"
+            }
+        },
+        {
+            "name": "PROGRAM_CHANGE",
+            "value": 192,
+            "exports": {
+                "javascript": "PROGRAM_CHANGE",
+                "lua": "PROGRAM_CHANGE"
+            }
+        },
+        {
+            "name": "CHANNEL_PRESSURE",
+            "value": 208,
+            "exports": {
+                "javascript": "CHANNEL_PRESSURE",
+                "lua": "CHANNEL_PRESSURE"
+            }
+        },
+        {
+            "name": "PITCH_BEND",
+            "value": 224,
+            "exports": {
+                "javascript": "PITCH_BEND",
+                "lua": "PITCH_BEND"
+            }
+        },
+        {
+            "name": "SYSEX",
+            "value": 240,
+            "exports": {
+                "javascript": "SYSEX",
+                "lua": "SYSEX"
+            }
+        },
+        {
+            "name": "CC_MOD_WHEEL",
+            "value": 1,
+            "exports": {
+                "javascript": "CC_MOD_WHEEL",
+                "lua": "CC_MOD_WHEEL"
+            }
+        },
+        {
+            "name": "CC_BREATH",
+            "value": 2,
+            "exports": {
+                "javascript": "CC_BREATH",
+                "lua": "CC_BREATH"
+            }
+        },
+        {
+            "name": "CC_FOOT",
+            "value": 4,
+            "exports": {
+                "javascript": "CC_FOOT",
+                "lua": "CC_FOOT"
+            }
+        },
+        {
+            "name": "CC_VOLUME",
+            "value": 7,
+            "exports": {
+                "javascript": "CC_VOLUME",
+                "lua": "CC_VOLUME"
+            }
+        },
+        {
+            "name": "CC_PAN",
+            "value": 10,
+            "exports": {
+                "javascript": "CC_PAN",
+                "lua": "CC_PAN"
+            }
+        },
+        {
+            "name": "CC_EXPRESSION",
+            "value": 11,
+            "exports": {
+                "javascript": "CC_EXPRESSION",
+                "lua": "CC_EXPRESSION"
+            }
+        },
+        {
+            "name": "CC_SUSTAIN",
+            "value": 64,
+            "exports": {
+                "javascript": "CC_SUSTAIN",
+                "lua": "CC_SUSTAIN"
+            }
+        },
+        {
+            "name": "CC_ALL_SOUND_OFF",
+            "value": 120,
+            "exports": {
+                "javascript": "CC_ALL_SOUND_OFF",
+                "lua": "CC_ALL_SOUND_OFF"
+            }
+        },
+        {
+            "name": "CC_ALL_NOTES_OFF",
+            "value": 123,
+            "exports": {
+                "javascript": "CC_ALL_NOTES_OFF",
+                "lua": "CC_ALL_NOTES_OFF"
+            }
+        }
+    ]
+}

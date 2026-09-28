@@ -1,0 +1,233 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "midi-preset-saver.schema.json",
+    "title": "MIDI Preset Saver export",
+    "description": "Portable backup format for MIDI Preset Saver songs, presets, MIDI commands, note sequences, and current selection.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "$schema",
+        "format",
+        "version",
+        "exportedAt",
+        "songs",
+        "selection"
+    ],
+    "properties": {
+        "$schema": {
+            "const": "midi-preset-saver.schema.json"
+        },
+        "format": {
+            "const": "midi-preset-saver"
+        },
+        "version": {
+            "const": 1
+        },
+        "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "songs": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/song"
+            }
+        },
+        "selection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "songId",
+                "presetId"
+            ],
+            "properties": {
+                "songId": {
+                    "$ref": "#/$defs/nullableId"
+                },
+                "presetId": {
+                    "$ref": "#/$defs/nullableId"
+                }
+            }
+        }
+    },
+    "$defs": {
+        "id": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "nullableId": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/id"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "storedTimestamp": {
+            "type": "string"
+        },
+        "midiBytes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+            }
+        },
+        "command": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "key",
+                "label",
+                "bytes",
+                "receivedAt"
+            ],
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "bytes": {
+                    "$ref": "#/$defs/midiBytes"
+                },
+                "receivedAt": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "sequenceEvent": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "timeMs",
+                "label",
+                "bytes"
+            ],
+            "properties": {
+                "timeMs": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "label": {
+                    "type": "string"
+                },
+                "bytes": {
+                    "$ref": "#/$defs/midiBytes"
+                }
+            }
+        },
+        "sequence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id",
+                "createdAt",
+                "updatedAt",
+                "events"
+            ],
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/id"
+                },
+                "createdAt": {
+                    "$ref": "#/$defs/storedTimestamp"
+                },
+                "updatedAt": {
+                    "$ref": "#/$defs/storedTimestamp"
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/sequenceEvent"
+                    }
+                }
+            }
+        },
+        "preset": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id",
+                "name",
+                "sortOrder",
+                "createdAt",
+                "updatedAt",
+                "commands",
+                "sequences"
+            ],
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/id"
+                },
+                "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 48
+                },
+                "sortOrder": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "createdAt": {
+                    "$ref": "#/$defs/storedTimestamp"
+                },
+                "updatedAt": {
+                    "$ref": "#/$defs/storedTimestamp"
+                },
+                "commands": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/command"
+                    }
+                },
+                "sequences": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/sequence"
+                    }
+                }
+            }
+        },
+        "song": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id",
+                "name",
+                "sortOrder",
+                "createdAt",
+                "presets"
+            ],
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/id"
+                },
+                "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 48
+                },
+                "sortOrder": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "createdAt": {
+                    "$ref": "#/$defs/storedTimestamp"
+                },
+                "presets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/preset"
+                    }
+                }
+            }
+        }
+    }
+}

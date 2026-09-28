@@ -1,0 +1,384 @@
+{
+    "version": 1,
+    "subsystem": "file",
+    "error_convention": {
+        "javascript": {
+            "kind": "throw_programmer_error_return_falsy_transient",
+            "details": "Wrong arity or type and unsafe virtual paths throw; missing roots, missing or denied entries, I/O failures, and picker launch contention return null or false, with sys.files.getError and sys.assets.getError sharing the wrapper error string."
+        },
+        "lua": {
+            "kind": "throw_programmer_error_return_falsy_transient",
+            "details": "luaL checks reject wrong arguments and unsafe paths; missing roots, missing or denied entries, and I/O failures return nil or false, with sys.files.getError and sys.assets.getError sharing the wrapper error string."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host calls do not trap and expose no get-error import: list, reads, and size return -1 on failure while exists and is_directory return 0; successful output writes may be truncated to the guest buffer and return the bytes copied."
+        }
+    },
+    "wrapper_header": "src/file/file_wrapper.h",
+    "service_header": "src/file/file_service.h",
+    "runtimes": {
+        "javascript": {
+            "source": "src/file/js_file_bindings.c",
+            "registration_symbol": "js_file_init",
+            "namespace": [
+                "sys.files",
+                "sys.assets"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_function_data"
+        },
+        "lua": {
+            "source": "src/file/lua_file_bindings.c",
+            "registration_symbol": "lua_file_init",
+            "namespace": [
+                "sys.files",
+                "sys.assets"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg"
+        },
+        "wasmtime": {
+            "source": "src/file/wasm_file_bindings.c",
+            "registration_symbol": "wasm_file_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no files_* imports.",
+            "absent_export_prefixes": [
+                "files_"
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "list",
+            "wrapper_symbol": "file_list",
+            "signature": "(path?: string) -> file_entry[]|null",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "list",
+                        "namespace": "sys.files",
+                        "signature": "(path?: assets/|files/ virtual path) -> Array<{name,type,size?}>|null"
+                    },
+                    {
+                        "name": "list",
+                        "namespace": "sys.assets",
+                        "signature": "(path?: safe bundle-relative path) -> Array<{name,type,size?}>|null"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "list",
+                        "namespace": "sys.files",
+                        "signature": "(path?: assets/|files/ virtual path) -> table[]|nil"
+                    },
+                    {
+                        "name": "list",
+                        "namespace": "sys.assets",
+                        "signature": "(path?: safe bundle-relative path) -> table[]|nil"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "files_list_json",
+                    "signature": "(path_ptr: i32, path_len: i32, out_ptr: i32, out_max_len: i32) -> i32 JSON bytes written; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "read_text",
+            "wrapper_symbol": "file_read_text",
+            "service_symbol": "file_service_read_text",
+            "signature": "(path: string) -> string|null",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "readText",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> string|null"
+                    },
+                    {
+                        "name": "readText",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> string|null"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "readText",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> string|nil"
+                    },
+                    {
+                        "name": "readText",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> string|nil"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "files_read_text",
+                    "signature": "(path_ptr: i32, path_len: i32, out_ptr: i32, out_max_len: i32) -> i32 bytes written; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "read_binary",
+            "wrapper_symbol": "file_read_binary",
+            "signature": "(path: string) -> bytes|null",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "readBinary",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> ArrayBuffer|null"
+                    },
+                    {
+                        "name": "readBinary",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> ArrayBuffer|null"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "readBinary",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> binary string|nil"
+                    },
+                    {
+                        "name": "readBinary",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> binary string|nil"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "files_read_binary",
+                    "signature": "(path_ptr: i32, path_len: i32, out_ptr: i32, out_max_len: i32) -> i32 bytes written; -1 on failure"
+                }
+            }
+        },
+        {
+            "name": "exists",
+            "wrapper_symbol": "file_is_file",
+            "signature": "(path: string) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "exists",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> bool"
+                    },
+                    {
+                        "name": "exists",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> bool"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "exists",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> bool"
+                    },
+                    {
+                        "name": "exists",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> bool"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "files_exists",
+                    "signature": "(path_ptr: i32, path_len: i32) -> i32; 1 regular file, 0 otherwise"
+                }
+            }
+        },
+        {
+            "name": "is_directory",
+            "wrapper_symbol": "file_is_directory",
+            "signature": "(path: string) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "isDirectory",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> bool"
+                    },
+                    {
+                        "name": "isDirectory",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> bool"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "isDirectory",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> bool"
+                    },
+                    {
+                        "name": "isDirectory",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> bool"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "files_is_directory",
+                    "signature": "(path_ptr: i32, path_len: i32) -> i32; 1 directory, 0 otherwise"
+                }
+            }
+        },
+        {
+            "name": "size",
+            "wrapper_symbol": "file_size",
+            "signature": "(path: string) -> integer|null",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "size",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> number|null"
+                    },
+                    {
+                        "name": "size",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> number|null"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "size",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> integer|nil"
+                    },
+                    {
+                        "name": "size",
+                        "namespace": "sys.assets",
+                        "signature": "(path: safe bundle-relative path) -> integer|nil"
+                    }
+                ],
+                "wasmtime": {
+                    "name": "files_size",
+                    "signature": "(path_ptr: i32, path_len: i32) -> i32 byte size; -1 on wrapper failure; the wrapper i64 is narrowed without an overflow check"
+                }
+            }
+        },
+        {
+            "name": "write_text",
+            "wrapper_symbol": "file_write_text",
+            "signature": "(path: files/ virtual path, text: string) -> absolute_path|null",
+            "exports": {
+                "javascript": {
+                    "name": "writeText",
+                    "namespace": "sys.files"
+                },
+                "lua": {
+                    "name": "writeText",
+                    "namespace": "sys.files"
+                }
+            }
+        },
+        {
+            "name": "write_binary",
+            "wrapper_symbol": "file_write_binary",
+            "signature": "(path: files/ virtual path, data: bytes) -> absolute_path|null",
+            "exports": {
+                "javascript": {
+                    "name": "writeBinary",
+                    "namespace": "sys.files",
+                    "signature": "(path: files/ virtual path, data: ArrayBuffer|TypedArray) -> string|null"
+                },
+                "lua": {
+                    "name": "writeBinary",
+                    "namespace": "sys.files",
+                    "signature": "(path: files/ virtual path, data: binary string) -> string|nil"
+                }
+            }
+        },
+        {
+            "name": "append_binary",
+            "wrapper_symbol": "file_append_binary",
+            "signature": "(path: files/ virtual path, data: bytes) -> absolute_path|null",
+            "exports": {
+                "javascript": {
+                    "name": "appendBinary",
+                    "namespace": "sys.files",
+                    "signature": "(path: files/ virtual path, data: ArrayBuffer|TypedArray) -> string|null"
+                }
+            }
+        },
+        {
+            "name": "pick_text",
+            "signature": "(callback, extension?: string) -> bool",
+            "binding_symbols": {
+                "javascript": "js_file_pick_text"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "pickText",
+                    "namespace": "sys.files",
+                    "signature": "(callback: (file|null, error|null), extension?: string) -> bool launched"
+                }
+            }
+        },
+        {
+            "name": "save_text",
+            "signature": "(name: string, text: string, callback) -> bool",
+            "binding_symbols": {
+                "javascript": "js_file_save_text"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "saveText",
+                    "namespace": "sys.files",
+                    "signature": "(name: simple_filename, text: string, callback: (error|null)) -> bool launched"
+                }
+            }
+        },
+        {
+            "name": "get_error",
+            "wrapper_symbol": "file_get_error",
+            "signature": "() -> string",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "getError",
+                        "namespace": "sys.files"
+                    },
+                    {
+                        "name": "getError",
+                        "namespace": "sys.assets"
+                    }
+                ],
+                "lua": [
+                    {
+                        "name": "getError",
+                        "namespace": "sys.files"
+                    },
+                    {
+                        "name": "getError",
+                        "namespace": "sys.assets"
+                    }
+                ]
+            }
+        }
+    ]
+}

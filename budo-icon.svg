@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="portalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6C3AED"/>
+      <stop offset="50%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <linearGradient id="doorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="lightGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="40%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#4C1D95"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="innerGlow">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#doorGrad)"/>
+
+  <!-- Subtle star particles in background -->
+  <circle cx="120" cy="120" r="2" fill="#C4B5FD" opacity="0.5"/>
+  <circle cx="390" cy="100" r="1.5" fill="#C4B5FD" opacity="0.4"/>
+  <circle cx="100" cy="350" r="1.5" fill="#C4B5FD" opacity="0.3"/>
+  <circle cx="410" cy="380" r="2" fill="#C4B5FD" opacity="0.4"/>
+  <circle cx="330" cy="140" r="1" fill="#DDD6FE" opacity="0.5"/>
+  <circle cx="180" cy="400" r="1" fill="#DDD6FE" opacity="0.4"/>
+
+  <!-- Budo door frame (trapezoid perspective) -->
+  <path d="M 168 100 L 344 100 L 364 432 L 148 432 Z"
+        fill="url(#frameGrad)" stroke="#A78BFA" stroke-width="3" rx="8"/>
+
+  <!-- Inner opening — the budo portal -->
+  <path d="M 184 116 L 328 116 L 346 420 L 166 420 Z"
+        fill="#0F0A2A"/>
+
+  <!-- Light rays emanating from the portal opening -->
+  <g opacity="0.15" filter="url(#innerGlow)">
+    <path d="M 256 200 L 140 432 L 180 432 Z" fill="#FBBF24"/>
+    <path d="M 256 200 L 332 432 L 372 432 Z" fill="#FBBF24"/>
+    <path d="M 256 200 L 220 432 L 260 432 Z" fill="#FDE68A"/>
+  </g>
+
+  <!-- Central glowing orb — the magic within -->
+  <circle cx="256" cy="250" r="40" fill="url(#lightGrad)" opacity="0.9" filter="url(#glow)"/>
+  <circle cx="256" cy="250" r="24" fill="#FEF3C7" opacity="0.95"/>
+  <circle cx="256" cy="250" r="12" fill="#FFFBEB"/>
+
+  <!-- Hatch lid (top) — angled open -->
+  <path d="M 160 104 L 352 104 L 380 52 L 132 52 Z"
+        fill="url(#portalGrad)" stroke="#A78BFA" stroke-width="2"/>
+  <!-- Lid thickness edge -->
+  <path d="M 132 52 L 160 104 L 160 98 L 136 48 Z" fill="#4C1D95" opacity="0.6"/>
+  <path d="M 380 52 L 352 104 L 352 98 L 376 48 Z" fill="#4C1D95" opacity="0.4"/>
+  <!-- Lid highlight -->
+  <path d="M 148 56 L 364 56 L 348 96 L 164 96 Z" fill="#8B5CF6" opacity="0.3"/>
+
+  <!-- Small handle/latch on the lid -->
+  <rect x="240" y="64" width="32" height="8" rx="4" fill="#DDD6FE" opacity="0.7"/>
+
+  <!-- Bracket/hinge details on door frame sides -->
+  <rect x="156" y="140" width="8" height="20" rx="2" fill="#A78BFA" opacity="0.5"/>
+  <rect x="156" y="220" width="8" height="20" rx="2" fill="#A78BFA" opacity="0.5"/>
+  <rect x="156" y="300" width="8" height="20" rx="2" fill="#A78BFA" opacity="0.4"/>
+  <rect x="348" y="140" width="8" height="20" rx="2" fill="#A78BFA" opacity="0.5"/>
+  <rect x="348" y="220" width="8" height="20" rx="2" fill="#A78BFA" opacity="0.5"/>
+  <rect x="348" y="300" width="8" height="20" rx="2" fill="#A78BFA" opacity="0.4"/>
+</svg>

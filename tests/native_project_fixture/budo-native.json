@@ -1,0 +1,22 @@
+{
+    "schema_version": 1,
+    "name": "Native Project Fixture",
+    "sources": [
+        "main.c",
+        "src/counter.c"
+    ],
+    "include_directories": [
+        "include"
+    ],
+    "assets": [
+        "assets/message.txt"
+    ],
+    "definitions": [
+        "NATIVE_FIXTURE=1"
+    ],
+    "modules": [
+        "core"
+    ],
+    "c_standard": 11,
+    "sdk_version": "0.4.3"
+}

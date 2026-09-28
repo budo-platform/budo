@@ -1,0 +1,5 @@
+{
+    "name": "WASM Interactive",
+    "description": "Interactive WebAssembly example using Budo input and drawing imports.",
+    "icon": "icon.svg"
+}

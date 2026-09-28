@@ -1,0 +1,12 @@
+{
+    "name": "Tiny Local LLM",
+    "author": "Budo",
+    "version": "1.0",
+    "network": [
+        "huggingface.co",
+        "cdn-lfs.hf.co",
+        "cas-bridge.xethub.hf.co",
+        "us.aws.cdn.hf.co"
+    ],
+    "icon": "icon.svg"
+}

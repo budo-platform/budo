@@ -1,0 +1,5 @@
+{
+    "name": "Lua Demo",
+    "description": "Lua scripting example for drawing and animation in Budo.",
+    "icon": "icon.svg"
+}

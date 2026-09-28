@@ -1,0 +1,325 @@
+{
+  "version": 1,
+  "subsystem": "math",
+  "error_convention": "programmer_error_on_invalid_buffer",
+  "state_ownership": {
+    "javascript": "No lifecycle: math registration retains no mutable state, requires no polling or cleanup, and functions operate only on caller-owned arrays.",
+    "lua": "No lifecycle: math registration retains no mutable state, requires no polling or cleanup, and functions operate only on caller-owned tables and temporary C arrays.",
+    "wasmtime": "WasmCanvasContext owns the memory/error adapter state; math has no independent registry entry and is destroyed with that parent runtime.",
+    "browser_wasm": "No native lifecycle: imports operate on the current browser WebAssembly instance memory and are discarded with that instance."
+  },
+  "wrapper_header": "src/math/math_wrapper.h",
+  "typescript": {
+    "interface": "SysMath",
+    "kind": "methods",
+    "description": "In-place 3D math helpers. Matrices, vectors, and quaternions use caller-owned Float32Array storage; mat4 values are column-major."
+  },
+  "runtimes": {
+    "javascript": {
+      "source": "src/math/js_math_bindings.c",
+      "registration_symbol": "js_math_init",
+      "namespace": "sys.math",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "lua": {
+      "source": "src/math/lua_math_bindings.c",
+      "registration_symbol": "lua_math_init",
+      "namespace": "sys.math",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "wasmtime": {
+      "source": "src/math/wasm_math_bindings.c",
+      "registration_symbol": "wasm_math_register",
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ]
+    },
+    "browser_wasm": {
+      "source": "src/web/web_main.c",
+      "registration_symbol": "js_web_wasm_start",
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ]
+    }
+  },
+  "operations": [
+    {
+      "name": "mat4_identity",
+      "wrapper_symbol": "math_service_mat4_identity",
+      "signature": "(out: mat4) -> void",
+      "exports": {
+        "javascript": "mat4Identity",
+        "lua": "mat4Identity",
+        "wasmtime": "math_mat4_identity",
+        "browser_wasm": "math_mat4_identity"
+      }
+    },
+    {
+      "name": "mat4_multiply",
+      "wrapper_symbol": "math_mat4_multiply",
+      "signature": "(out: mat4, a: mat4, b: mat4) -> void",
+      "exports": {
+        "javascript": "mat4Multiply",
+        "lua": "mat4Multiply",
+        "wasmtime": "math_mat4_multiply",
+        "browser_wasm": "math_mat4_multiply"
+      }
+    },
+    {
+      "name": "mat4_perspective",
+      "wrapper_symbol": "math_mat4_perspective",
+      "signature": "(out: mat4, fovy: f32, aspect: f32, near: f32, far: f32) -> void",
+      "exports": {
+        "javascript": "mat4Perspective",
+        "lua": "mat4Perspective",
+        "wasmtime": "math_mat4_perspective",
+        "browser_wasm": "math_mat4_perspective"
+      }
+    },
+    {
+      "name": "mat4_ortho",
+      "wrapper_symbol": "math_mat4_ortho",
+      "signature": "(out: mat4, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> void",
+      "exports": {
+        "javascript": "mat4Ortho",
+        "lua": "mat4Ortho",
+        "wasmtime": "math_mat4_ortho"
+      }
+    },
+    {
+      "name": "mat4_lookat",
+      "wrapper_symbol": "math_mat4_lookat",
+      "signature": "(out: mat4, eye: vec3, target: vec3, up: vec3) -> void",
+      "exports": {
+        "javascript": "mat4LookAt",
+        "lua": "mat4LookAt",
+        "wasmtime": "math_mat4_lookat",
+        "browser_wasm": "math_mat4_lookat"
+      }
+    },
+    {
+      "name": "mat4_translate",
+      "wrapper_symbol": "math_mat4_translate",
+      "signature": "(out: mat4, a: mat4, translation: vec3) -> void",
+      "exports": {
+        "javascript": "mat4Translate",
+        "lua": "mat4Translate",
+        "wasmtime": "math_mat4_translate"
+      }
+    },
+    {
+      "name": "mat4_rotate_x",
+      "wrapper_symbol": "math_mat4_rotate_x",
+      "signature": "(out: mat4, a: mat4, angle: f32) -> void",
+      "exports": {
+        "javascript": "mat4RotateX",
+        "lua": "mat4RotateX",
+        "wasmtime": "math_mat4_rotate_x",
+        "browser_wasm": "math_mat4_rotate_x"
+      }
+    },
+    {
+      "name": "mat4_rotate_y",
+      "wrapper_symbol": "math_mat4_rotate_y",
+      "signature": "(out: mat4, a: mat4, angle: f32) -> void",
+      "exports": {
+        "javascript": "mat4RotateY",
+        "lua": "mat4RotateY",
+        "wasmtime": "math_mat4_rotate_y",
+        "browser_wasm": "math_mat4_rotate_y"
+      }
+    },
+    {
+      "name": "mat4_rotate_z",
+      "wrapper_symbol": "math_mat4_rotate_z",
+      "signature": "(out: mat4, a: mat4, angle: f32) -> void",
+      "exports": {
+        "javascript": "mat4RotateZ",
+        "lua": "mat4RotateZ",
+        "wasmtime": "math_mat4_rotate_z"
+      }
+    },
+    {
+      "name": "mat4_scale",
+      "wrapper_symbol": "math_mat4_scale",
+      "signature": "(out: mat4, a: mat4, scale: vec3) -> void",
+      "exports": {
+        "javascript": "mat4Scale",
+        "lua": "mat4Scale",
+        "wasmtime": "math_mat4_scale"
+      }
+    },
+    {
+      "name": "mat4_invert",
+      "wrapper_symbol": "math_service_mat4_invert",
+      "signature": "(out: mat4, a: mat4) -> bool",
+      "typescript_description": "Returns true when the matrix is invertible.",
+      "exports": {
+        "javascript": "mat4Invert",
+        "lua": "mat4Invert",
+        "wasmtime": "math_mat4_invert"
+      }
+    },
+    {
+      "name": "mat4_transpose",
+      "wrapper_symbol": "math_mat4_transpose",
+      "signature": "(out: mat4, a: mat4) -> void",
+      "exports": {
+        "javascript": "mat4Transpose",
+        "lua": "mat4Transpose",
+        "wasmtime": "math_mat4_transpose"
+      }
+    },
+    {
+      "name": "vec3_add",
+      "wrapper_symbol": "math_vec3_add",
+      "signature": "(out: vec3, a: vec3, b: vec3) -> void",
+      "exports": {
+        "javascript": "vec3Add",
+        "lua": "vec3Add",
+        "wasmtime": "math_vec3_add"
+      }
+    },
+    {
+      "name": "vec3_sub",
+      "wrapper_symbol": "math_vec3_sub",
+      "signature": "(out: vec3, a: vec3, b: vec3) -> void",
+      "exports": {
+        "javascript": "vec3Sub",
+        "lua": "vec3Sub",
+        "wasmtime": "math_vec3_sub"
+      }
+    },
+    {
+      "name": "vec3_scale",
+      "wrapper_symbol": "math_service_vec3_scale",
+      "signature": "(out: vec3, a: vec3, scale: f32) -> void",
+      "exports": {
+        "javascript": "vec3Scale",
+        "lua": "vec3Scale",
+        "wasmtime": "math_vec3_scale"
+      }
+    },
+    {
+      "name": "vec3_normalize",
+      "wrapper_symbol": "math_vec3_normalize",
+      "signature": "(out: vec3, a: vec3) -> void",
+      "exports": {
+        "javascript": "vec3Normalize",
+        "lua": "vec3Normalize",
+        "wasmtime": "math_vec3_normalize"
+      }
+    },
+    {
+      "name": "vec3_cross",
+      "wrapper_symbol": "math_vec3_cross",
+      "signature": "(out: vec3, a: vec3, b: vec3) -> void",
+      "exports": {
+        "javascript": "vec3Cross",
+        "lua": "vec3Cross",
+        "wasmtime": "math_vec3_cross"
+      }
+    },
+    {
+      "name": "vec3_dot",
+      "wrapper_symbol": "math_vec3_dot",
+      "signature": "(a: vec3, b: vec3) -> f32",
+      "exports": {
+        "javascript": "vec3Dot",
+        "lua": "vec3Dot",
+        "wasmtime": "math_vec3_dot"
+      }
+    },
+    {
+      "name": "vec3_length",
+      "wrapper_symbol": "math_vec3_length",
+      "signature": "(a: vec3) -> f32",
+      "exports": {
+        "javascript": "vec3Length",
+        "lua": "vec3Length",
+        "wasmtime": "math_vec3_length"
+      }
+    },
+    {
+      "name": "vec3_transform_mat4",
+      "wrapper_symbol": "math_vec3_transform_mat4",
+      "signature": "(out: vec3, value: vec3, matrix: mat4) -> void",
+      "typescript_description": "Transforms a vec3 as (x, y, z, 1) and applies perspective division.",
+      "exports": {
+        "javascript": "vec3TransformMat4",
+        "lua": "vec3TransformMat4",
+        "wasmtime": "math_vec3_transform_mat4"
+      }
+    },
+    {
+      "name": "vec3_normalize_many",
+      "wrapper_symbol": "math_vec3_normalize_many",
+      "signature": "(out: vec3[], values: vec3[], count: i32) -> void",
+      "typescript_description": "Normalizes count tightly packed vec3 values in one native call.",
+      "exports": {
+        "javascript": "vec3NormalizeMany",
+        "lua": "vec3NormalizeMany"
+      }
+    },
+    {
+      "name": "vec3_transform_mat4_many",
+      "wrapper_symbol": "math_vec3_transform_mat4_many",
+      "signature": "(out: vec3[], values: vec3[], matrix: mat4, count: i32) -> void",
+      "typescript_description": "Transforms count tightly packed vec3 values by one matrix in one native call.",
+      "exports": {
+        "javascript": "vec3TransformMat4Many",
+        "lua": "vec3TransformMat4Many"
+      }
+    },
+    {
+      "name": "quat_from_axis_angle",
+      "wrapper_symbol": "math_quat_from_axis_angle",
+      "signature": "(out: quat, axis: vec3, angle: f32) -> void",
+      "exports": {
+        "javascript": "quatFromAxisAngle",
+        "lua": "quatFromAxisAngle",
+        "wasmtime": "math_quat_from_axis_angle"
+      }
+    },
+    {
+      "name": "quat_multiply",
+      "wrapper_symbol": "math_quat_multiply",
+      "signature": "(out: quat, a: quat, b: quat) -> void",
+      "exports": {
+        "javascript": "quatMultiply",
+        "lua": "quatMultiply",
+        "wasmtime": "math_quat_multiply"
+      }
+    },
+    {
+      "name": "quat_slerp",
+      "wrapper_symbol": "math_quat_slerp",
+      "signature": "(out: quat, a: quat, b: quat, t: f32) -> void",
+      "exports": {
+        "javascript": "quatSlerp",
+        "lua": "quatSlerp",
+        "wasmtime": "math_quat_slerp"
+      }
+    },
+    {
+      "name": "quat_to_mat4",
+      "wrapper_symbol": "math_quat_to_mat4",
+      "signature": "(out: mat4, value: quat) -> void",
+      "exports": {
+        "javascript": "quatToMat4",
+        "lua": "quatToMat4",
+        "wasmtime": "math_quat_to_mat4"
+      }
+    }
+  ]
+}

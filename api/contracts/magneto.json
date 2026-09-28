@@ -1,0 +1,204 @@
+{
+    "version": 1,
+    "subsystem": "magneto",
+    "error_convention": {
+        "javascript": {
+            "kind": "unavailable_returns_false_or_null",
+            "details": "Availability, start, and active probes return false when the context or sensor is unavailable; getAccel and getCompass return null until valid active sensor data exists, and stop is a no-op when inactive."
+        },
+        "lua": {
+            "kind": "unavailable_returns_false_or_null",
+            "details": "Availability, start, and active probes return false when the context or sensor is unavailable; getAccel and getCompass return nil until valid active sensor data exists, and stop is a no-op when inactive."
+        },
+        "wasmtime": {
+            "kind": "unavailable_returns_false_or_zero",
+            "details": "Availability, start, and active imports return 0 when unavailable; scalar reading imports return 0.0 when the context is absent or no valid reading exists, so callers must use the availability and active probes."
+        }
+    },
+    "wrapper_header": "src/magneto/magneto_wrapper.h",
+    "service_header": "src/magneto/magneto_service.h",
+    "capability_gate": {
+        "subsystem": "capabilities",
+        "operation": "sensors",
+        "kind": "availability_probe",
+        "required_for_registration": false,
+        "unavailable_behavior": "The magneto API remains registered; capability false predicts false availability/start results and null, nil, or zero readings."
+    },
+    "runtimes": {
+        "javascript": {
+            "source": "src/magneto/js_magneto_bindings.c",
+            "registration_symbol": "js_magneto_init",
+            "namespace": "sys.sensors",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_function_data"
+        },
+        "lua": {
+            "source": "src/magneto/lua_magneto_bindings.c",
+            "registration_symbol": "lua_magneto_init",
+            "namespace": "sys.sensors",
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg"
+        },
+        "wasmtime": {
+            "source": "src/magneto/wasm_magneto_bindings.c",
+            "registration_symbol": "wasm_magneto_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The browser-native WebAssembly env object registers no magneto_* imports.",
+            "absent_export_prefixes": [
+                "magneto_"
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "is_available",
+            "wrapper_symbol": "magneto_is_available",
+            "signature": "() -> bool",
+            "exports": {
+                "javascript": "isAvailable",
+                "lua": "isAvailable",
+                "wasmtime": {
+                    "name": "magneto_is_available",
+                    "signature": "() -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "has_accelerometer",
+            "wrapper_symbol": "magneto_has_accelerometer",
+            "signature": "() -> bool",
+            "exports": {
+                "javascript": "hasAccelerometer",
+                "lua": "hasAccelerometer",
+                "wasmtime": {
+                    "name": "magneto_has_accelerometer",
+                    "signature": "() -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "has_compass",
+            "wrapper_symbol": "magneto_has_compass",
+            "signature": "() -> bool",
+            "exports": {
+                "javascript": "hasCompass",
+                "lua": "hasCompass",
+                "wasmtime": {
+                    "name": "magneto_has_compass",
+                    "signature": "() -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "start",
+            "wrapper_symbol": "magneto_start",
+            "service_symbol": "magneto_service_start",
+            "signature": "() -> bool",
+            "exports": {
+                "javascript": "start",
+                "lua": "start",
+                "wasmtime": {
+                    "name": "magneto_start",
+                    "signature": "() -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "stop",
+            "wrapper_symbol": "magneto_stop",
+            "signature": "() -> void",
+            "exports": {
+                "javascript": "stop",
+                "lua": "stop",
+                "wasmtime": {
+                    "name": "magneto_stop",
+                    "signature": "() -> void"
+                }
+            }
+        },
+        {
+            "name": "is_active",
+            "wrapper_symbol": "magneto_is_active",
+            "signature": "() -> bool",
+            "exports": {
+                "javascript": "isActive",
+                "lua": "isActive",
+                "wasmtime": {
+                    "name": "magneto_is_active",
+                    "signature": "() -> i32 bool"
+                }
+            }
+        },
+        {
+            "name": "get_accel",
+            "wrapper_symbol": "magneto_get_accel",
+            "signature": "() -> {x: f32, y: f32, z: f32}|null",
+            "exports": {
+                "javascript": "getAccel",
+                "lua": "getAccel",
+                "wasmtime": [
+                    {
+                        "name": "magneto_get_accel_x",
+                        "signature": "() -> f32; 0.0 when unavailable or unreadable"
+                    },
+                    {
+                        "name": "magneto_get_accel_y",
+                        "signature": "() -> f32; 0.0 when unavailable or unreadable"
+                    },
+                    {
+                        "name": "magneto_get_accel_z",
+                        "signature": "() -> f32; 0.0 when unavailable or unreadable"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "get_compass",
+            "wrapper_symbol": "magneto_get_compass",
+            "signature": "() -> {x: f32, y: f32, z: f32, heading: f32}|null",
+            "exports": {
+                "javascript": "getCompass",
+                "lua": "getCompass",
+                "wasmtime": [
+                    {
+                        "name": "magneto_get_compass_x",
+                        "signature": "() -> f32; 0.0 when unavailable or unreadable"
+                    },
+                    {
+                        "name": "magneto_get_compass_y",
+                        "signature": "() -> f32; 0.0 when unavailable or unreadable"
+                    },
+                    {
+                        "name": "magneto_get_compass_z",
+                        "signature": "() -> f32; 0.0 when unavailable or unreadable"
+                    },
+                    {
+                        "name": "magneto_get_compass_heading",
+                        "signature": "() -> f32 degrees; 0.0 when unavailable or unreadable"
+                    }
+                ]
+            }
+        }
+    ]
+}

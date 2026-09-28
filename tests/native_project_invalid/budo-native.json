@@ -1,0 +1,6 @@
+{
+    "schema_version": 1,
+    "sources": [
+        "../native_project_fixture/main.c"
+    ]
+}

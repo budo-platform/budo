@@ -1,0 +1,5 @@
+{
+    "name": "Shader Debug",
+    "description": "Shader debugging example for experimenting with Budo GL output.",
+    "icon": "icon.svg"
+}

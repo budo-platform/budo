@@ -1,0 +1,50 @@
+app-id: com.budo.app
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk//24.08
+command: budo
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  # Budo's desktop backend is SDL2 + OpenGL. In the Flatpak sandbox, SDL's
+  # Wayland/EGL path can fail on some hosts with "Could not get EGL display".
+  # Prefer the X11/XWayland + GLX path instead.
+  - --socket=x11
+  - --socket=pulseaudio
+  - --device=dri
+  - --env=SDL_VIDEODRIVER=x11
+  - --env=SDL_VIDEO_X11_FORCE_EGL=0
+  - --env=SDL_OPENGL_LIBRARY=libGL.so.1
+  # Budo is a developer runtime: users pass arbitrary project paths from
+  # the CLI. Grant host filesystem access so `flatpak run com.budo.app
+  # /path/to/project` can see the requested directory.
+  - --filesystem=host
+  # MIDI / sensors
+  - --device=all
+
+modules:
+  - name: budo
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 usr/bin/budo /app/bin/budo
+      - |
+        if [ -d usr/lib ] && [ -n "$(ls -A usr/lib 2>/dev/null)" ]; then
+          mkdir -p /app/lib
+          cp -P usr/lib/* /app/lib/
+        fi
+      - install -Dm644 com.budo.app.desktop
+        /app/share/applications/com.budo.app.desktop
+      - |
+        if [ -f usr/share/icons/hicolor/scalable/apps/com.budo.app.svg ]; then
+          install -Dm644 usr/share/icons/hicolor/scalable/apps/com.budo.app.svg \
+            /app/share/icons/hicolor/scalable/apps/com.budo.app.svg
+        fi
+      - |
+        if [ -f usr/share/icons/hicolor/256x256/apps/com.budo.app.png ]; then
+          install -Dm644 usr/share/icons/hicolor/256x256/apps/com.budo.app.png \
+            /app/share/icons/hicolor/256x256/apps/com.budo.app.png
+        fi
+    sources:
+      - type: dir
+        path: payload

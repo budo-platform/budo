@@ -1,0 +1,8 @@
+{
+    "name": "wasm_network",
+    "version": "1.0",
+    "main": "main.wat",
+    "title": "WASM fetch demo",
+    "network": "*",
+    "icon": "icon.svg"
+}

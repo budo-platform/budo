@@ -1,0 +1,401 @@
+{
+  "version": 1,
+  "subsystem": "audio",
+  "error_convention": {
+    "javascript": {
+      "kind": "documented_sentinel_on_failure",
+      "details": "Unavailable contexts and backend failures produce no-ops, false, 0.0, or -1 depending on the operation; loadBufferFromBuffer throws TypeError for a non-ArrayBuffer, and getError exposes the backend message. Most other missing or coercible arguments are accepted without throwing."
+    },
+    "lua": {
+      "kind": "documented_sentinel_on_failure",
+      "details": "luaL argument checks and setBufferData allocation failure raise Lua errors; unavailable contexts and backend failures otherwise produce no-ops, false, fallback gain 0.5, or -1, and getError exposes the backend message."
+    },
+    "wasmtime": {
+      "kind": "documented_sentinel_on_failure",
+      "details": "Host calls do not trap: mutating imports become no-ops when audio is unavailable and audio_create_oscillator returns -1. Wasmtime exposes neither getError nor buffer, playback-state, or master-gain query imports."
+    }
+  },
+  "wrapper_header": "src/audio/audio_wrapper.h",
+  "service_header": "src/audio/audio_service.h",
+  "runtimes": {
+    "javascript": {
+      "source": "src/audio/js_audio_bindings.c",
+      "registration_symbol": "js_audio_init",
+      "namespace": "sys.audio",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "export_extractor": [
+        "quickjs_function_data",
+        "quickjs_int_property"
+      ]
+    },
+    "lua": {
+      "source": "src/audio/lua_audio_bindings.c",
+      "registration_symbol": "lua_audio_init",
+      "namespace": "sys.audio",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "export_extractor": [
+        "lua_reg",
+        "lua_integer_field"
+      ]
+    },
+    "wasmtime": {
+      "source": "src/audio/wasm_audio_bindings.c",
+      "registration_symbol": "wasm_audio_register",
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "export_extractor": "wasmtime_host"
+    }
+  },
+  "unsupported_runtimes": {
+    "browser_wasm": {
+      "source": "src/web/web_main.c",
+      "registration_symbol": "js_web_wasm_start",
+      "platforms": [
+        "web"
+      ],
+      "reason": "The browser-native WebAssembly env object registers no audio_* imports; browser audio is exposed only to the managed JavaScript and Lua runtimes.",
+      "absent_export_prefixes": [
+        "audio_"
+      ]
+    }
+  },
+  "platform_differences": {
+    "android": {
+      "source": "private/android/android/app/src/main/cpp/android_audio.c",
+      "details": [
+        "Binding state and AudioContext wrappers are instance-owned, while Android audio initialization, cached JNI method IDs, and the AudioTrack helper remain process-global platform state.",
+        "AAudio streams are stored per AndroidAudioContext, but concurrent backend operation, especially through the shared AudioTrack fallback helper, is not guaranteed by binding isolation."
+      ]
+    },
+    "web": {
+      "source": "src/web/web_audio.c",
+      "details": [
+        "Managed JavaScript and Lua register sys.audio on web.",
+        "Browser-native WebAssembly receives no env.audio_* imports.",
+        "Each managed adapter owns its C binding state and asset root, but web_audio routes all wrappers through the single Module._hw_audio Web Audio graph; concurrent independent web backends are not supported."
+      ]
+    }
+  },
+  "constants": [
+    {
+      "name": "AUDIO_WAVE_SINE",
+      "value": 0,
+      "exports": {
+        "javascript": "SINE",
+        "lua": "SINE"
+      }
+    },
+    {
+      "name": "AUDIO_WAVE_SQUARE",
+      "value": 1,
+      "exports": {
+        "javascript": "SQUARE",
+        "lua": "SQUARE"
+      }
+    },
+    {
+      "name": "AUDIO_WAVE_SAWTOOTH",
+      "value": 2,
+      "exports": {
+        "javascript": "SAWTOOTH",
+        "lua": "SAWTOOTH"
+      }
+    },
+    {
+      "name": "AUDIO_WAVE_TRIANGLE",
+      "value": 3,
+      "exports": {
+        "javascript": "TRIANGLE",
+        "lua": "TRIANGLE"
+      }
+    },
+    {
+      "name": "AUDIO_WAVE_NOISE",
+      "value": 4,
+      "exports": {
+        "javascript": "NOISE",
+        "lua": "NOISE"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "name": "start",
+      "wrapper_symbol": "audio_start",
+      "signature": "() -> void",
+      "exports": {
+        "javascript": "start",
+        "lua": "start",
+        "wasmtime": "audio_start"
+      }
+    },
+    {
+      "name": "stop",
+      "wrapper_symbol": "audio_stop",
+      "signature": "() -> void",
+      "exports": {
+        "javascript": "stop",
+        "lua": "stop",
+        "wasmtime": "audio_stop"
+      }
+    },
+    {
+      "name": "is_playing",
+      "wrapper_symbol": "audio_is_playing",
+      "signature": "() -> bool",
+      "exports": {
+        "javascript": "isPlaying",
+        "lua": "isPlaying"
+      }
+    },
+    {
+      "name": "set_master_gain",
+      "wrapper_symbol": "audio_set_master_gain",
+      "signature": "(gain: f32) -> void",
+      "exports": {
+        "javascript": "setMasterGain",
+        "lua": "setMasterGain",
+        "wasmtime": "audio_set_master_gain"
+      }
+    },
+    {
+      "name": "get_master_gain",
+      "wrapper_symbol": "audio_get_master_gain",
+      "signature": "() -> f32",
+      "exports": {
+        "javascript": "getMasterGain",
+        "lua": "getMasterGain"
+      }
+    },
+    {
+      "name": "create_oscillator",
+      "wrapper_symbol": "audio_create_oscillator",
+      "service_symbol": "audio_service_create_oscillator",
+      "signature": "() -> i32 oscillator_id; -1 on failure",
+      "exports": {
+        "javascript": "createOscillator",
+        "lua": "createOscillator",
+        "wasmtime": "audio_create_oscillator"
+      }
+    },
+    {
+      "name": "destroy_oscillator",
+      "wrapper_symbol": "audio_destroy_oscillator",
+      "signature": "(oscillator_id: i32) -> void",
+      "exports": {
+        "javascript": "destroyOscillator",
+        "lua": "destroyOscillator",
+        "wasmtime": "audio_destroy_oscillator"
+      }
+    },
+    {
+      "name": "set_oscillator_type",
+      "wrapper_symbol": "audio_oscillator_set_type",
+      "signature": "(oscillator_id: i32, type: wave_type) -> void",
+      "exports": {
+        "javascript": {
+          "name": "setOscillatorType",
+          "signature": "(oscillator_id: number, type: number|string) -> void; unknown strings select SINE"
+        },
+        "lua": {
+          "name": "setOscillatorType",
+          "signature": "(oscillator_id: integer, type: integer|string) -> nil; unknown strings select SINE"
+        },
+        "wasmtime": {
+          "name": "audio_oscillator_set_type",
+          "signature": "(oscillator_id: i32, type: i32) -> void"
+        }
+      }
+    },
+    {
+      "name": "set_oscillator_frequency",
+      "wrapper_symbol": "audio_oscillator_set_frequency",
+      "signature": "(oscillator_id: i32, frequency_hz: f32) -> void",
+      "exports": {
+        "javascript": "setOscillatorFrequency",
+        "lua": "setOscillatorFrequency",
+        "wasmtime": "audio_oscillator_set_frequency"
+      }
+    },
+    {
+      "name": "set_oscillator_gain",
+      "wrapper_symbol": "audio_oscillator_set_gain",
+      "signature": "(oscillator_id: i32, gain: f32) -> void",
+      "exports": {
+        "javascript": "setOscillatorGain",
+        "lua": "setOscillatorGain",
+        "wasmtime": "audio_oscillator_set_gain"
+      }
+    },
+    {
+      "name": "set_oscillator_detune",
+      "wrapper_symbol": "audio_oscillator_set_detune",
+      "signature": "(oscillator_id: i32, cents: f32) -> void",
+      "exports": {
+        "javascript": "setOscillatorDetune",
+        "lua": "setOscillatorDetune",
+        "wasmtime": "audio_oscillator_set_detune"
+      }
+    },
+    {
+      "name": "start_oscillator",
+      "wrapper_symbol": "audio_oscillator_start",
+      "signature": "(oscillator_id: i32) -> void",
+      "exports": {
+        "javascript": "startOscillator",
+        "lua": "startOscillator",
+        "wasmtime": "audio_oscillator_start"
+      }
+    },
+    {
+      "name": "stop_oscillator",
+      "wrapper_symbol": "audio_oscillator_stop",
+      "signature": "(oscillator_id: i32) -> void",
+      "exports": {
+        "javascript": "stopOscillator",
+        "lua": "stopOscillator",
+        "wasmtime": "audio_oscillator_stop"
+      }
+    },
+    {
+      "name": "set_oscillator_envelope",
+      "wrapper_symbol": "audio_oscillator_set_envelope",
+      "signature": "(oscillator_id: i32, attack: f32, decay: f32, sustain: f32, release: f32) -> void",
+      "exports": {
+        "javascript": "setOscillatorEnvelope",
+        "lua": "setOscillatorEnvelope",
+        "wasmtime": "audio_oscillator_set_envelope"
+      }
+    },
+    {
+      "name": "note_on",
+      "wrapper_symbol": "audio_oscillator_note_on",
+      "signature": "(oscillator_id: i32) -> void",
+      "exports": {
+        "javascript": "noteOn",
+        "lua": "noteOn",
+        "wasmtime": "audio_oscillator_note_on"
+      }
+    },
+    {
+      "name": "note_off",
+      "wrapper_symbol": "audio_oscillator_note_off",
+      "signature": "(oscillator_id: i32) -> void",
+      "exports": {
+        "javascript": "noteOff",
+        "lua": "noteOff",
+        "wasmtime": "audio_oscillator_note_off"
+      }
+    },
+    {
+      "name": "load_buffer",
+      "wrapper_symbol": "audio_load_buffer",
+      "signature": "(project_relative_path: string) -> i32 buffer_id; -1 on failure",
+      "exports": {
+        "javascript": "loadBuffer",
+        "lua": "loadBuffer"
+      }
+    },
+    {
+      "name": "load_buffer_from_buffer",
+      "wrapper_symbol": "audio_load_buffer_from_memory",
+      "signature": "(encoded_audio: bytes) -> i32 buffer_id; -1 on failure",
+      "exports": {
+        "javascript": {
+          "name": "loadBufferFromBuffer",
+          "signature": "(encoded_audio: ArrayBuffer) -> number; throws TypeError for other values"
+        },
+        "lua": {
+          "name": "loadBufferFromBuffer",
+          "signature": "(encoded_audio: binary string) -> integer"
+        }
+      }
+    },
+    {
+      "name": "create_buffer",
+      "wrapper_symbol": "audio_create_buffer",
+      "signature": "(sample_rate: i32, channels: i32, sample_count: i32) -> i32 buffer_id; -1 on failure",
+      "exports": {
+        "javascript": "createBuffer",
+        "lua": "createBuffer"
+      }
+    },
+    {
+      "name": "set_buffer_data",
+      "wrapper_symbol": "audio_buffer_set_data",
+      "signature": "(buffer_id: i32, samples: f32[], offset?: i32) -> void",
+      "exports": {
+        "javascript": {
+          "name": "setBufferData",
+          "signature": "(buffer_id: number, samples: Array<number>, offset?: number) -> void"
+        },
+        "lua": {
+          "name": "setBufferData",
+          "signature": "(buffer_id: integer, samples: number[], offset?: integer) -> nil"
+        }
+      }
+    },
+    {
+      "name": "destroy_buffer",
+      "wrapper_symbol": "audio_destroy_buffer",
+      "signature": "(buffer_id: i32) -> void",
+      "exports": {
+        "javascript": "destroyBuffer",
+        "lua": "destroyBuffer"
+      }
+    },
+    {
+      "name": "play_buffer",
+      "wrapper_symbol": "audio_play_buffer",
+      "signature": "(buffer_id: i32, loop?: bool, gain?: f32) -> i32 playback_id; -1 on failure",
+      "exports": {
+        "javascript": "playBuffer",
+        "lua": "playBuffer"
+      }
+    },
+    {
+      "name": "stop_buffer",
+      "wrapper_symbol": "audio_stop_buffer",
+      "signature": "(playback_id: i32) -> void",
+      "exports": {
+        "javascript": "stopBuffer",
+        "lua": "stopBuffer"
+      }
+    },
+    {
+      "name": "midi_to_frequency",
+      "wrapper_symbol": "audio_midi_to_freq",
+      "signature": "(midi_note: i32) -> f32 frequency_hz",
+      "exports": {
+        "javascript": {
+          "name": "midiToFreq",
+          "signature": "(midi_note?: number) -> number; missing note returns 440.0"
+        },
+        "lua": "midiToFreq",
+        "wasmtime": {
+          "name": "audio_midi_to_freq",
+          "signature": "(midi_note: i32) -> f32"
+        }
+      }
+    },
+    {
+      "name": "get_error",
+      "wrapper_symbol": "audio_get_error",
+      "signature": "() -> string",
+      "exports": {
+        "javascript": "getError",
+        "lua": "getError"
+      }
+    }
+  ]
+}

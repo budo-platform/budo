@@ -1,0 +1,885 @@
+# =============================================================================
+# Type annotations for generate-types.sh
+# =============================================================================
+#
+# Format:
+#   [scope.functionName]
+#   sig = (param: type, ...) => returnType
+#   doc = /** JSDoc comment. */
+#
+# scope matches the sys.* sub-object: canvas, transform, path, svg,
+# font, gl, input, window, animation, audio, midi, db
+# For constants: [scope.CONSTANT_NAME] with sig = literal_type
+#
+# Functions not listed here get a generic (arg1: any, ...) => any signature.
+# =============================================================================
+
+[canvas.transform]
+sig = SysTransform
+doc = /** Canvas transform operations. */
+
+# ── sys.canvas — drawing primitives ─────────────────────────────────────────
+
+[canvas.clear]
+sig = (color?: Color): void
+doc = /** Clear the entire canvas with the given color. */
+
+[canvas.flush]
+sig = (): void
+doc = /** Force any pending Skia draw calls to be submitted to the GPU. The desktop and mobile graphics pipeline is GPU-immediate (Ganesh GL): canvas drawing updates the backing GL texture as part of the current frame. Calling flush() guarantees that all draws issued so far are visible in that texture, which is required before sampling it from a custom shader pass via sys.gl.* or before reading pixels back via readPixels(). */
+
+[canvas.readPixels]
+sig = (): { width: number, height: number, pixels: ArrayBuffer }
+doc = /** Read the canvas's current pixel content back from the GPU. Returns RGBA8 premultiplied pixels in row-major top-to-bottom order. Implicitly flushes pending draws and stalls until the GPU has finished, so use sparingly. Useful for screenshots, image processing, and procedural content generation that needs to inspect what was just drawn. */
+
+[canvas.drawRect]
+sig = (x: number, y: number, width: number, height: number): void
+doc = /** Draw a filled/stroked rectangle. */
+
+[canvas.drawRoundRect]
+sig = (x: number, y: number, width: number, height: number, rx: number, ry: number): void
+doc = /** Draw a filled/stroked rounded rectangle. */
+
+[canvas.drawCircle]
+sig = (cx: number, cy: number, radius: number): void
+doc = /** Draw a filled/stroked circle. */
+
+[canvas.drawOval]
+sig = (x: number, y: number, width: number, height: number): void
+doc = /** Draw a filled/stroked oval inscribed in the given rectangle. */
+
+[canvas.drawLine]
+sig = (x1: number, y1: number, x2: number, y2: number): void
+doc = /** Draw a line segment. */
+
+[canvas.drawPoint]
+sig = (x: number, y: number): void
+doc = /** Draw a single point. */
+
+[canvas.drawText]
+sig = (text: string, x: number, y: number, fontSize?: number): void
+doc = /** Draw text at the given position. The default font size is 32. */
+
+[canvas.measureText]
+sig = (text: string, fontSize?: number): number
+doc = /** Measure text width in pixels using the active font. The default font size is 32. */
+
+[canvas.measureTextRect]
+sig = (text: string, fontSize?: number): { width: number, height: number }
+doc = /** Measure text bounds in pixels using the active font. The default font size is 32. */
+
+[canvas.drawArc]
+sig = (x: number, y: number, width: number, height: number, startAngle: number, sweepAngle: number, useCenter?: boolean): void
+doc = /** Draw an arc. Angles in degrees. If useCenter is true, draws a pie-shaped wedge. */
+
+# ── sys.canvas — paint style and color ───────────────────────────────────────
+
+[canvas.setFillColor]
+sig = (color: Color): void
+doc = /** Set the fill color and switch paint style to fill. */
+
+[canvas.setStrokeColor]
+sig = (color: Color): void
+doc = /** Set the stroke color and switch paint style to stroke. */
+
+[canvas.setStrokeWidth]
+sig = (width: number): void
+doc = /** Set the stroke width. */
+
+[canvas.setAntiAlias]
+sig = (enabled: boolean): void
+doc = /** Enable or disable anti-aliasing. */
+
+[canvas.setAlpha]
+sig = (alpha: number): void
+doc = /** Set paint alpha (0–255). */
+
+[canvas.setStrokeCap]
+sig = (cap: "butt" | "round" | "square"): void
+doc = /** Set the stroke cap style. */
+
+[canvas.setStrokeJoin]
+sig = (join: "miter" | "round" | "bevel"): void
+doc = /** Set the stroke join style. */
+
+[canvas.setBlendMode]
+sig = (mode: "src-over" | "src" | "dst-over" | "dst-in" | "dst-out" | "src-in" | "src-out" | "clear" | "plus" | "multiply" | "screen" | "overlay" | "darken" | "lighten" | "color-dodge" | "color-burn" | "hard-light" | "soft-light" | "difference" | "exclusion" | "hue" | "saturation" | "color" | "luminosity"): boolean
+doc = /** Set the SkBlendMode used when compositing. Throws RangeError on an unknown mode name. */
+
+[canvas.setImageFilter]
+sig = (name?: "blur" | "drop-shadow" | "drop-shadow-only" | "none" | null, ...args: (number | string)[]): boolean
+doc = /** Attach a Skia image-filter to the default paint, or clear it. Forms: `setImageFilter("blur", sigmaX, sigmaY?)`; `setImageFilter("drop-shadow", dx, dy, sigmaX, sigmaY?, color)` (color is ARGB number or "#RRGGBBAA"); `setImageFilter("drop-shadow-only", dx, dy, sigmaX, sigmaY?, color)` (same args, but only the shadow is rasterised -- the original paint output is dropped, useful for composing shadows under separately drawn elements); `setImageFilter("none")` / `setImageFilter(null)` / `setImageFilter()` to clear.`. Throws TypeError on missing required arguments and RangeError on an unknown filter name. */
+
+[canvas.setColorFilter]
+sig = (name?: "matrix" | "blend" | "none" | null, ...args: (number | string | ArrayLike<number>)[]): boolean
+doc = /** Attach a Skia color-filter to the default paint, or clear it. Forms: `setColorFilter("matrix", m)` where `m` is an array-like of exactly 20 numbers (4x5 row-major matrix applied as `[Rout Gout Bout Aout]^T = M * [R G B A 1]^T`, channels in 0..1, last column is the bias term); `setColorFilter("blend", color, blendModeName)` composes the source with `color` (ARGB number or "#RRGGBBAA") using one of the names accepted by `setBlendMode`; `setColorFilter("none")` / `setColorFilter(null)` / `setColorFilter()` to clear. Throws TypeError on missing / wrong-typed arguments and RangeError on an unknown filter or blend mode name. */
+
+[canvas.getError]
+sig = (): string
+doc = /** Return and clear the last `sys.canvas` error message. */
+
+# ── sys.canvas — canvas transforms ──────────────────────────────────────
+
+[canvas.save]
+sig = (): void
+doc = /** Save the current transform and clip state onto a stack. */
+
+[canvas.restore]
+sig = (): void
+doc = /** Restore the most recently saved transform/clip state. */
+
+[canvas.translate]
+sig = (dx: number, dy: number): void
+doc = /** Translate the canvas origin. */
+
+[canvas.rotate]
+sig = (degrees: number, px?: number, py?: number): void
+doc = /** Rotate the canvas. If px/py are given, rotate around that point. */
+
+[canvas.scale]
+sig = (sx: number, sy: number): void
+doc = /** Scale the canvas. */
+
+[canvas.skew]
+sig = (sx: number, sy: number): void
+doc = /** Skew the canvas. */
+
+[canvas.reset]
+sig = (): void
+doc = /** Reset the transform to identity. */
+
+[canvas.clipRect]
+sig = (x: number, y: number, width: number, height: number): void
+doc = /** Clip drawing to a rectangle. */
+
+# ── sys.path — path creation and manipulation ──────────────────────────────
+
+[path.create]
+sig = (): number
+doc = /** Create a new empty path. Returns an opaque integer path ID. */
+
+[path.reset]
+sig = (pathId: number): void
+doc = /** Reset a path to empty. */
+
+[path.moveTo]
+sig = (pathId: number, x: number, y: number): void
+doc = /** Move the path cursor to (x, y). */
+
+[path.lineTo]
+sig = (pathId: number, x: number, y: number): void
+doc = /** Add a line segment to (x, y). */
+
+[path.quadTo]
+sig = (pathId: number, x1: number, y1: number, x2: number, y2: number): void
+doc = /** Add a quadratic Bézier curve. */
+
+[path.cubicTo]
+sig = (pathId: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number): void
+doc = /** Add a cubic Bézier curve. */
+
+[path.close]
+sig = (pathId: number): void
+doc = /** Close the current subpath. */
+
+[path.addRect]
+sig = (pathId: number, x: number, y: number, width: number, height: number): void
+doc = /** Add a rectangle subpath. */
+
+[path.addCircle]
+sig = (pathId: number, cx: number, cy: number, radius: number): void
+doc = /** Add a circle subpath. */
+
+[path.draw]
+sig = (pathId: number): void
+doc = /** Draw a previously created path with the current paint. */
+
+# ── sys.svg — SVG loading and drawing ──────────────────────────────────────
+
+[svg.load]
+sig = (path: string): number
+doc = /** Load an SVG image from a file. Returns a non-negative SVG ID on success, -1 on failure. */
+
+[svg.loadFromBuffer]
+sig = (buffer: ArrayBuffer | ArrayBufferView): number
+doc = /** Load an SVG image from an ArrayBuffer or TypedArray. Returns a non-negative SVG ID on success, -1 on failure. */
+
+[svg.destroy]
+sig = (svgId: number): void
+doc = /** Destroy a loaded SVG and free its resources. */
+
+[svg.draw]
+sig = (svgId: number, x: number, y: number, width: number, height: number): void
+doc = /** Draw an SVG scaled to fit the given rectangle. */
+
+[svg.getWidth]
+sig = (svgId: number): number
+doc = /** Get the intrinsic width of a loaded SVG. */
+
+[svg.getHeight]
+sig = (svgId: number): number
+doc = /** Get the intrinsic height of a loaded SVG. */
+
+# ── sys.font — font loading and selection ──────────────────────────────────
+
+[font.load]
+sig = (path: string, name?: string): void
+doc = /** Load a font file from the project directory. */
+
+[font.loadFromBuffer]
+sig = (buffer: ArrayBuffer | ArrayBufferView, name?: string): void
+doc = /** Load a font from an ArrayBuffer or TypedArray and register it under an optional name. */
+
+[font.set]
+sig = (name: string): void
+doc = /** Set the active typeface by name (previously loaded). */
+
+[font.reset]
+sig = (): void
+doc = /** Reset text rendering to the runtime default font. */
+
+# ── sys.gl — immediate OpenGL shader and mesh API ──────────────────────────
+
+[gl.createProgram]
+sig = (vertexPath: string, fragmentPath: string): number
+doc = /** Compile and link a vertex/fragment shader pair. Returns a positive program ID. Throws on failure. */
+
+[gl.createProgramFromBuffer]
+sig = (vertexSource: ArrayBuffer | ArrayBufferView, fragmentSource: ArrayBuffer | ArrayBufferView): number
+doc = /** Compile and link a vertex/fragment shader pair from in-memory shader source buffers. Returns a positive program ID. Throws on failure. */
+
+[gl.createShaderProgram]
+sig = (paths: { vertex: string; fragment: string } | string, fragmentPath?: string): ShaderProgram
+doc = /** Compile and link a shader program and return an immediate object-style Program wrapper. */
+
+[gl.destroyProgram]
+sig = (programId: number): void
+doc = /** Destroy a previously created shader program. */
+
+[gl.useProgram]
+sig = (program: ShaderProgram | number): void
+doc = /** Bind a shader program immediately as the current GL program. */
+
+[gl.bindScreen]
+sig = (): void
+doc = /** Bind the screen/default framebuffer immediately and set the viewport to the window size. */
+
+[gl.bindRenderTarget]
+sig = (targetId?: number): void
+doc = /** Bind an app render target immediately and set its viewport. Omit targetId to bind the screen. */
+
+[gl.drawFullscreen]
+sig = (programId: number): void
+doc = /** Draw a fullscreen shader immediately using the given program. */
+
+[gl.drawFullscreenImmediate]
+sig = (program: ShaderProgram | number, sourceTexture?: number | CanvasTexture): void
+doc = /** Draw a fullscreen shader immediately against the currently bound target. */
+
+[gl.setUniform1i]
+sig = (programId: number, name: string, value: number): void
+doc = /** Set an integer uniform on a shader program. */
+
+[gl.setUniform1f]
+sig = (programId: number, name: string, value: number): void
+doc = /** Set a float uniform on a shader program. */
+
+[gl.setUniform2f]
+sig = (programId: number, name: string, x: number, y: number): void
+doc = /** Set a vec2 uniform on a shader program. */
+
+[gl.setUniform3f]
+sig = (programId: number, name: string, x: number, y: number, z: number): void
+doc = /** Set a vec3 uniform on a shader program. */
+
+[gl.setUniform4f]
+sig = (programId: number, name: string, x: number, y: number, z: number, w: number): void
+doc = /** Set a vec4 uniform on a shader program. */
+
+[gl.getLastError]
+sig = (): string
+doc = /** Return the last OpenGL/shader error string, or "". */
+
+[gl.getProjectDir]
+sig = (): string
+doc = /** Return the loaded project directory path. */
+
+[gl.testAndDemo]
+sig = (): boolean
+doc = /** Shader-pipeline diagnostic helper. Returns true on success. */
+
+[gl.createRenderTarget]
+sig = (width: number, height: number, depth?: boolean): number
+doc = /** Create an offscreen render target. Returns a render target ID. */
+
+[gl.destroyRenderTarget]
+sig = (targetId: number): void
+doc = /** Destroy a previously created render target. */
+
+[gl.resizeRenderTarget]
+sig = (targetId: number, width: number, height: number): void
+doc = /** Resize an existing render target to new dimensions. */
+
+[gl.drawRegion]
+sig = (programId: number, x: number, y: number, w: number, h: number, targetId?: number): void
+doc = /** Draw a rectangular region immediately using a shader program. If targetId is given, draws into that render target. */
+
+[gl.drawRegionImmediate]
+sig = (program: ShaderProgram | number, x: number, y: number, w: number, h: number, targetId?: number): void
+doc = /** Draw a rectangular shader region immediately against the current or given render target. */
+
+[gl.bindTexture]
+sig = (programId: number, name: string, renderTargetId: number, textureUnit: number): void
+doc = /** Bind a render target's color texture to a sampler uniform in a shader program. */
+
+[gl.bindCanvasTexture]
+sig = (programId: number, name: string, canvasTexture: CanvasTexture, textureUnit: number): void
+doc = /** Bind a CanvasTexture's flushed GL texture to a sampler uniform in a shader program. */
+
+[gl.loadTexture2DFromBuffer]
+sig = (buffer: ArrayBuffer | ArrayBufferView): number
+doc = /** Decode PNG/JPG image bytes from an ArrayBuffer or TypedArray and upload them as a 2D texture. */
+
+[gl.loadTextureCubeFromBuffer]
+sig = (faces: [ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView]): number
+doc = /** Decode six image buffers (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
+
+[gl.drawMeshImmediate]
+sig = (program: ShaderProgram | number, layoutId: number, options: GLDrawOptions): void
+doc = /** Draw a mesh immediately using the current or explicitly selected render target. */
+
+# ── sys.graphics — texture-backed Skia surfaces ────────────────────────────
+
+[graphics.createCanvasTexture]
+sig = (width: number, height: number): CanvasTexture
+doc = /** Create an offscreen Skia canvas backed by a GL texture and framebuffer. */
+
+# ── sys.input — input state ────────────────────────────────────────────────
+
+[input.get]
+sig = (): InputState
+doc = /** Get the current frame's input state. */
+
+[input.isKeyDown]
+sig = (scancode: number): boolean
+doc = /** Check whether a key is currently held down (SDL scancode). */
+
+[input.isKeyPressed]
+sig = (scancode: number): boolean
+doc = /** Check whether a key was pressed this frame (SDL scancode). */
+
+[input.startTextInput]
+sig = (options: TextInputOptions): boolean
+doc = /** Start a platform text-editing session and show the soft keyboard where applicable. */
+
+[input.updateTextInput]
+sig = (options: TextInputOptions): boolean
+doc = /** Synchronize text, UTF-16 selection, and candidate-window caret geometry. */
+
+[input.stopTextInput]
+sig = (): void
+doc = /** Finish composition and stop the active platform text-editing session. */
+
+# ── sys.window — window dimensions and display ─────────────────────────────
+
+[window.getWidth]
+sig = (): number
+doc = /** Canvas width in pixels. */
+
+[window.getHeight]
+sig = (): number
+doc = /** Canvas height in pixels. */
+
+[window.getDisplayDensity]
+sig = (): number
+doc = /** Display density scaling factor. Returns 1.0 on desktop, device density on Android. */
+
+# ── sys.animation — frame scheduling ───────────────────────────────────────
+
+[animation.requestFrame]
+sig = (callback: (timestamp: number) => void): number
+doc = /** Register a callback to be invoked on the next frame. Returns a handle. */
+
+[animation.cancelFrame]
+sig = (handle: number): void
+doc = /** Cancel the stored animation callback. */
+
+# ── sys.timer — delayed and repeating callbacks ───────────────────────────
+
+[timer.once]
+sig = (delayMs: number, callback: () => void): number | undefined
+doc = /** Schedule a one-shot callback after delayMs milliseconds. Returns a timer ID when scheduled. */
+
+[timer.every]
+sig = (intervalMs: number, callback: () => void): number | undefined
+doc = /** Schedule a repeating callback every intervalMs milliseconds. Returns a timer ID when scheduled. */
+
+[timer.clear]
+sig = (timerId: number): void
+doc = /** Cancel a timer returned by sys.timer.once() or sys.timer.every(). */
+
+# ── console ────────────────────────────────────────────────────────────────
+
+[console.log]
+sig = (...args: any[]): void
+doc = /** Print arguments to stdout. */
+
+# ── sys.audio ──────────────────────────────────────────────────────────────
+
+[audio.start]
+sig = (): void
+doc = /** Start the audio context. */
+
+[audio.stop]
+sig = (): void
+doc = /** Stop the audio context. */
+
+[audio.isPlaying]
+sig = (): boolean
+doc = /** Check whether audio is currently playing. */
+
+[audio.setMasterGain]
+sig = (gain: number): void
+doc = /** Set master output gain. Clamped to 0.0–1.0. Default is 0.5. */
+
+[audio.getMasterGain]
+sig = (): number
+doc = /** Get the current master gain. */
+
+[audio.createOscillator]
+sig = (): number
+doc = /** Create a new oscillator. Returns an oscillator ID. */
+
+[audio.destroyOscillator]
+sig = (oscId: number): void
+doc = /** Destroy an oscillator and release its resources. */
+
+[audio.setOscillatorType]
+sig = (oscId: number, type: number | "sine" | "square" | "sawtooth" | "triangle" | "noise"): void
+doc = /** Set the waveform type of an oscillator. */
+
+[audio.setOscillatorFrequency]
+sig = (oscId: number, freq: number): void
+doc = /** Set oscillator frequency in Hz. */
+
+[audio.setOscillatorGain]
+sig = (oscId: number, gain: number): void
+doc = /** Set oscillator gain (0.0–1.0). */
+
+[audio.setOscillatorDetune]
+sig = (oscId: number, cents: number): void
+doc = /** Set oscillator pitch detune in cents. */
+
+[audio.startOscillator]
+sig = (oscId: number): void
+doc = /** Start an oscillator. Starts the audio context if needed. */
+
+[audio.stopOscillator]
+sig = (oscId: number): void
+doc = /** Stop an oscillator. */
+
+[audio.setOscillatorEnvelope]
+sig = (oscId: number, attack: number, decay: number, sustain: number, release: number): void
+doc = /** Configure the ADSR envelope on an oscillator. Times in seconds, sustain is 0.0–1.0. */
+
+[audio.noteOn]
+sig = (oscId: number): void
+doc = /** Trigger the attack phase of the envelope. Starts audio if needed. */
+
+[audio.noteOff]
+sig = (oscId: number): void
+doc = /** Trigger the release phase of the envelope. */
+
+[audio.createBuffer]
+sig = (sampleRate: number, channels: number, numSamples: number): number
+doc = /** Create an audio buffer. Returns a buffer ID. */
+
+[audio.loadBuffer]
+sig = (path: string): number
+doc = /** Load a WAV, MP3, Ogg Vorbis, or FLAC asset into an audio buffer. Returns a buffer ID, or -1 on failure. */
+
+[audio.loadBufferFromBuffer]
+sig = (buffer: ArrayBuffer): number
+doc = /** Decode WAV, MP3, Ogg Vorbis, or FLAC bytes from an ArrayBuffer into an audio buffer. Returns a buffer ID, or -1 on failure. */
+
+[audio.setBufferData]
+sig = (bufferId: number, samples: number[], offset?: number): void
+doc = /** Fill a buffer with sample data. Samples are floats from -1.0 to 1.0. */
+
+[audio.destroyBuffer]
+sig = (bufferId: number): void
+doc = /** Destroy an audio buffer. */
+
+[audio.playBuffer]
+sig = (bufferId: number, loop?: boolean, gain?: number): number
+doc = /** Play an audio buffer. Returns a playback ID. */
+
+[audio.stopBuffer]
+sig = (playbackId: number): void
+doc = /** Stop a currently playing buffer. */
+
+[audio.midiToFreq]
+sig = (midiNote: number): number
+doc = /** Convert a MIDI note number to frequency in Hz (A4 = 440 Hz). */
+
+[audio.getError]
+sig = (): string
+doc = /** Return the most recent audio error message. */
+
+# ── sys.audio constants ────────────────────────────────────────────────────
+
+[audio.SINE]
+sig = 0
+doc = /** Sine wave (0). */
+
+[audio.SQUARE]
+sig = 1
+doc = /** Square wave (1). */
+
+[audio.SAWTOOTH]
+sig = 2
+doc = /** Sawtooth wave (2). */
+
+[audio.TRIANGLE]
+sig = 3
+doc = /** Triangle wave (3). */
+
+[audio.NOISE]
+sig = 4
+doc = /** Noise (4). */
+
+# ── sys.midi ───────────────────────────────────────────────────────────────
+
+[midi.getInputCount]
+sig = (): number
+doc = /** Number of available MIDI input devices. */
+
+[midi.getOutputCount]
+sig = (): number
+doc = /** Number of available MIDI output devices. */
+
+[midi.getInputDevices]
+sig = (): MidiDevice[]
+doc = /** List available MIDI input devices. */
+
+[midi.getOutputDevices]
+sig = (): MidiDevice[]
+doc = /** List available MIDI output devices. */
+
+[midi.refreshDevices]
+sig = (): void
+doc = /** Rescan available MIDI devices. */
+
+[midi.onDevicesChanged]
+sig = (callback: ((event: MidiDevicesChangedEvent) => void) | null): void
+doc = /** Replace the device-topology listener, or pass null to unsubscribe. The callback runs on the runtime frame thread after a real input/output topology change. */
+
+[midi.openInput]
+sig = (deviceIndex: number, callback: (msg: MidiMessage) => void): number
+doc = /** Open a MIDI input port and start receiving messages. Returns an input handle. */
+
+[midi.closeInput]
+sig = (handle: number): void
+doc = /** Close a MIDI input handle. */
+
+[midi.openOutput]
+sig = (deviceIndex: number): number
+doc = /** Open a MIDI output port. Returns a handle, or -1 on failure. */
+
+[midi.closeOutput]
+sig = (handle: number): void
+doc = /** Close a MIDI output handle. */
+
+[midi.sendMessage]
+sig = (handle: number, status: number, data1: number, data2: number): boolean
+doc = /** Send a raw 3-byte MIDI message. Returns true on success. */
+
+[midi.sendRaw]
+sig = (handle: number, bytes: ArrayLike<number>): boolean
+doc = /** Send a raw MIDI byte sequence, including SysEx. Returns true on success. */
+
+[midi.noteOn]
+sig = (handle: number, channel: number, note: number, velocity: number): boolean
+doc = /** Send a Note On message. Channel is 0–15. Returns true on success. */
+
+[midi.noteOff]
+sig = (handle: number, channel: number, note: number, velocity: number): boolean
+doc = /** Send a Note Off message. Channel is 0–15. Returns true on success. */
+
+[midi.controlChange]
+sig = (handle: number, channel: number, control: number, value: number): boolean
+doc = /** Send a Control Change message. Returns true on success. */
+
+[midi.programChange]
+sig = (handle: number, channel: number, program: number): boolean
+doc = /** Send a Program Change message. Returns true on success. */
+
+[midi.pitchBend]
+sig = (handle: number, channel: number, value: number): boolean
+doc = /** Send a Pitch Bend message. Value is -8192 to 8191. Returns true on success. */
+
+[midi.channelPressure]
+sig = (handle: number, channel: number, pressure: number): boolean
+doc = /** Send a Channel Pressure message. Returns true on success. */
+
+[midi.polyPressure]
+sig = (handle: number, channel: number, note: number, pressure: number): boolean
+doc = /** Send a Polyphonic Key Pressure message. Returns true on success. */
+
+[midi.getType]
+sig = (status: number): number
+doc = /** Extract the message type from a MIDI status byte. */
+
+[midi.getChannel]
+sig = (status: number): number
+doc = /** Extract the channel (0–15) from a MIDI status byte, or -1 for system. */
+
+[midi.createSession]
+sig = (name: string, port?: number): number
+doc = /** Create an RTP-MIDI session. Pass port 0 or omit it to let the runtime choose. Returns a session handle, or -1 on failure. */
+
+[midi.connectSession]
+sig = (session: number, host: string, port: number): boolean
+doc = /** Invite/connect an RTP-MIDI session to a remote host and port. */
+
+[midi.destroySession]
+sig = (session: number): void
+doc = /** Destroy an RTP-MIDI session and unregister its callback. */
+
+[midi.onSessionMessage]
+sig = (session: number, callback: (msg: MidiMessage) => void): void
+doc = /** Register a callback for incoming RTP-MIDI messages on a session. */
+
+[midi.sessionSend]
+sig = (session: number, status: number, data1: number, data2: number): boolean
+doc = /** Send a raw 3-byte RTP-MIDI message through a session. Returns true on success. */
+
+[midi.sessionNoteOn]
+sig = (session: number, channel: number, note: number, velocity: number): boolean
+doc = /** Send an RTP-MIDI Note On message. Returns true on success. */
+
+[midi.sessionNoteOff]
+sig = (session: number, channel: number, note: number, velocity: number): boolean
+doc = /** Send an RTP-MIDI Note Off message. Returns true on success. */
+
+[midi.sessionControlChange]
+sig = (session: number, channel: number, control: number, value: number): boolean
+doc = /** Send an RTP-MIDI Control Change message. Returns true on success. */
+
+[midi.sessionSendRaw]
+sig = (session: number, bytes: ArrayLike<number>): boolean
+doc = /** Send a raw RTP-MIDI byte sequence through a session. Returns true on success. */
+
+[midi.getSessions]
+sig = (): RtpMidiSession[]
+doc = /** Return information for active RTP-MIDI sessions. */
+
+# ── sys.midi constants ─────────────────────────────────────────────────────
+
+[midi.NOTE_OFF]
+sig = 0x80
+doc = /** Note Off (0x80). */
+
+[midi.NOTE_ON]
+sig = 0x90
+doc = /** Note On (0x90). */
+
+[midi.POLY_PRESSURE]
+sig = 0xA0
+doc = /** Polyphonic Key Pressure (0xA0). */
+
+[midi.CONTROL_CHANGE]
+sig = 0xB0
+doc = /** Control Change (0xB0). */
+
+[midi.PROGRAM_CHANGE]
+sig = 0xC0
+doc = /** Program Change (0xC0). */
+
+[midi.CHANNEL_PRESSURE]
+sig = 0xD0
+doc = /** Channel Pressure (0xD0). */
+
+[midi.PITCH_BEND]
+sig = 0xE0
+doc = /** Pitch Bend (0xE0). */
+
+[midi.SYSEX]
+sig = 0xF0
+doc = /** System Exclusive (0xF0). */
+
+[midi.CC_MOD_WHEEL]
+sig = 1
+
+[midi.CC_BREATH]
+sig = 2
+
+[midi.CC_FOOT]
+sig = 4
+
+[midi.CC_VOLUME]
+sig = 7
+
+[midi.CC_PAN]
+sig = 10
+
+[midi.CC_EXPRESSION]
+sig = 11
+
+[midi.CC_SUSTAIN]
+sig = 64
+
+[midi.CC_ALL_SOUND_OFF]
+sig = 120
+
+[midi.CC_ALL_NOTES_OFF]
+sig = 123
+
+# ── sys.db — SQLite persistence ────────────────────────────────────────────
+
+[db.open]
+sig = (name: string): number
+doc = /** Open (or create) a named database. Returns a database handle. Throws on failure. */
+
+[db.close]
+sig = (handle: number): void
+doc = /** Close a database handle. */
+
+[db.execute]
+sig = (handle: number, sql: string): boolean
+doc = /** Execute a SQL statement (no result set). Throws on failure. */
+
+[db.run]
+sig = (handle: number, sql: string, ...params: (string | number | boolean | null)[]): number
+doc = /** Execute a parameterized SQL statement. Returns the number of changed rows. Throws on failure. */
+
+[db.query]
+sig = (handle: number, sql: string, ...params: (string | number | boolean | null)[]): Record<string, any>[]
+doc = /** Execute a parameterized SQL query. Returns an array of row objects. */
+
+[db.lastInsertId]
+sig = (handle: number): number
+doc = /** Get the row ID of the last inserted row. */
+
+[db.getError]
+sig = (): string
+doc = /** Get the last SQLite error message. */
+
+# ── sys.files — virtual bundled and persistent storage ────────────────────
+
+[file.list]
+sig = (path?: string): FileEntry[]
+doc = /** List entries at a virtual path. The root contains assets/ and files/. */
+
+[file.readText]
+sig = (path: string): string
+doc = /** Read an assets/... or files/... path as UTF-8 text. Throws on error. */
+
+[file.readBinary]
+sig = (path: string): ArrayBuffer
+doc = /** Read an assets/... or files/... path as binary data. Returns an ArrayBuffer. Throws on error. */
+
+[file.writeText]
+sig = (path: string, text: string): string
+doc = /** Write UTF-8 text to a files/... path, creating parents and replacing any existing file. assets/... is read-only. Returns the absolute saved path. On web this triggers a browser download. Throws on error. */
+
+[file.writeBinary]
+sig = (path: string, data: ArrayBuffer | ArrayBufferView): string
+doc = /** Write binary data to a files/... path, creating parents and replacing any existing file. assets/... is read-only. Returns the absolute saved path. On web this triggers a browser download. Throws on error. */
+
+[file.appendBinary]
+sig = (path: string, data: ArrayBuffer | ArrayBufferView): string
+doc = /** Append binary data to a files/... path, creating it and its parents when needed. assets/... is read-only. Returns the absolute saved path. Throws on error. */
+
+[file.exists]
+sig = (path: string): boolean
+doc = /** Check if a path exists and is a regular file. */
+
+[file.isDirectory]
+sig = (path: string): boolean
+doc = /** Check if a path exists and is a directory. */
+
+[file.size]
+sig = (path: string): number
+doc = /** Get the size of a file in bytes. Throws on error. */
+
+[file.getError]
+sig = (): string
+doc = /** Get the last file error message. */
+
+[file.pickText]
+sig = (callback: (file: PickedTextFile | null, error: string | null) => void): boolean
+doc = /** Open a native/system text-file picker. Returns false if unavailable or another picker is active. Selected files are capped at 8 MiB. */
+
+# ── sys.sensors — accelerometer & compass sensors ──────────────────────────
+
+[magneto.isAvailable]
+sig = (): boolean
+doc = /** Check if any motion sensors are present. Returns false on desktop. */
+
+[magneto.hasAccelerometer]
+sig = (): boolean
+doc = /** Check if an accelerometer sensor is available. */
+
+[magneto.hasCompass]
+sig = (): boolean
+doc = /** Check if a magnetometer (compass) sensor is available. */
+
+[magneto.start]
+sig = (): boolean
+doc = /** Start sensor updates. Returns true on success, false on desktop. */
+
+[magneto.stop]
+sig = (): void
+doc = /** Stop sensor updates. */
+
+[magneto.isActive]
+sig = (): boolean
+doc = /** Check if sensors are currently running. */
+
+[magneto.getAccel]
+sig = (): AccelData | null
+doc = /** Get the latest accelerometer reading, or null if unavailable. */
+
+[magneto.getCompass]
+sig = (): CompassData | null
+doc = /** Get the latest compass reading, or null if unavailable. */
+# ── sys.device — device-level controls ────────────────────────────────────
+
+[device.keepScreenOn]
+sig = (enabled: boolean): boolean
+doc = /** Request that the device screen stays on (true) or release the request (false). Returns true if accepted by the platform. */
+# ── sys.neural — ONNX Runtime neural inference ────────────────────────────
+
+[neural.isAvailable]
+sig = (): boolean
+doc = /** Returns true if ONNX Runtime was compiled in (ENABLE_NEURAL=ON). */
+
+[neural.getError]
+sig = (): string
+doc = /** Returns the last error message from the neural subsystem, or an empty string. */
+
+[neural.loadModel]
+sig = (path: string): number
+doc = /** Load a model from a path relative to the project directory. Only .onnx files are supported. Returns a non-negative model ID. Throws on failure. */
+
+[neural.loadModelFromBuffer]
+sig = (buffer: ArrayBuffer | ArrayBufferView): number
+doc = /** Load an ONNX model from an ArrayBuffer or TypedArray. Returns a non-negative model ID. Throws on failure. */
+
+[neural.unloadModel]
+sig = (modelId: number): void
+doc = /** Unload a previously loaded model and free its session. */
+
+[neural.getModelInfo]
+sig = (modelId: number): ModelInfo
+doc = /** Return metadata describing the model's inputs, outputs, shapes, dtypes, and version. Throws on failure. */
+
+[neural.run]
+sig = (modelId: number, inputs: Record<string, Float32Array | Int32Array | BigInt64Array | Uint8Array>): Record<string, Float32Array | Int32Array | BigInt64Array | Uint8Array>
+doc = /** Run inference. inputs maps each input tensor name to a TypedArray. Returns an object mapping each output tensor name to a TypedArray. Throws on failure. */
+# ── sys.net — HTTP networking (fetch API) ──────────────────────────────
+
+[network.fetch]
+sig = (url: string, options?: RequestInit): Response
+doc = /** Perform an HTTP request (synchronous). Requires network policy in app.json. */

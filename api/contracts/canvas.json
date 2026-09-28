@@ -1,0 +1,759 @@
+{
+    "version": 1,
+    "subsystem": "canvas",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "QuickJS coercion accepts many numeric values, but invalid colors, stroke modes, filter arguments, buffers, or failed allocations can throw. Drawing without an active canvas is generally a no-op; getError returns and clears paint/filter errors."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "luaL argument checks raise Lua errors for invalid required values and failed allocations. Drawing without an active canvas is generally a no-op; getError returns and clears paint/filter errors."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Host imports do not trap. Missing canvas, paint, memory, or invalid handles make void imports no-ops; canvas_read_pixels returns 0, text measurement returns 0, and output pointers are written only when valid."
+        },
+        "browser_wasm": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "Browser env imports do not trap. Missing canvas or paint makes drawing and state changes no-ops; drawText returns 0. The browser bridge exposes only a portable subset and performs no guest-memory pixel readback or text measurement."
+        }
+    },
+    "wrapper_headers": [
+        "src/graphics/skia_wrapper.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_core_bindings.c",
+            "export_sources": [
+                "src/graphics/js_canvas_bindings.c"
+            ],
+            "registration_symbol": "js_runtime_create",
+            "namespace": [
+                "sys.canvas"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": [
+                "js_sys_canvas_funcs"
+            ]
+        },
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "export_sources": [
+                "src/graphics/lua_transform_bindings.c"
+            ],
+            "registration_symbol": "lua_canvas_create",
+            "namespace": [
+                "sys.canvas"
+            ],
+            "platforms": [
+                "desktop",
+                "android",
+                "web"
+            ],
+            "export_extractor": "lua_reg",
+            "export_scopes": [
+                "canvas_funcs"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "export_sources": [
+                "src/graphics/wasm_transform_bindings.c"
+            ],
+            "registration_symbol": "wasm_canvas_create",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host",
+            "export_prefixes": [
+                "canvas_",
+                "transform_"
+            ]
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "namespace": "env",
+            "platforms": [
+                "web"
+            ],
+            "export_extractor": "javascript_object_key",
+            "export_prefixes": [
+                "canvas_",
+                "transform_"
+            ]
+        }
+    },
+    "state_ownership": {
+        "javascript": "Each JSCanvasContext owns its default paint, path/SVG/font registries, timers, callback values, and QuickJS runtime. Callbacks recover that instance through QuickJS context/runtime opaque data; no mutable process-global canvas context is retained. The frame host lends the current canvas, input, and window pointers.",
+        "lua": "Each LuaCanvasContext owns its default paint, path/SVG/font registries, callback reference, and Lua state. Callbacks recover that instance from the owning Lua state's private registry entry, keyed by an immutable file-scope identity token; no mutable process-global canvas context is retained. The frame host lends the current canvas, input, and window pointers.",
+        "wasmtime": "Each WasmCanvasContext owns its default paint, path/SVG registries, Wasmtime engine/linker/store/module, and subsystem binding states. Every canvas host callback receives that instance through its linker environment; no mutable process-global canvas context is retained. The frame host lends the current canvas, input, and window pointers.",
+        "browser_wasm": "The web host keeps one browser-WASM paint and fixed path registry in WebAppState and lends the current window canvas to bridge calls."
+    },
+    "platform_differences": {
+        "web": {
+            "source": "src/web/web_main.c",
+            "details": [
+                "Managed JavaScript and Lua use the same Skia-backed canvas binding tables as desktop and Android.",
+                "Browser-native WebAssembly exposes 11 canvas/paint imports and five transform imports; it omits pixel readback, text measurement, oval/point/arc drawing, stroke cap/join, advanced filters, skew, reset, and clipping.",
+                "Browser-native drawText bridges guest UTF-8 through temporary Emscripten memory, while Wasmtime reads directly from the guest memory export."
+            ]
+        },
+        "android": {
+            "source": "src/graphics/js_canvas_bindings.c",
+            "details": [
+                "Android has managed JavaScript and Lua canvas bindings but no Wasmtime or browser-native WebAssembly runtime."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "path_draw",
+            "wrapper_symbol": "skia_canvas_draw_path",
+            "signature": "(path) -> void using current paint",
+            "exports": {
+                "javascript": {
+                    "name": "drawPath",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawPath",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_path",
+                "browser_wasm": "canvas_draw_path"
+            }
+        },
+        {
+            "name": "svg_draw",
+            "wrapper_symbol": "skia_svg_render",
+            "signature": "(SVG handle, x:f32, y:f32, width:f32, height:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawSvg",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawSvg",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_svg"
+            }
+        },
+        {
+            "name": "clear",
+            "wrapper_symbol": "skia_canvas_clear",
+            "signature": "(color: ARGB) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "clear",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "clear",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_clear",
+                "browser_wasm": "canvas_clear"
+            }
+        },
+        {
+            "name": "read_pixels",
+            "wrapper_symbol": "skia_canvas_read_pixels",
+            "signature": "read RGBA8 premultiplied pixels",
+            "exports": {
+                "javascript": {
+                    "name": "readPixels",
+                    "namespace": "sys.canvas",
+                    "signature": "() -> {width,height,pixels:ArrayBuffer}"
+                },
+                "lua": {
+                    "name": "readPixels",
+                    "namespace": "sys.canvas",
+                    "signature": "() -> {width,height,pixels:string}"
+                },
+                "wasmtime": {
+                    "name": "canvas_read_pixels",
+                    "signature": "(destination_ptr:i32, max_len:i32) -> i32 bytes written; 0 on failure"
+                }
+            }
+        },
+        {
+            "name": "draw_rect",
+            "wrapper_symbol": "skia_canvas_draw_rect",
+            "signature": "(x:f32, y:f32, width:f32, height:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawRect",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawRect",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_rect",
+                "browser_wasm": "canvas_draw_rect"
+            }
+        },
+        {
+            "name": "draw_round_rect",
+            "wrapper_symbol": "skia_canvas_draw_round_rect",
+            "signature": "(x:f32, y:f32, width:f32, height:f32, rx:f32, ry:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawRoundRect",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawRoundRect",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_round_rect",
+                "browser_wasm": "canvas_draw_round_rect"
+            }
+        },
+        {
+            "name": "draw_circle",
+            "wrapper_symbol": "skia_canvas_draw_circle",
+            "signature": "(cx:f32, cy:f32, radius:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawCircle",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawCircle",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_circle",
+                "browser_wasm": "canvas_draw_circle"
+            }
+        },
+        {
+            "name": "draw_oval",
+            "wrapper_symbol": "skia_canvas_draw_oval",
+            "signature": "(x:f32, y:f32, width:f32, height:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawOval",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawOval",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_oval"
+            }
+        },
+        {
+            "name": "draw_line",
+            "wrapper_symbol": "skia_canvas_draw_line",
+            "signature": "(x1:f32, y1:f32, x2:f32, y2:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawLine",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawLine",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_line",
+                "browser_wasm": "canvas_draw_line"
+            }
+        },
+        {
+            "name": "draw_point",
+            "wrapper_symbol": "skia_canvas_draw_point",
+            "signature": "(x:f32, y:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawPoint",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawPoint",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_point"
+            }
+        },
+        {
+            "name": "draw_text",
+            "signature": "draw UTF-8 text and return its width",
+            "binding_symbols": {
+                "javascript": "js_canvas_draw_text",
+                "lua": "l_canvas_draw_text",
+                "wasmtime": "host_canvas_draw_text",
+                "browser_wasm": "budo_web_wasm_canvas_draw_text"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawText",
+                    "namespace": "sys.canvas",
+                    "signature": "(text:string, x:number, y:number, fontSize?:number) -> number"
+                },
+                "lua": {
+                    "name": "drawText",
+                    "namespace": "sys.canvas",
+                    "signature": "(text:string, x:number, y:number, fontSize?:number) -> number"
+                },
+                "wasmtime": {
+                    "name": "canvas_draw_text",
+                    "signature": "(text_ptr:i32, text_len:i32, x:f32, y:f32, font_size:f32) -> f32"
+                },
+                "browser_wasm": {
+                    "name": "canvas_draw_text",
+                    "signature": "(text_ptr:i32, text_len:i32, x:f32, y:f32, font_size:f32) -> f32"
+                }
+            }
+        },
+        {
+            "name": "measure_text",
+            "wrapper_symbol": "skia_measure_text_width",
+            "signature": "measure UTF-8 text width",
+            "exports": {
+                "javascript": {
+                    "name": "measureText",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "measureText",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_measure_text"
+            }
+        },
+        {
+            "name": "measure_text_rect",
+            "wrapper_symbol": "skia_measure_text_rect",
+            "signature": "measure UTF-8 text bounds",
+            "exports": {
+                "javascript": {
+                    "name": "measureTextRect",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "measureTextRect",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_measure_text_rect"
+            }
+        },
+        {
+            "name": "draw_arc",
+            "wrapper_symbol": "skia_canvas_draw_arc",
+            "signature": "(x:f32, y:f32, width:f32, height:f32, start_degrees:f32, sweep_degrees:f32, use_center:bool) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "drawArc",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "drawArc",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_draw_arc"
+            }
+        },
+        {
+            "name": "font_set",
+            "signature": "(registered name or null) -> void",
+            "binding_symbols": {
+                "javascript": "js_canvas_set_font",
+                "lua": "l_font_set"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setFont",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setFont",
+                    "namespace": "sys.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_fill_color",
+            "signature": "(color: ARGB) -> void and select fill style",
+            "binding_symbols": {
+                "javascript": "js_set_fill_color",
+                "lua": "l_set_fill_color",
+                "wasmtime": "host_set_fill_color",
+                "browser_wasm": "budo_web_wasm_canvas_set_fill_color"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setFillColor",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setFillColor",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_set_fill_color",
+                "browser_wasm": "canvas_set_fill_color"
+            }
+        },
+        {
+            "name": "set_stroke_color",
+            "signature": "(color: ARGB) -> void and select stroke style",
+            "binding_symbols": {
+                "javascript": "js_set_stroke_color",
+                "lua": "l_set_stroke_color",
+                "wasmtime": "host_set_stroke_color",
+                "browser_wasm": "budo_web_wasm_canvas_set_stroke_color"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeColor",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setStrokeColor",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_set_stroke_color",
+                "browser_wasm": "canvas_set_stroke_color"
+            }
+        },
+        {
+            "name": "set_stroke_width",
+            "wrapper_symbol": "skia_paint_set_stroke_width",
+            "signature": "(width:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeWidth",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setStrokeWidth",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_set_stroke_width",
+                "browser_wasm": "canvas_set_stroke_width"
+            }
+        },
+        {
+            "name": "set_anti_alias",
+            "wrapper_symbol": "skia_paint_set_anti_alias",
+            "signature": "(enabled:bool) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setAntiAlias",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setAntiAlias",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_set_anti_alias",
+                "browser_wasm": "canvas_set_anti_alias"
+            }
+        },
+        {
+            "name": "set_alpha",
+            "wrapper_symbol": "skia_paint_set_alpha",
+            "signature": "(alpha:i32 clamped to 0..255) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setAlpha",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setAlpha",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_set_alpha",
+                "browser_wasm": "canvas_set_alpha"
+            }
+        },
+        {
+            "name": "set_stroke_cap",
+            "wrapper_symbol": "skia_paint_set_stroke_cap",
+            "signature": "(butt|round|square) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeCap",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setStrokeCap",
+                    "namespace": "sys.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_stroke_join",
+            "wrapper_symbol": "skia_paint_set_stroke_join",
+            "signature": "(miter|round|bevel) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "setStrokeJoin",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setStrokeJoin",
+                    "namespace": "sys.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_blend_mode",
+            "wrapper_symbol": "skia_paint_set_blend_mode",
+            "signature": "set a stable Skia blend-mode name or numeric ABI value",
+            "exports": {
+                "javascript": {
+                    "name": "setBlendMode",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setBlendMode",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_set_blend_mode"
+            }
+        },
+        {
+            "name": "set_image_filter",
+            "signature": "set or clear a managed blur/drop-shadow image filter",
+            "binding_symbols": {
+                "javascript": "js_set_image_filter",
+                "lua": "l_set_image_filter"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setImageFilter",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setImageFilter",
+                    "namespace": "sys.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_color_filter",
+            "signature": "set or clear a managed matrix/blend color filter",
+            "binding_symbols": {
+                "javascript": "js_set_color_filter",
+                "lua": "l_set_color_filter"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setColorFilter",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "setColorFilter",
+                    "namespace": "sys.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_blur_filter",
+            "wrapper_symbol": "skia_paint_set_blur_filter",
+            "signature": "(sigma_x:f32, sigma_y:f32) -> void",
+            "exports": {
+                "wasmtime": "canvas_set_blur_filter"
+            }
+        },
+        {
+            "name": "set_drop_shadow_filter",
+            "wrapper_symbol": "skia_paint_set_drop_shadow_filter",
+            "signature": "(dx:f32, dy:f32, sigma_x:f32, sigma_y:f32, color_argb:i32) -> void",
+            "exports": {
+                "wasmtime": "canvas_set_drop_shadow_filter"
+            }
+        },
+        {
+            "name": "set_drop_shadow_only_filter",
+            "wrapper_symbol": "skia_paint_set_drop_shadow_only_filter",
+            "signature": "(dx:f32, dy:f32, sigma_x:f32, sigma_y:f32, color_argb:i32) -> void",
+            "exports": {
+                "wasmtime": "canvas_set_drop_shadow_only_filter"
+            }
+        },
+        {
+            "name": "clear_image_filter",
+            "wrapper_symbol": "skia_paint_clear_image_filter",
+            "signature": "() -> void",
+            "exports": {
+                "wasmtime": "canvas_clear_image_filter"
+            }
+        },
+        {
+            "name": "set_color_matrix_filter",
+            "wrapper_symbol": "skia_paint_set_color_matrix_filter",
+            "signature": "(matrix_ptr:i32, matrix_len:i32) -> void; requires exactly 20 f32 values",
+            "exports": {
+                "wasmtime": "canvas_set_color_matrix_filter"
+            }
+        },
+        {
+            "name": "set_blend_color_filter",
+            "wrapper_symbol": "skia_paint_set_blend_color_filter",
+            "signature": "(color_argb:i32, blend_mode:i32) -> void",
+            "exports": {
+                "wasmtime": "canvas_set_blend_color_filter"
+            }
+        },
+        {
+            "name": "clear_color_filter",
+            "wrapper_symbol": "skia_paint_clear_color_filter",
+            "signature": "() -> void",
+            "exports": {
+                "wasmtime": "canvas_clear_color_filter"
+            }
+        },
+        {
+            "name": "save",
+            "wrapper_symbol": "skia_canvas_save",
+            "signature": "() -> void",
+            "exports": {
+                "javascript": {
+                    "name": "save",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "save",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "transform_save",
+                "browser_wasm": "transform_save"
+            }
+        },
+        {
+            "name": "restore",
+            "wrapper_symbol": "skia_canvas_restore",
+            "signature": "() -> void",
+            "exports": {
+                "javascript": {
+                    "name": "restore",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "restore",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "transform_restore",
+                "browser_wasm": "transform_restore"
+            }
+        },
+        {
+            "name": "translate",
+            "wrapper_symbol": "skia_canvas_translate",
+            "signature": "(dx:f32, dy:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "translate",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "translate",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "transform_translate",
+                "browser_wasm": "transform_translate"
+            }
+        },
+        {
+            "name": "rotate",
+            "wrapper_symbol": "skia_canvas_rotate",
+            "signature": "(degrees:f32) -> void; managed bindings also accept an optional pivot",
+            "exports": {
+                "javascript": {
+                    "name": "rotate",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "rotate",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "transform_rotate",
+                "browser_wasm": "transform_rotate"
+            }
+        },
+        {
+            "name": "rotate_around",
+            "wrapper_symbol": "skia_canvas_rotate_around",
+            "signature": "(degrees:f32, px:f32, py:f32) -> void",
+            "exports": {
+                "wasmtime": "transform_rotate_around"
+            }
+        },
+        {
+            "name": "scale",
+            "wrapper_symbol": "skia_canvas_scale",
+            "signature": "(sx:f32, sy:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "scale",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "scale",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "transform_scale",
+                "browser_wasm": "transform_scale"
+            }
+        },
+        {
+            "name": "skew",
+            "wrapper_symbol": "skia_canvas_skew",
+            "signature": "(sx:f32, sy:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "skew",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "skew",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_skew"
+            }
+        },
+        {
+            "name": "reset_transform",
+            "wrapper_symbol": "skia_canvas_reset_transform",
+            "signature": "() -> void",
+            "exports": {
+                "javascript": {
+                    "name": "reset",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "reset",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_reset_transform"
+            }
+        },
+        {
+            "name": "clip_rect",
+            "wrapper_symbol": "skia_canvas_clip_rect",
+            "signature": "(x:f32, y:f32, width:f32, height:f32) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "clipRect",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "clipRect",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_clip_rect"
+            }
+        }
+    ]
+}

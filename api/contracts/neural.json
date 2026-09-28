@@ -1,0 +1,524 @@
+{
+    "version": 1,
+    "subsystem": "neural",
+    "error_convention": {
+        "javascript": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "The namespace is installed only after compile support, app opt-in, ONNX Runtime loading, and NeuralContext creation succeed. loadModel, loadModelFromBuffer, getModelInfo, and run throw InternalError for wrapper failures; invalid buffers and run inputs throw TypeError. Missing context or required arguments return -1, null, or undefined in selected native functions, unloadModel is a no-op, staged getOutput returns undefined when no output is cached, and getError returns the context error string or empty string."
+        },
+        "lua": {
+            "kind": "throws_on_invalid_arguments_or_operation_failure",
+            "details": "The namespace is installed only after compile support, app opt-in, ONNX Runtime loading, and NeuralContext creation succeed. luaL argument checks, model loading, metadata lookup, and inference failures raise Lua errors; unloadModel is a no-op only when no context exists. Staged getOutput returns nil when no output is cached, and getError returns the context error string or empty string."
+        },
+        "wasmtime": {
+            "kind": "documented_sentinel_on_failure",
+            "details": "When compiled, all imports register before app metadata is checked and host calls do not trap. Without an active context or valid memory/model/input/output, load operations return -1, count/info/error-copy/output-copy/shape queries return 0, run returns 0, and void operations silently do nothing. String copies are NUL-terminated and may truncate; tensor metadata and output copies can also truncate to fixed or guest-supplied capacities."
+        }
+    },
+    "wrapper_header": "src/neural/neural_wrapper.h",
+    "service_header": "src/neural/neural_service.h",
+    "runtimes": {
+        "javascript": {
+            "source": "src/neural/js_neural_bindings.c",
+            "registration_symbol": "js_neural_init",
+            "namespace": "sys.neural",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "export_extractor": [
+                "quickjs_function_data",
+                "quickjs_shim_addition"
+            ]
+        },
+        "lua": {
+            "source": "src/neural/lua_neural_bindings.c",
+            "registration_symbol": "lua_neural_init",
+            "namespace": "sys.neural",
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "export_extractor": [
+                "lua_reg",
+                "lua_shim_addition"
+            ]
+        },
+        "wasmtime": {
+            "source": "src/neural/wasm_neural_bindings.c",
+            "registration_symbol": "wasm_neural_register",
+            "namespace": "env",
+            "platforms": [
+                "desktop"
+            ],
+            "export_extractor": "wasmtime_host"
+        }
+    },
+    "unsupported_runtimes": {
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": [
+                "web"
+            ],
+            "reason": "The web build includes no neural binding sources and the browser-native WebAssembly env object registers no neural_* imports.",
+            "absent_export_prefixes": [
+                "neural_"
+            ]
+        }
+    },
+    "availability_gates": [
+        {
+            "kind": "compile_time",
+            "registration_effect": "required",
+            "runtimes": [
+                "javascript",
+                "lua",
+                "wasmtime"
+            ],
+            "platforms": [
+                "desktop"
+            ],
+            "source": "CMakeLists.txt",
+            "source_symbols": [
+                "ENABLE_NEURAL",
+                "BUDO_NEURAL",
+                "wasm_neural_bindings"
+            ],
+            "behavior": "The root build adds all neural wrapper and binding sources and defines BUDO_NEURAL only while ENABLE_NEURAL remains enabled after the ONNX headers check. Without those sources there is no valid neural export surface."
+        },
+        {
+            "kind": "compile_time",
+            "registration_effect": "required",
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "platforms": [
+                "android"
+            ],
+            "source": "private/android/android/app/src/main/cpp/CMakeLists.txt",
+            "source_symbols": [
+                "ORT_ANDROID_INCLUDE",
+                "BUDO_NEURAL",
+                "js_neural_bindings",
+                "lua_neural_bindings"
+            ],
+            "behavior": "Android adds the managed neural sources, defines BUDO_NEURAL, and links the ABI-specific ONNX Runtime library only when the staged Android headers and shared library exist. Android exposes no Wasmtime runtime."
+        },
+        {
+            "kind": "application_metadata",
+            "registration_effect": "required",
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "platforms": [
+                "desktop"
+            ],
+            "source": "src/core/main.c",
+            "source_symbols": [
+                "neural_enabled",
+                "js_neural_init",
+                "lua_neural_init"
+            ],
+            "behavior": "On desktop, app.json must contain neural: true before a context is created and sys.neural is installed for JavaScript or Lua."
+        },
+        {
+            "kind": "application_metadata",
+            "registration_effect": "context_only",
+            "runtimes": [
+                "wasmtime"
+            ],
+            "platforms": [
+                "desktop"
+            ],
+            "source": "src/core/main.c",
+            "source_symbols": [
+                "neural_enabled",
+                "wasm_canvas_enable_neural"
+            ],
+            "behavior": "Wasmtime env.neural_* imports are registered with instance-owned binding state while the canvas runtime is created, but app.json neural: true is required to create its NeuralContext. Without opt-in the imports remain and return failure sentinels."
+        },
+        {
+            "kind": "application_metadata",
+            "registration_effect": "required",
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "platforms": [
+                "android"
+            ],
+            "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+            "source_symbols": [
+                "neural_enabled",
+                "js_neural_init",
+                "lua_neural_init"
+            ],
+            "behavior": "On Android, app.json must contain neural: true before a context is created and sys.neural is installed for JavaScript or Lua."
+        },
+        {
+            "kind": "runtime_dependency",
+            "registration_effect": "required",
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "platforms": [
+                "desktop",
+                "android"
+            ],
+            "source": "src/neural/neural_wrapper.c",
+            "source_symbols": [
+                "ort_dl_load",
+                "neural_create"
+            ],
+            "behavior": "Even in a neural-enabled build and opted-in app, sys.neural is installed only if the ONNX Runtime shared library can be loaded, its API resolved, and NeuralContext initialization succeeds."
+        },
+        {
+            "kind": "runtime_dependency",
+            "registration_effect": "context_only",
+            "runtimes": [
+                "wasmtime"
+            ],
+            "platforms": [
+                "desktop"
+            ],
+            "source": "src/neural/neural_wrapper.c",
+            "source_symbols": [
+                "ort_dl_load",
+                "neural_create"
+            ],
+            "behavior": "Wasmtime imports remain registered when ONNX Runtime loading or context creation fails. neural_is_available returns 0 and context-dependent imports return their documented failure sentinels."
+        }
+    ],
+    "capability_relationships": [
+        {
+            "subsystem": "capabilities",
+            "operation": "neural",
+            "kind": "availability_probe",
+            "required_for_registration": true,
+            "runtimes": [
+                "javascript",
+                "lua"
+            ],
+            "applies_to": [
+                "is_available",
+                "get_error",
+                "load_model",
+                "load_model_from_buffer",
+                "unload_model",
+                "get_model_info",
+                "get_input_count",
+                "get_output_count",
+                "get_input_info",
+                "get_output_info",
+                "set_input",
+                "run",
+                "get_output",
+                "get_output_shape"
+            ],
+            "unavailable_behavior": "A false capability prevents managed context creation and sys.neural registration. A true capability is necessary but not sufficient because app.json neural opt-in and successful context creation are separate gates."
+        },
+        {
+            "subsystem": "capabilities",
+            "operation": "neural",
+            "kind": "availability_probe",
+            "required_for_registration": false,
+            "runtimes": [
+                "wasmtime"
+            ],
+            "applies_to": [
+                "is_available",
+                "get_error",
+                "load_model",
+                "load_model_from_buffer",
+                "unload_model",
+                "get_model_info",
+                "get_input_count",
+                "get_output_count",
+                "get_input_info",
+                "get_output_info",
+                "set_input",
+                "run",
+                "get_output",
+                "get_output_shape"
+            ],
+            "unavailable_behavior": "In a compiled neural build the Wasmtime imports remain registered; neural_is_available and capability_neural return 0, while context-dependent imports return sentinels or no-op."
+        }
+    ],
+    "platform_differences": {
+        "desktop": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "details": [
+                "Desktop JavaScript and Lua omit sys.neural unless both app metadata and context creation succeed.",
+                "Desktop Wasmtime registers env.neural_* before app metadata is checked, so imports can exist without an active context.",
+                "Each Wasmtime canvas owns its neural context, store/memory references, and staged model state; neural registration and memory wiring are omitted together when ENABLE_NEURAL is disabled."
+            ]
+        },
+        "android": {
+            "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+            "details": [
+                "Android packages optional ABI-specific ONNX Runtime libraries and exposes neural only to JavaScript and Lua.",
+                "Android has no Wasmtime guest runtime or env.neural_* import surface."
+            ]
+        },
+        "web": {
+            "source": "web/CMakeLists.txt",
+            "details": [
+                "The web build includes neither managed neural bindings nor a browser-native WebAssembly neural bridge.",
+                "Type declarations and generic WebAssembly documentation are broader than the executable web surface."
+            ]
+        }
+    },
+    "operations": [
+        {
+            "name": "is_available",
+            "wrapper_symbol": "neural_is_available",
+            "signature": "() -> bool indicating whether the ONNX Runtime library can be loaded",
+            "exports": {
+                "javascript": {
+                    "name": "isAvailable",
+                    "signature": "() -> boolean"
+                },
+                "lua": {
+                    "name": "isAvailable",
+                    "signature": "() -> boolean"
+                },
+                "wasmtime": {
+                    "name": "neural_is_available",
+                    "signature": "() -> i32; 1 available, 0 unavailable; independent of app opt-in and active context"
+                }
+            }
+        },
+        {
+            "name": "get_error",
+            "wrapper_symbol": "neural_get_error",
+            "signature": "() -> last context error string",
+            "exports": {
+                "javascript": {
+                    "name": "getError",
+                    "signature": "() -> string; empty without context or error"
+                },
+                "lua": {
+                    "name": "getError",
+                    "signature": "() -> string; empty without context or error"
+                },
+                "wasmtime": {
+                    "name": "neural_get_error",
+                    "signature": "(destination_ptr: i32, max_len: i32) -> i32 bytes written excluding NUL, truncated to max_len-1; 0 on failure or empty error"
+                }
+            }
+        },
+        {
+            "name": "load_model",
+            "wrapper_symbol": "neural_load_model",
+            "service_symbol": "neural_service_load_model",
+            "signature": "(safe project-relative .onnx path) -> model_id",
+            "exports": {
+                "javascript": {
+                    "name": "loadModel",
+                    "signature": "(path: string) -> number model_id; throws InternalError on wrapper failure, returns -1 for missing context/argument or failed string coercion"
+                },
+                "lua": {
+                    "name": "loadModel",
+                    "signature": "(path: string) -> integer model_id; raises Lua error on failure"
+                },
+                "wasmtime": {
+                    "name": "neural_load_model",
+                    "signature": "(path_ptr: i32, path_len: i32) -> i32 model_id; -1 on invalid memory, missing context, unsafe path, or load failure; paths longer than 511 bytes are rejected"
+                }
+            }
+        },
+        {
+            "name": "load_model_from_buffer",
+            "wrapper_symbol": "neural_load_model_from_buffer",
+            "signature": "(ONNX model bytes) -> model_id",
+            "exports": {
+                "javascript": {
+                    "name": "loadModelFromBuffer",
+                    "signature": "(data: ArrayBuffer|TypedArray) -> number model_id; throws TypeError for other values and InternalError on wrapper failure"
+                },
+                "lua": {
+                    "name": "loadModelFromBuffer",
+                    "signature": "(data: binary string) -> integer model_id; raises Lua error on failure"
+                },
+                "wasmtime": {
+                    "name": "neural_load_model_from_buffer",
+                    "signature": "(data_ptr: i32, data_len: i32) -> i32 model_id; -1 for non-positive or out-of-bounds data, missing context, or load failure"
+                }
+            }
+        },
+        {
+            "name": "unload_model",
+            "wrapper_symbol": "neural_unload_model",
+            "signature": "(model_id) -> void",
+            "exports": {
+                "javascript": {
+                    "name": "unloadModel",
+                    "signature": "(model_id: number) -> void; also clears staged shim state"
+                },
+                "lua": {
+                    "name": "unloadModel",
+                    "signature": "(model_id: integer) -> nil; also clears staged shim state"
+                },
+                "wasmtime": {
+                    "name": "neural_unload_model",
+                    "signature": "(model_id: i32) -> void; clears staged/cached binding state for in-range ids and otherwise silently delegates/no-ops"
+                }
+            }
+        },
+        {
+            "name": "get_model_info",
+            "wrapper_symbol": "neural_get_model_info",
+            "signature": "(model_id) -> model metadata",
+            "exports": {
+                "javascript": {
+                    "name": "getModelInfo",
+                    "signature": "(model_id: number) -> {description,producerName,graphName,domain,version,inputs:Array<{name,dtype,shape}>,outputs:Array<{name,dtype,shape}>}; throws on wrapper failure"
+                },
+                "lua": {
+                    "name": "getModelInfo",
+                    "signature": "(model_id: integer) -> metadata table with 1-based inputs/outputs arrays; raises on failure"
+                }
+            }
+        },
+        {
+            "name": "get_input_count",
+            "signature": "(model_id) -> input tensor count",
+            "binding_symbols": {
+                "wasmtime": "host_neural_get_input_count"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "neural_get_input_count",
+                    "signature": "(model_id: i32) -> i32 count; 0 when context/model metadata is unavailable"
+                }
+            }
+        },
+        {
+            "name": "get_output_count",
+            "signature": "(model_id) -> output tensor count",
+            "binding_symbols": {
+                "wasmtime": "host_neural_get_output_count"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "neural_get_output_count",
+                    "signature": "(model_id: i32) -> i32 count; 0 when context/model metadata is unavailable"
+                }
+            }
+        },
+        {
+            "name": "get_input_info",
+            "signature": "(model_id, input_index) -> input name, shape, and rank",
+            "binding_symbols": {
+                "wasmtime": "host_neural_get_input_info"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "neural_get_input_info",
+                    "signature": "(model_id: i32, index: i32, name_destination: i32, name_max_len: i32, shape_i64_destination: i32) -> i32 rank; name is NUL-terminated/truncated, rank shape elements are written, 0 on failure; dtype is not returned"
+                }
+            }
+        },
+        {
+            "name": "get_output_info",
+            "signature": "(model_id, output_index) -> output name, shape, and rank",
+            "binding_symbols": {
+                "wasmtime": "host_neural_get_output_info"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "neural_get_output_info",
+                    "signature": "(model_id: i32, index: i32, name_destination: i32, name_max_len: i32, shape_i64_destination: i32) -> i32 rank; name is NUL-terminated/truncated, rank shape elements are written, 0 on failure; dtype is not returned"
+                }
+            }
+        },
+        {
+            "name": "set_input",
+            "signature": "stage a named tensor for the next inference",
+            "binding_symbols": {
+                "javascript": "k_neural_staged_shim",
+                "lua": "k_neural_staged_shim",
+                "wasmtime": "host_neural_set_input_f32"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setInput",
+                    "signature": "(model_id: number, name: string, data: TypedArray, shape?: number[]) -> void; stores data without validation and ignores shape"
+                },
+                "lua": {
+                    "name": "setInput",
+                    "signature": "(model_id: integer, name: string, data: number[], shape?: integer[]) -> nil; stores a staged input table"
+                },
+                "wasmtime": {
+                    "name": "neural_set_input_f32",
+                    "signature": "(model_id: i32, name_ptr: i32, name_len: i32, data_f32_ptr: i32, element_count: i32, shape_i64_ptr: i32, rank: i32) -> void; copies data, accepts only f32, and silently no-ops on invalid input"
+                }
+            }
+        },
+        {
+            "name": "run",
+            "wrapper_symbol": "neural_run",
+            "signature": "run synchronous model inference",
+            "exports": {
+                "javascript": {
+                    "name": "run",
+                    "signature": "(model_id: number, inputs?: Record<string,TypedArray>) -> Record<string,TypedArray>; omitted inputs use staged data; typed arrays must match model names/types/counts; throws on failure"
+                },
+                "lua": {
+                    "name": "run",
+                    "signature": "(model_id: integer, inputs?: table) -> table keyed by output name with {data,shape,dtype}; omitted inputs use staged data; raises on failure"
+                },
+                "wasmtime": {
+                    "name": "neural_run",
+                    "signature": "(model_id: i32) -> i32; 1 success, 0 missing context/model/staged input or inference failure; staged inputs are cleared after each attempted run"
+                }
+            }
+        },
+        {
+            "name": "get_output",
+            "signature": "retrieve a named output from the most recent run",
+            "binding_symbols": {
+                "javascript": "k_neural_staged_shim",
+                "lua": "k_neural_staged_shim",
+                "wasmtime": "host_neural_copy_output_f32"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "getOutput",
+                    "signature": "(model_id: number, name: string) -> TypedArray|undefined; returns the staged shim cache"
+                },
+                "lua": {
+                    "name": "getOutput",
+                    "signature": "(model_id: integer, name: string) -> {data,shape,dtype}|nil; returns the staged shim cache"
+                },
+                "wasmtime": [
+                    {
+                        "name": "neural_copy_output_f32",
+                        "signature": "(model_id: i32, name_ptr: i32, name_len: i32, destination_f32_ptr: i32, max_elements: i32) -> i32 elements copied, possibly truncated; 0 on failure; output dtype is not checked"
+                    },
+                    {
+                        "name": "neural_get_output_f32",
+                        "signature": "exact alias of neural_copy_output_f32"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "get_output_shape",
+            "signature": "retrieve the resolved shape of a named output",
+            "binding_symbols": {
+                "wasmtime": "host_neural_get_output_shape"
+            },
+            "exports": {
+                "wasmtime": {
+                    "name": "neural_get_output_shape",
+                    "signature": "(model_id: i32, name_ptr: i32, name_len: i32, destination_i64_ptr: i32, max_rank: i32) -> i32 actual rank; writes min(rank,max_rank) dimensions and returns 0 on failure"
+                }
+            }
+        }
+    ]
+}
