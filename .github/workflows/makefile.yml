@@ -29,3 +29,24 @@ jobs:
 
       - name: Build
         run: make build
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: brew install cmake sdl2
+
+      - name: Download Skia
+        run: ./scripts/setup-skia.sh
+
+      - name: Download ONNX
+        run: ./scripts/setup-onnx.sh
+
+      - name: Download STB
+        run: ./scripts/setup-stb.sh
+
+      - name: Build
+        run: make build
