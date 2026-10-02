@@ -17,6 +17,13 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
+
+if(MSVC)
+    # /Zc:__cplusplus: report the real C++ standard (MSVC otherwise says
+    # 199711L), which dependencies test, e.g. llama.cpp's u8"" handling under
+    # C++20. /utf-8: sources are UTF-8, not the machine's legacy code page.
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/Zc:__cplusplus>" /utf-8)
+endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Python3 is required to embed resources into the binary.
