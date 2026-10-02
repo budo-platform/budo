@@ -39,6 +39,11 @@ set(BUDO_SDL2_SOURCE_VERSION "2.30.3")
 set(BUDO_SDL2_SOURCE_URL "https://github.com/libsdl-org/SDL/releases/download/release-2.30.3/SDL2-2.30.3.tar.gz")
 set(BUDO_SDL2_SOURCE_SHA256 "820440072f8f5b50188c1dae104f2ad25984de268785be40c41a099a510f0aec")
 
+# zlib source, built as a static library on Windows (no system zlib there).
+set(BUDO_ZLIB_SOURCE_VERSION "1.3.1")
+set(BUDO_ZLIB_SOURCE_URL "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz")
+set(BUDO_ZLIB_SOURCE_SHA256 "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23")
+
 set(BUDO_ONNXRUNTIME_VERSION "1.21.0")
 set(BUDO_ONNXRUNTIME_OSX_ARM64_URL_HASH "SHA256=5c3f2064ee97eb7774e87f396735c8eada7287734f1bb7847467ad30d4036115")
 set(BUDO_ONNXRUNTIME_OSX_X86_64_URL_HASH "SHA256=8305afd2d75ee5702844a23b099d41885af30ad3d1b4cf3d8d795e3d8c1f9396")

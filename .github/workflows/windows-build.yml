@@ -40,6 +40,9 @@ jobs:
           "sdl_version=$(Lock 'set\(BUDO_SDL2_WINDOWS_VERSION "([^"]+)"\)')" >> $env:GITHUB_OUTPUT
           "sdl_url=$(Lock 'set\(BUDO_SDL2_WINDOWS_URL\s+"([^"]+)"\)')" >> $env:GITHUB_OUTPUT
           "sdl_sha256=$(Lock 'set\(BUDO_SDL2_WINDOWS_URL_HASH\s+"SHA256=([0-9a-f]{64})"\)')" >> $env:GITHUB_OUTPUT
+          "zlib_version=$(Lock 'set\(BUDO_ZLIB_SOURCE_VERSION "([^"]+)"\)')" >> $env:GITHUB_OUTPUT
+          "zlib_url=$(Lock 'set\(BUDO_ZLIB_SOURCE_URL "([^"]+)"\)')" >> $env:GITHUB_OUTPUT
+          "zlib_sha256=$(Lock 'set\(BUDO_ZLIB_SOURCE_SHA256 "([0-9a-f]{64})"\)')" >> $env:GITHUB_OUTPUT
 
       - name: Set up MSVC (x64)
         run: |
@@ -81,6 +84,33 @@ jobs:
           }
           Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
           "SDL2_ROOT=$env:RUNNER_TEMP\SDL2-$env:SDL_VERSION" >> $env:GITHUB_ENV
+
+      # Windows has no system zlib: build the pinned source as a static library
+      # (linked into budo.exe, so there is no zlib DLL to ship).
+      - name: Build pinned zlib ${{ steps.lock.outputs.zlib_version }}
+        env:
+          ZLIB_URL: ${{ steps.lock.outputs.zlib_url }}
+          ZLIB_SHA256: ${{ steps.lock.outputs.zlib_sha256 }}
+          ZLIB_VERSION: ${{ steps.lock.outputs.zlib_version }}
+        run: |
+          $archive = "$env:RUNNER_TEMP\zlib.tar.gz"
+          Invoke-WebRequest -Uri $env:ZLIB_URL -OutFile $archive
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($actual -ne $env:ZLIB_SHA256) {
+            throw "zlib archive SHA-256 mismatch (expected $env:ZLIB_SHA256, got $actual)"
+          }
+          tar -xzf $archive -C $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $src = "$env:RUNNER_TEMP\zlib-$env:ZLIB_VERSION"
+          $prefix = "$env:RUNNER_TEMP\zlib-install"
+          cmake -S $src -B "$src\build" -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=cl -DCMAKE_INSTALL_PREFIX="$prefix" -DZLIB_BUILD_EXAMPLES=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "$src\build"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --install "$src\build"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "ZLIB_ROOT=$prefix" >> $env:GITHUB_ENV
 
       # Building Skia takes most of the job, so the built tree is cached per
       # locked commit. Its checkout history, third-party sources, and object
@@ -127,6 +157,8 @@ jobs:
             -DSKIA_PATH="$PWD\third_party\skia" `
             -DSDL2_DIR="$env:SDL2_ROOT\cmake" `
             -DOPENSSL_ROOT_DIR="$env:OPENSSL_ROOT_DIR" `
+            -DZLIB_ROOT="$env:ZLIB_ROOT" `
+            -DZLIB_USE_STATIC_LIBS=ON `
             -DENABLE_NEURAL=OFF `
             -DBUDO_QUICKJS_IMPL="$env:QUICKJS_IMPL"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
