@@ -1,0 +1,167 @@
+name: Release
+
+# Builds standalone `budo` binaries for Linux and macOS and publishes them on a
+# GitHub release. Push a tag (git tag v0.4.3 && git push origin v0.4.3) or run
+# the workflow by hand with an existing or new tag name.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or update (e.g. v0.4.3)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Built on the oldest available Ubuntu so the binary runs on older
+          # glibc versions too.
+          - runner: ubuntu-22.04
+            asset: budo-linux-x86_64
+          - runner: macos-latest
+            asset: budo-macos-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          # SDL2 itself is built statically below; these headers let it load
+          # X11/Wayland/ALSA/PulseAudio at runtime without linking them.
+          sudo apt-get install -y cmake build-essential python3 \
+            libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxinerama-dev libxss-dev libxkbcommon-dev libwayland-dev \
+            libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
+
+      - name: Install packages (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake openssl@3
+
+      - name: Download Skia
+        run: ./scripts/setup-skia.sh
+
+      - name: Download ONNX
+        run: ./scripts/setup-onnx.sh
+
+      - name: Download STB
+        run: ./scripts/setup-stb.sh
+
+      - name: Build static SDL2
+        run: ./scripts/setup-sdl2-static.sh
+
+      - name: Build
+        run: |
+          prefix="$PWD/third_party/sdl2-static"
+          make build CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2"
+
+      - name: Check the binary is standalone
+        run: |
+          ./build/budo help > /dev/null
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            otool -L build/budo
+            # Only system libraries and frameworks may remain.
+            if otool -L build/budo | tail -n +2 | grep -vE '^[[:space:]]*(/usr/lib/|/System/)'; then
+              echo "::error::build/budo links non-system libraries"
+              exit 1
+            fi
+          else
+            ldd build/budo
+            if ldd build/budo | grep -i 'sdl2'; then
+              echo "::error::build/budo links SDL2 dynamically"
+              exit 1
+            fi
+          fi
+
+      - name: Stage release asset
+        run: |
+          mkdir -p dist
+          cp build/budo "dist/${{ matrix.asset }}"
+          chmod 0755 "dist/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          chmod 0755 budo-*
+          sha256sum budo-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --target "$GITHUB_SHA" \
+              --title "Budo $RELEASE_TAG" \
+              --generate-notes
+          fi
+
+      - name: Download links
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          base="$REPO_URL/releases/download/$RELEASE_TAG"
+          latest="$REPO_URL/releases/latest/download"
+          {
+            echo "## Budo $RELEASE_TAG"
+            echo ""
+            echo "Release page: $REPO_URL/releases/tag/$RELEASE_TAG"
+            echo ""
+            echo "| Platform | Download |"
+            echo "|---|---|"
+            echo "| Linux x86_64 | $base/budo-linux-x86_64 |"
+            echo "| macOS Apple Silicon | $base/budo-macos-aarch64 |"
+            echo "| Checksums | $base/SHA256SUMS.txt |"
+            echo ""
+            echo "Always-latest links: \`$latest/budo-linux-x86_64\`, \`$latest/budo-macos-aarch64\`"
+            echo ""
+            echo "Install:"
+            echo ""
+            echo '```sh'
+            echo "curl -fL -o budo $latest/budo-macos-aarch64   # or budo-linux-x86_64"
+            echo "chmod +x budo && ./budo help"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Budo $RELEASE_TAG for Linux x86_64::$base/budo-linux-x86_64"
+          echo "::notice title=Budo $RELEASE_TAG for macOS Apple Silicon::$base/budo-macos-aarch64"
+          echo "Linux x86_64:        $base/budo-linux-x86_64"
+          echo "macOS Apple Silicon: $base/budo-macos-aarch64"
+          echo "Checksums:           $base/SHA256SUMS.txt"

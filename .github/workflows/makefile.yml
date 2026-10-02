@@ -1,0 +1,71 @@
+name: Makefile CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
+
+      - name: Download Skia
+        run: ./scripts/setup-skia.sh
+
+      - name: Download ONNX
+        run: ./scripts/setup-onnx.sh
+
+      - name: Download STB
+        run: ./scripts/setup-stb.sh
+
+      - name: Build
+        run: make build
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: brew install cmake sdl2
+
+      - name: Download Skia
+        run: ./scripts/setup-skia.sh
+
+      - name: Download ONNX
+        run: ./scripts/setup-onnx.sh
+
+      - name: Download STB
+        run: ./scripts/setup-stb.sh
+
+      - name: Build
+        run: make build
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL2
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          C:\vcpkg\vcpkg.exe install sdl2:x64-windows
+
+      - name: Download Skia
+        run: ./scripts/setup-skia.bat
+
+      - name: Build
+        run: make build

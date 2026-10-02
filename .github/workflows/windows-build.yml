@@ -1,0 +1,156 @@
+name: Windows build
+
+# Reusable Windows x64 build (MSVC + Ninja), mirroring scripts/windows-build.ps1.
+# Produces budo-windows-x86_64.zip: budo.exe plus the DLLs it needs at runtime
+# (SDL2, OpenSSL, Wasmtime, ...). Called by makefile.yml (CI) and release.yml.
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: "Name of the uploaded artifact holding the zip"
+        type: string
+        default: budo-windows-x86_64
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build budo-windows-x86_64
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read dependency lock
+        id: lock
+        run: |
+          $lock = Get-Content cmake/BudoDependencyLock.cmake -Raw
+          function Lock($pattern) {
+            $value = [regex]::Match($lock, $pattern).Groups[1].Value
+            if (-not $value) { throw "Dependency lock value not found: $pattern" }
+            return $value
+          }
+          "skia=$(Lock 'set\(BUDO_SKIA_DESKTOP_GIT_TAG "([0-9a-f]{40})"\)')" >> $env:GITHUB_OUTPUT
+          "quickjs=$(Lock 'set\(BUDO_QUICKJS_IMPL_DEFAULT "([^"]+)"\)')" >> $env:GITHUB_OUTPUT
+          "sdl_version=$(Lock 'set\(BUDO_SDL2_WINDOWS_VERSION "([^"]+)"\)')" >> $env:GITHUB_OUTPUT
+          "sdl_url=$(Lock 'set\(BUDO_SDL2_WINDOWS_URL\s+"([^"]+)"\)')" >> $env:GITHUB_OUTPUT
+          "sdl_sha256=$(Lock 'set\(BUDO_SDL2_WINDOWS_URL_HASH\s+"SHA256=([0-9a-f]{64})"\)')" >> $env:GITHUB_OUTPUT
+
+      - name: Set up MSVC (x64)
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "Visual Studio with the x64 C++ tools was not found" }
+          $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvarsall.bat"
+          # Export the developer environment to every following step.
+          cmd /c "`"$vcvars`" x64 >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') {
+              "$($Matches[1])=$($Matches[2])" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+
+      - name: Install Ninja and OpenSSL
+        run: |
+          choco install -y --no-progress ninja openssl
+          $roots = @("C:\Program Files\OpenSSL-Win64", "C:\Program Files\OpenSSL")
+          $openssl = $roots | Where-Object { Test-Path "$_\include\openssl\ssl.h" } | Select-Object -First 1
+          if (-not $openssl) { throw "OpenSSL headers not found after installation" }
+          "OPENSSL_ROOT_DIR=$openssl" >> $env:GITHUB_ENV
+          Write-Host "OpenSSL: $openssl"
+
+      - name: Download pinned SDL2 ${{ steps.lock.outputs.sdl_version }}
+        env:
+          SDL_URL: ${{ steps.lock.outputs.sdl_url }}
+          SDL_SHA256: ${{ steps.lock.outputs.sdl_sha256 }}
+          SDL_VERSION: ${{ steps.lock.outputs.sdl_version }}
+        run: |
+          $zip = "$env:RUNNER_TEMP\sdl2-dev.zip"
+          Invoke-WebRequest -Uri $env:SDL_URL -OutFile $zip
+          $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($actual -ne $env:SDL_SHA256) {
+            throw "SDL2 archive SHA-256 mismatch (expected $env:SDL_SHA256, got $actual)"
+          }
+          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+          "SDL2_ROOT=$env:RUNNER_TEMP\SDL2-$env:SDL_VERSION" >> $env:GITHUB_ENV
+
+      # Building Skia takes most of the job, so the built tree is cached per
+      # locked commit. Its checkout history, third-party sources, and object
+      # files are not needed to build Budo and are left out of the cache.
+      - name: Restore Skia
+        id: skia-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party/skia
+            !third_party/skia/.git
+            !third_party/skia/third_party/externals
+            !third_party/skia/out/Release/obj
+          key: skia-windows-x64-${{ steps.lock.outputs.skia }}
+
+      - name: Build Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        shell: cmd
+        run: scripts\setup-skia.bat
+
+      - name: Configure
+        env:
+          QUICKJS_IMPL: ${{ steps.lock.outputs.quickjs }}
+        run: |
+          cmake -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=cl `
+            -DCMAKE_CXX_COMPILER=cl `
+            -DSKIA_PATH="$PWD\third_party\skia" `
+            -DSDL2_DIR="$env:SDL2_ROOT\cmake" `
+            -DOPENSSL_ROOT_DIR="$env:OPENSSL_ROOT_DIR" `
+            -DENABLE_NEURAL=OFF `
+            -DBUDO_QUICKJS_IMPL="$env:QUICKJS_IMPL"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build
+        run: |
+          cmake --build build --config Release --target budo -j $env:NUMBER_OF_PROCESSORS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package
+        run: |
+          $out = "dist\budo-windows-x86_64"
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          Copy-Item build\budo.exe $out
+          # DLLs CMake placed next to the exe, Wasmtime, SDL2, and OpenSSL.
+          Get-ChildItem build -Filter *.dll | Copy-Item -Destination $out
+          Get-ChildItem build\wasmtime\lib -Filter *.dll -ErrorAction SilentlyContinue | Copy-Item -Destination $out
+          Copy-Item "$env:SDL2_ROOT\lib\x64\SDL2.dll" $out
+          $ssl = Get-ChildItem "$env:OPENSSL_ROOT_DIR\bin" -Filter *.dll |
+            Where-Object { $_.Name -match '^(libssl|libcrypto)-.*\.dll$' }
+          if (-not $ssl) { throw "OpenSSL runtime DLLs not found under $env:OPENSSL_ROOT_DIR\bin" }
+          $ssl | Copy-Item -Destination $out
+          Copy-Item LICENSE, THIRD_PARTY_NOTICES.md $out
+
+          # Every DLL the exe imports must be shipped or come with Windows.
+          $deps = dumpbin /nologo /dependents "$out\budo.exe" |
+            ForEach-Object { $_.Trim() } | Where-Object { $_ -match '\.dll$' }
+          $missing = $deps | Where-Object {
+            -not (Test-Path "$out\$_") -and -not (Test-Path "$env:SystemRoot\System32\$_") -and
+            $_ -notmatch '^(api|ext)-ms-'
+          }
+          Write-Host "Imports: $($deps -join ', ')"
+          if ($missing) { throw "Not shipped with budo.exe: $($missing -join ', ')" }
+
+          & "$out\budo.exe" help > $null
+          if ($LASTEXITCODE -ne 0) { throw "budo.exe help failed with exit code $LASTEXITCODE" }
+
+          Compress-Archive -Path "$out\*" -DestinationPath "dist\budo-windows-x86_64.zip" -Force
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: dist/budo-windows-x86_64.zip
+          if-no-files-found: error
