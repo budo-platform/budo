@@ -63,7 +63,21 @@ git checkout --detach %SKIA_COMMIT% || exit /b 1
 
 REM Sync dependencies
 echo Syncing Skia dependencies...
-python tools\git-sync-deps || exit /b 1
+REM Dozens of parallel fetches from googlesource.com: one transient failure
+REM aborts the whole sync, so retry (already-synced deps are kept).
+set SYNC_ATTEMPT=1
+:sync_deps
+python tools\git-sync-deps && goto sync_done
+if %SYNC_ATTEMPT% geq 3 (
+    echo Error: Skia dependency sync failed after 3 attempts
+    exit /b 1
+)
+set /a SYNC_ATTEMPT+=1
+echo Dependency sync failed; retrying ^(attempt %SYNC_ATTEMPT%/3^)...
+REM ~20 s pause; "timeout" fails when stdin is not a console (CI).
+ping -n 21 127.0.0.1 >nul
+goto sync_deps
+:sync_done
 
 REM Generate build files
 echo Generating build files...

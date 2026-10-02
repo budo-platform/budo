@@ -54,7 +54,20 @@ clone_skia() {
 sync_deps() {
     echo_info "Syncing Skia dependencies..."
     cd "$SKIA_DIR"
-    python3 tools/git-sync-deps
+    # Dozens of parallel fetches from googlesource.com: one transient failure
+    # aborts the whole sync, so retry (already-synced deps are kept).
+    local attempt
+    for attempt in 1 2 3; do
+        if python3 tools/git-sync-deps; then
+            return 0
+        fi
+        if [ "$attempt" -lt 3 ]; then
+            echo_warn "Dependency sync failed (attempt $attempt/3); retrying in $((attempt * 20)) s..."
+            sleep $((attempt * 20))
+        fi
+    done
+    echo_error "Skia dependency sync failed after 3 attempts"
+    exit 1
 }
 
 # ── Build Skia ────────────────────────────────────────────────────────────────

@@ -18,8 +18,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
 
-      - name: Download Skia
-        run: ./scripts/setup-skia.sh
+      - name: Skia
+        uses: ./.github/actions/skia
 
       - name: Download ONNX
         run: ./scripts/setup-onnx.sh
@@ -39,8 +39,8 @@ jobs:
       - name: Install packages
         run: brew install cmake sdl2
 
-      - name: Download Skia
-        run: ./scripts/setup-skia.sh
+      - name: Skia
+        uses: ./.github/actions/skia
 
       - name: Download ONNX
         run: ./scripts/setup-onnx.sh
