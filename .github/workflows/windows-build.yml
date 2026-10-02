@@ -100,7 +100,10 @@ jobs:
       - name: Build Skia
         if: steps.skia-cache.outputs.cache-hit != 'true'
         shell: cmd
-        run: scripts\setup-skia.bat
+        run: |
+          rem Skia's synced dependencies come close to the 260-character path limit.
+          git config --global core.longpaths true
+          call scripts\setup-skia.bat
 
       - name: Save Skia
         if: steps.skia-cache.outputs.cache-hit != 'true'

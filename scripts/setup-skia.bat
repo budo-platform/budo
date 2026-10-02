@@ -7,7 +7,9 @@ setlocal enabledelayedexpansion
 set SCRIPT_DIR=%~dp0
 set SKIA_DIR=%SCRIPT_DIR%..\third_party\skia
 set BUILD_DIR=%SKIA_DIR%\out\Release
-for /f "tokens=2 delims=^\"" %%A in ('findstr /b "set(BUDO_SKIA_DESKTOP_GIT_TAG" "%SCRIPT_DIR%..\cmake\BudoDependencyLock.cmake"') do set SKIA_COMMIT=%%A
+REM The commit is the 2nd field when splitting on double quotes. A quote can
+REM only be a FOR /F delimiter with unquoted, caret-escaped options.
+for /f tokens^=2^ delims^=^" %%A in ('findstr /b /l /c:"set(BUDO_SKIA_DESKTOP_GIT_TAG " "%SCRIPT_DIR%..\cmake\BudoDependencyLock.cmake"') do set SKIA_COMMIT=%%A
 if not defined SKIA_COMMIT (
     echo Error: cannot read Skia commit from dependency lock
     exit /b 1
@@ -54,22 +56,28 @@ if exist "%SKIA_DIR%\.git" (
     echo Cloning Skia...
     if not exist "%SKIA_DIR%\.." mkdir "%SKIA_DIR%\.."
     git clone --no-checkout https://skia.googlesource.com/skia.git "%SKIA_DIR%"
+    if errorlevel 1 exit /b 1
     cd /d "%SKIA_DIR%"
 )
 git fetch origin %SKIA_COMMIT%
+if errorlevel 1 exit /b 1
 git checkout --detach %SKIA_COMMIT%
+if errorlevel 1 exit /b 1
 
 REM Sync dependencies
 echo Syncing Skia dependencies...
 python tools\git-sync-deps
+if errorlevel 1 exit /b 1
 
 REM Generate build files
 echo Generating build files...
 bin\gn gen "%BUILD_DIR%" --args="is_official_build=true is_component_build=false skia_use_system_expat=false skia_use_system_libjpeg_turbo=false skia_use_system_libpng=false skia_use_system_libwebp=false skia_use_system_zlib=false skia_use_system_harfbuzz=false skia_use_system_icu=false skia_enable_pdf=false skia_enable_skottie=false skia_enable_skshaper=false"
+if errorlevel 1 exit /b 1
 
 REM Build
 echo Building Skia...
 ninja -C "%BUILD_DIR%"
+if errorlevel 1 exit /b 1
 
 echo.
 echo ===================================
