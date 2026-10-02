@@ -9,9 +9,13 @@
 #define MA_NO_ENCODING
 #define MA_NO_ENGINE
 #define MA_NO_NODE_GRAPH
+
+#define STB_VORBIS_HEADER_ONLY
 #include "extras/stb_vorbis.c"
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
+#undef STB_VORBIS_HEADER_ONLY
+#include "extras/stb_vorbis.c"
 
 static bool audio_decode_from_decoder(ma_decoder *decoder, const char *label,
                                       AudioDecodedData *out, char *error, int error_size)

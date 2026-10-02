@@ -986,8 +986,8 @@ bool midi_get_input_info(MidiContext *ctx, int index, MidiDeviceInfo *info)
     if (!ctx || !info || index < 0 || index >= midi_get_input_count(ctx))
         return false;
 
-    MIDIINCAPS caps;
-    if (midiInGetDevCaps(index, &caps, sizeof(caps)) != MMSYSERR_NOERROR)
+    MIDIINCAPSW caps;
+    if (midiInGetDevCapsW(index, &caps, sizeof(caps)) != MMSYSERR_NOERROR)
         return false;
 
     info->id = index;
@@ -1003,8 +1003,8 @@ bool midi_get_output_info(MidiContext *ctx, int index, MidiDeviceInfo *info)
     if (!ctx || !info || index < 0 || index >= midi_get_output_count(ctx))
         return false;
 
-    MIDIOUTCAPS caps;
-    if (midiOutGetDevCaps(index, &caps, sizeof(caps)) != MMSYSERR_NOERROR)
+    MIDIOUTCAPSW caps;
+    if (midiOutGetDevCapsW(index, &caps, sizeof(caps)) != MMSYSERR_NOERROR)
         return false;
 
     info->id = index;
