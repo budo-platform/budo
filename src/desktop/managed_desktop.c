@@ -7,9 +7,14 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <unistd.h>
 #ifdef _WIN32
+#include <direct.h>
+#include <io.h>
 #include <windows.h>
+#define rmdir _rmdir
+#define unlink _unlink
+#else
+#include <unistd.h>
 #endif
 
 #include "core/app_entrypoint.h"

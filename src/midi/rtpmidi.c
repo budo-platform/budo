@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 #define APPLEMIDI_SIGNATURE 0xFFFF
 
@@ -68,9 +74,18 @@ static void set_error(RtpMidiContext *ctx, const char *msg)
 
 static uint64_t get_time_us(void)
 {
+#ifdef _WIN32
+    LARGE_INTEGER counter, frequency;
+    QueryPerformanceCounter(&counter);
+    QueryPerformanceFrequency(&frequency);
+    return (uint64_t)(counter.QuadPart / frequency.QuadPart) * 1000000ULL +
+           (uint64_t)(counter.QuadPart % frequency.QuadPart) * 1000000ULL /
+               (uint64_t)frequency.QuadPart;
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+#endif
 }
 
 static uint32_t generate_ssrc(void)

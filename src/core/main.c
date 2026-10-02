@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096 
+#endif
+
 #include "core/android_package.h"
 #include "core/budo_init.h"
 #include "core/cli.h"

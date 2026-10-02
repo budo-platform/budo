@@ -501,6 +501,35 @@ endif()
 # Find SDL2
 find_package(SDL2 REQUIRED)
 
+# Budo includes SDL as <SDL2/SDL.h> (the Homebrew/distribution layout). The
+# official Windows development package puts the headers directly in include/,
+# so expose them under an SDL2/ directory in the build tree.
+if(SDL2_INCLUDE_DIRS)
+    list(GET SDL2_INCLUDE_DIRS 0 BUDO_SDL2_HEADER_DIR)
+    if(EXISTS "${BUDO_SDL2_HEADER_DIR}/SDL.h" AND NOT EXISTS "${BUDO_SDL2_HEADER_DIR}/SDL2/SDL.h")
+        set(BUDO_SDL2_SHIM_DIR "${CMAKE_BINARY_DIR}/sdl2-include")
+        file(COPY "${BUDO_SDL2_HEADER_DIR}/" DESTINATION "${BUDO_SDL2_SHIM_DIR}/SDL2"
+            FILES_MATCHING PATTERN "*.h")
+        list(APPEND SDL2_INCLUDE_DIRS "${BUDO_SDL2_SHIM_DIR}")
+        if(TARGET SDL2::SDL2)
+            set_property(TARGET SDL2::SDL2 APPEND PROPERTY
+                INTERFACE_INCLUDE_DIRECTORIES "${BUDO_SDL2_SHIM_DIR}")
+        endif()
+        message(STATUS "SDL2 headers exposed as <SDL2/...> from ${BUDO_SDL2_SHIM_DIR}")
+    endif()
+endif()
+
+# MSVC lacks POSIX pieces Budo's portable code uses (<dirent.h>, <libgen.h>,
+# <unistd.h>, PATH_MAX, S_ISDIR/S_ISREG). Directory-scoped on purpose: it only
+# reaches targets created from here on, i.e. Budo's own code, not the
+# third-party targets above.
+if(MSVC)
+    set(BUDO_MSVC_COMPAT_DIR "${CMAKE_SOURCE_DIR}/src/compat/msvc")
+    include_directories(BEFORE "${BUDO_MSVC_COMPAT_DIR}")
+    add_compile_options("/FI${BUDO_MSVC_COMPAT_DIR}/budo_msvc_compat.h")
+    add_compile_definitions(_CRT_NONSTDC_NO_DEPRECATE)
+endif()
+
 get_target_property(BUDO_SDK_SDL_LIBRARY SDL2::SDL2 IMPORTED_LOCATION)
 if(NOT BUDO_SDK_SDL_LIBRARY)
     get_target_property(BUDO_SDK_SDL_LIBRARY SDL2::SDL2 IMPORTED_LOCATION_RELEASE)
