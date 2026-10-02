@@ -5,6 +5,7 @@
 #include "quickjs.h"
 #include "graphics/skia_wrapper.h"
 #include "core/input.h"
+#include "core/graphics_activation.h"
 
 typedef struct Window Window;
 typedef struct CanvasTexture CanvasTexture;
@@ -48,6 +49,8 @@ extern "C"
         CanvasTexture **canvas_textures;
         int canvas_texture_count;
         int canvas_texture_capacity;
+
+        BudoGraphicsActivation activation;
     } JSGraphicContext;
 
     typedef struct JsGraphicFunction

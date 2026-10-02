@@ -16,6 +16,8 @@ extern "C"
     NetworkContext *js_network_context(JsNetworkContext *state);
 
     void js_network_poll(JsNetworkContext *state);
+    
+    bool js_network_has_pending_work(JsNetworkContext *state);
 
     void js_network_cleanup(JsNetworkContext *state);
 

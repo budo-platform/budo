@@ -43,6 +43,8 @@ extern "C"
         unsigned int callback_depth;
         bool callback_allows_graphics;
         bool surface_active;
+        bool exit_requested;
+        int exit_code;
     };
 
     void budo_native_host_init(BudoHost *host, const InputState *input,
@@ -58,6 +60,8 @@ extern "C"
     void budo_native_host_leave_callback(BudoHost *host);
     bool budo_native_host_graphics_available(BudoHost *host);
     void budo_native_host_reset(BudoHost *host);
+    
+    bool budo_native_host_exit_requested(const BudoHost *host, int *exit_code);
 
 #ifdef __cplusplus
 }

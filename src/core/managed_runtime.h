@@ -1,6 +1,8 @@
 #ifndef BUDO_MANAGED_RUNTIME_H
 #define BUDO_MANAGED_RUNTIME_H
 
+#include "core/app_entrypoint.h"
+#include "core/graphics_activation.h"
 #include "core/input.h"
 #include "core/subsystem_registry.h"
 #include "core/window.h"
@@ -62,7 +64,7 @@ extern "C"
         JsNetworkContext *js_network_ctx;
         JsUdpContext *js_udp_ctx;
 #ifdef BUDO_LLAMACPP
-        JsLlamaCppContext *js_lamacpp_ctx;
+        JsLlamaCppContext *js_llamacpp_ctx;
 #endif
 
         LuaCanvasContext *lua_ctx;
@@ -84,21 +86,49 @@ extern "C"
         MANAGED_RUNTIME_WEBASSEMBLY
     } ManagedRuntimeKind;
 
+    typedef struct ManagedFrameContext
+    {
+        SkiaCanvas *canvas;
+        Window *window;
+        InputState *input;
+        int width;
+        int height;
+        float display_density;
+    } ManagedFrameContext;
+
+    bool managed_runtime_kind_from_entrypoint(AppEntrypointRuntime runtime,
+                                              ManagedRuntimeKind *out);
+    const char *managed_runtime_kind_name(ManagedRuntimeKind kind);
+
+    void managed_runtime_set_frame_context(ManagedRuntimeKind kind,
+                                           ManagedRuntimeCommon *contexts,
+                                           const ManagedFrameContext *frame);
+
     void managed_runtime_frame(ManagedRuntimeKind kind,
                                SubsystemRegistry *subsystems,
-                               JSRuntimeContext *js_context,
-                               JSGraphicContext *js_graphics,
-                               LuaCanvasContext *lua_context,
-                               WasmCanvasContext *wasm_context,
-                               SkiaCanvas *canvas,
-                               int width,
-                               int height,
-                               Window *window,
-                               InputState *input,
-                               float display_density,
+                               ManagedRuntimeCommon *contexts,
+                               const ManagedFrameContext *frame,
                                double timestamp_ms);
 
     void managed_runtime_shutdown(SubsystemRegistry *subsystems);
+
+    void managed_runtime_set_graphics_activation(ManagedRuntimeKind kind,
+                                                 ManagedRuntimeCommon *contexts,
+                                                 BudoGraphicsActivateFn activate,
+                                                 void *opaque);
+
+    bool managed_runtime_graphics_requested(ManagedRuntimeKind kind,
+                                            const ManagedRuntimeCommon *contexts);
+
+    bool managed_runtime_exit_requested(ManagedRuntimeKind kind,
+                                        const ManagedRuntimeCommon *contexts, int *code);
+
+    bool managed_runtime_has_pending_work(ManagedRuntimeKind kind,
+                                          const SubsystemRegistry *subsystems,
+                                          ManagedRuntimeCommon *contexts);
+
+    void managed_runtime_tick(ManagedRuntimeKind kind, SubsystemRegistry *subsystems,
+                              ManagedRuntimeCommon *contexts, double timestamp_ms);
 
 #ifdef __cplusplus
 }

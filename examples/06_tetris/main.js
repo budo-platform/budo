@@ -36,11 +36,6 @@ class ShaderProgram {
         if (this.programId < 0) throw "invalid program id"
     }
 
-    use() {
-        if (sys.gl.use(this.programId) < 0) throw "cannot use program"
-        return this
-    }
-
     uniform1i(name, value) {
         sys.gl.setUniform1i(this.programId, name, value)
         return this

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define lua_canvas_get_context(L) lua_canvas_context(L)
+#define lua_canvas_get_context(L) lua_canvas_graphics_context(L)
 
 static int l_gl_create_program(lua_State *L)
 {

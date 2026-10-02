@@ -150,6 +150,10 @@ emcmake cmake -B "$WEB_BUILD_DIR" -S "$PROJECT_ROOT/web" \
     -DPROJECT_ASSET_DIR="$APP_FOLDER"
 
 NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+# The preloaded budo.data is produced at link time, and the link does not
+# depend on the project files: remove the outputs so this project is packaged
+# instead of whichever project was linked last.
+rm -f "$WEB_BUILD_DIR/budo.html" "$WEB_BUILD_DIR/budo.js" "$WEB_BUILD_DIR/budo.wasm" "$WEB_BUILD_DIR/budo.data"
 emmake cmake --build "$WEB_BUILD_DIR" -j"$NPROC"
 
 # ── Step 2: Assemble output directory ────────────────────────────────────────

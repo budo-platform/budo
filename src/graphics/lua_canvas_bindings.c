@@ -27,7 +27,16 @@ LuaCanvasContext *lua_canvas_context(void *opaque)
     return ctx;
 }
 
-#define lua_canvas_get_context(L) lua_canvas_context(L)
+LuaCanvasContext *lua_canvas_graphics_context(void *opaque)
+{
+    LuaCanvasContext *ctx = lua_canvas_context(opaque);
+    
+    if (ctx)
+        budo_graphics_activation_request(&ctx->activation);
+    return ctx;
+}
+
+#define lua_canvas_get_context(L) lua_canvas_graphics_context(L)
 
 static void lua_canvas_store_context(lua_State *L, LuaCanvasContext *ctx)
 {
@@ -172,6 +181,27 @@ static uint32_t lua_get_color(lua_State *L, int idx)
             return color;
     }
     return SKIA_COLOR_BLACK;
+}
+
+static int l_sys_exit(lua_State *L)
+{
+    LuaCanvasContext *ctx = lua_canvas_context(L);
+    int code = (int)luaL_optinteger(L, 1, 0);
+    if (ctx)
+    {
+        ctx->exit_requested = true;
+        ctx->exit_code = code;
+    }
+    return 0;
+}
+
+bool lua_canvas_exit_requested(const LuaCanvasContext *ctx, int *code)
+{
+    if (!ctx || !ctx->exit_requested)
+        return false;
+    if (code)
+        *code = ctx->exit_code;
+    return true;
 }
 
 static int l_console_log(lua_State *L)
@@ -1434,7 +1464,7 @@ static int l_animation_cancel_frame(lua_State *L)
 
  static int l_transform_save(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas)
         skia_canvas_save(context->canvas);
     return 0;
@@ -1442,7 +1472,7 @@ static int l_animation_cancel_frame(lua_State *L)
 
 static int l_transform_restore(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas)
         skia_canvas_restore(context->canvas);
     return 0;
@@ -1450,7 +1480,7 @@ static int l_transform_restore(lua_State *state)
 
 static int l_transform_translate(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas && lua_gettop(state) >= 2)
         skia_canvas_translate(context->canvas,
                               luaL_checknumber(state, 1),
@@ -1460,7 +1490,7 @@ static int l_transform_translate(lua_State *state)
 
 static int l_transform_rotate(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     double degrees;
     if (!context || !context->canvas || lua_gettop(state) < 1)
         return 0;
@@ -1476,7 +1506,7 @@ static int l_transform_rotate(lua_State *state)
 
 static int l_transform_scale(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas && lua_gettop(state) >= 2)
         skia_canvas_scale(context->canvas,
                           luaL_checknumber(state, 1),
@@ -1486,7 +1516,7 @@ static int l_transform_scale(lua_State *state)
 
 static int l_transform_skew(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas && lua_gettop(state) >= 2)
         skia_canvas_skew(context->canvas,
                          luaL_checknumber(state, 1),
@@ -1496,7 +1526,7 @@ static int l_transform_skew(lua_State *state)
 
 static int l_transform_reset(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas)
         skia_canvas_reset_transform(context->canvas);
     return 0;
@@ -1504,7 +1534,7 @@ static int l_transform_reset(lua_State *state)
 
 static int l_transform_clip_rect(lua_State *state)
 {
-    LuaCanvasContext *context = lua_canvas_context(state);
+    LuaCanvasContext *context = lua_canvas_graphics_context(state);
     double x, y, width, height;
     if (!context || !context->canvas || lua_gettop(state) < 4)
         return 0;
@@ -1659,6 +1689,8 @@ LuaCanvasContext *lua_canvas_create(const char *project_dir)
     register_subtable(L, -1, "input", input_funcs);
     register_subtable(L, -1, "window", window_funcs);
     register_subtable(L, -1, "animation", animation_funcs);
+    lua_pushcfunction(L, l_sys_exit);
+    lua_setfield(L, -2, "exit");
 
     lua_setglobal(L, "sys");
 

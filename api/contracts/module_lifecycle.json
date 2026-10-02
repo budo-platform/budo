@@ -91,7 +91,7 @@
             ]
         },
         "desktop": {
-            "source": "src/core/main.c",
+            "source": "src/desktop/managed_desktop.c",
             "details": [
                 "Desktop chooses JavaScript, Lua, or Wasmtime from the configured entrypoint; Wasmtime wires guest memory before optional init so init may safely call memory-dependent imports."
             ]
@@ -197,6 +197,42 @@
                     "namespace": "guest.exports",
                     "source_token": "exports.init",
                     "signature": "optional () -> void; exception rejects runner startup"
+                }
+            }
+        },
+        {
+            "name": "exit",
+            "signature": "end the application with an exit status",
+            "binding_symbols": {
+                "javascript": "js_sys_exit",
+                "lua": "l_sys_exit",
+                "wasmtime": "host_app_exit",
+                "browser_wasm": "js_web_wasm_start"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "exit",
+                    "namespace": "runtime",
+                    "source_token": "\"exit\"",
+                    "signature": "sys.exit(code = 0) -> never; stops the script at once (uncatchable on QuickJS-NG) and ends the app with code"
+                },
+                "lua": {
+                    "name": "exit",
+                    "namespace": "runtime",
+                    "source_token": "\"exit\"",
+                    "signature": "sys.exit(code = 0); the app ends with code after the current script or callback returns"
+                },
+                "wasmtime": {
+                    "name": "app_exit",
+                    "namespace": "runtime",
+                    "source_token": "\"app_exit\"",
+                    "signature": "env.app_exit(code: i32) -> never; traps to stop the module and ends the app with code"
+                },
+                "browser_wasm": {
+                    "name": "app_exit",
+                    "namespace": "runtime",
+                    "source_token": "app_exit:",
+                    "signature": "env.app_exit(code: i32) -> never; throws to stop the module and ends the app with code"
                 }
             }
         }

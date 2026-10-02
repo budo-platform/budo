@@ -1214,6 +1214,11 @@ JsFileBridgeToken js_file_bridge_token(const JsFileContext *state)
     return state ? state->bridge_token : 0;
 }
 
+bool js_file_has_pending_work(JsFileContext *state)
+{
+    return state && !JS_IsUndefined(state->picker_callback);
+}
+
 void js_file_poll(JsFileContext *state)
 {
     JsFileCompletion completion;

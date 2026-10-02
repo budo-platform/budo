@@ -168,13 +168,21 @@ LuaUdpContext *lua_udp_init(void *L_void)
     }
 
     lua_getglobal(L, "sys");
+    lua_getfield(L, -1, "net");
+    if (!lua_istable(L, -1))
+    {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "net");
+    }
 
     lua_newtable(L);
     lua_pushlightuserdata(L, state);
     luaL_setfuncs(L, udp_funcs, 1);
     lua_setfield(L, -2, "udp");
 
-    lua_pop(L, 1); 
+    lua_pop(L, 2); 
 
     return state;
 }
@@ -206,6 +214,18 @@ void lua_udp_cleanup(LuaUdpContext *state)
     udp_destroy(state->udp_ctx);
     state->udp_ctx = NULL;
     free(state);
+}
+
+bool lua_udp_has_pending_work(LuaUdpContext *state)
+{
+    if (!state)
+        return false;
+    for (int i = 0; i < LUA_MAX_UDP_CALLBACKS; i++)
+    {
+        if (state->callbacks_active[i])
+            return true;
+    }
+    return false;
 }
 
 void lua_udp_poll(LuaUdpContext *state)

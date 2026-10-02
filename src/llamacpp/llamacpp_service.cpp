@@ -70,6 +70,7 @@ struct LlamaCppService
     std::atomic<uint64_t> next_handle{1};
     BudoThread worker{};
     bool worker_ready{};
+    bool backend_ready{};
     SubsystemQueue events{};
     LlamaCppEvent event_storage[kEventCapacity]{};
     std::mutex terminal_mutex;
@@ -93,6 +94,16 @@ struct StreamState
     bool invalid_utf8{};
     bool queue_overflow{};
 };
+
+static void ensure_backend(LlamaCppService *service)
+{
+    std::lock_guard<std::mutex> lock(service->mutex);
+    if (!service->backend_ready)
+    {
+        budo_llama_backend_init();
+        service->backend_ready = true;
+    }
+}
 
 static bool cached_device_available(const char *device)
 {
@@ -285,6 +296,9 @@ static void run_job(LlamaCppService *service, Job &job)
 {
     if (job.type == JobType::Load)
     {
+        ensure_backend(service);
+        job.placement_cache_hit = apply_placement_cache(
+            service, &job.reference, &job.load);
         char error[512]{};
         uint64_t identity_high = job.reference.identity_high;
         uint64_t identity_low = job.reference.identity_low;
@@ -519,11 +533,9 @@ LlamaCppService *llamacpp_service_create(FileContext *files)
         delete service;
         return nullptr;
     }
-    budo_llama_backend_init();
     service->worker_ready = budo_thread_create(&service->worker, worker_main, service);
     if (!service->worker_ready)
     {
-        budo_llama_backend_shutdown();
         subsystem_queue_destroy(&service->events);
         delete service;
         return nullptr;
@@ -570,11 +582,19 @@ void llamacpp_service_destroy(LlamaCppService *service)
     for (auto &terminal : service->terminal_events)
         free_event(terminal);
     subsystem_queue_destroy(&service->events);
-    budo_llama_backend_shutdown();
+    if (service->backend_ready)
+        budo_llama_backend_shutdown();
     delete service;
 }
 
 bool llamacpp_service_is_available(const LlamaCppService *service) { return service && budo_llama_is_available(); }
+size_t llamacpp_service_get_devices(LlamaCppService *service, BudoLlamaDeviceInfo *devices, size_t capacity)
+{
+    if (!service || service->closing)
+        return 0;
+    ensure_backend(service);
+    return budo_llama_get_devices(devices, capacity);
+}
 const char *llamacpp_service_get_error(const LlamaCppService *service) { return service ? service->error : ""; }
 void llamacpp_service_set_event_callback(LlamaCppService *service, LlamaCppEventCallback callback, void *opaque)
 {
@@ -606,8 +626,6 @@ bool llamacpp_service_load_model(LlamaCppService *service, uint64_t request_id, 
         std::snprintf(service->error, sizeof(service->error), "Model size is outside the configured limit");
         return false;
     }
-    job.placement_cache_hit = apply_placement_cache(
-        service, &job.reference, &job.load);
     if (options->allow_fallback && options->gpu_layers != 0)
     {
         if (!file_native_open(service->files, path, &job.fallback_reference))

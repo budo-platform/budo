@@ -80,7 +80,7 @@ set(SKIA_DIR "${CMAKE_BINARY_DIR}/skia")
 
 include(FetchContent)
 
-option(ENABLE_LLAMACPP "Enable local GGUF inference through llama.cpp" OFF)
+option(ENABLE_LLAMACPP "Enable local GGUF inference through llama.cpp" ON)
 option(ENABLE_LLAMACPP_CUDA "Build llama.cpp CUDA as a dynamic ggml backend" OFF)
 option(ENABLE_LLAMACPP_VULKAN "Build llama.cpp Vulkan as a dynamic ggml backend" OFF)
 if((ENABLE_LLAMACPP_CUDA OR ENABLE_LLAMACPP_VULKAN) AND NOT ENABLE_LLAMACPP)
@@ -588,6 +588,7 @@ set(SOURCES
     src/core/wasm_capabilities_bindings.c
     src/core/managed_basics.c
     src/core/managed_runtime.c
+    src/core/managed_subsystems.c
     src/graphics/js_core_bindings.c
     src/graphics/js_canvas_bindings.c
     src/graphics/js_gl_bindings.c
@@ -1099,6 +1100,7 @@ add_library(budo_native_compile STATIC
     src/native/native_compile.c
     src/native/native_cache.c
     src/native/native_sdk.c
+    src/core/fs_util.c
 )
 add_library(budo::native_compile ALIAS budo_native_compile)
 target_compile_features(budo_native_compile PUBLIC c_std_11)
@@ -1150,7 +1152,11 @@ if(WIN32 OR APPLE)
     target_link_libraries(budo_managed_drivers PRIVATE
         OpenSSL::SSL OpenSSL::Crypto)
 endif()
-add_executable(${PROJECT_NAME} src/core/entry.c src/core/main.c)
+add_executable(${PROJECT_NAME}
+    src/core/entry.c
+    src/core/main.c
+    src/core/cli.c
+    src/desktop/managed_desktop.c)
 if(ENABLE_LLAMACPP)
     target_compile_definitions(${PROJECT_NAME} PRIVATE BUDO_LLAMACPP)
 endif()
@@ -1182,6 +1188,15 @@ option(BUDO_BUILD_NATIVE_EXAMPLE "Build the native C desktop example" ON)
 if(BUDO_BUILD_NATIVE_EXAMPLE)
     add_executable(budo_native_example examples/12_native_c/main.c)
     target_link_libraries(budo_native_example PRIVATE budo_native_launcher)
+
+    add_executable(native_windowless_app tests/native_windowless_app.c)
+    target_link_libraries(native_windowless_app PRIVATE budo_native_launcher)
+    if(BUILD_TESTING)
+        # Runs without a display: no window is ever opened.
+        add_test(NAME native_windowless_exit_status
+            COMMAND ${CMAKE_COMMAND} -DAPP=$<TARGET_FILE:native_windowless_app> -DEXPECTED=4
+                -P ${CMAKE_SOURCE_DIR}/tests/expect_exit_status.cmake)
+    endif()
 
     add_executable(budo_native_gpu_example examples/13_native_gpu/main.c)
     target_link_libraries(budo_native_gpu_example PRIVATE budo_native_launcher)
@@ -1280,6 +1295,22 @@ if(BUILD_TESTING)
     add_test(NAME canvas_binding_ownership
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tests/canvas_binding_ownership_test.py
+            ${CMAKE_SOURCE_DIR})
+
+    set(HEADLESS_RUN_TEST_ARGS "")
+    if(BUDO_QUICKJS_IMPL STREQUAL "ng")
+        set(HEADLESS_RUN_TEST_ARGS "--quickjs-ng")
+    endif()
+    add_test(NAME headless_run
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/headless_run_test.py
+            $<TARGET_FILE:${PROJECT_NAME}>
+            ${CMAKE_BINARY_DIR}/test-data/headless-run
+            ${HEADLESS_RUN_TEST_ARGS})
+
+    add_test(NAME binding_ownership
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/binding_ownership_test.py
             ${CMAKE_SOURCE_DIR})
 
     if(EXISTS "${CMAKE_SOURCE_DIR}/private/android/android/app/src/main/cpp/android_main.cpp")
@@ -1472,6 +1503,23 @@ if(BUILD_TESTING)
     add_test(NAME js_canvas_binding_state
         COMMAND js_canvas_binding_state_test
             "${JS_CANVAS_TEST_ROOT_A}" "${JS_CANVAS_TEST_ROOT_B}")
+
+    add_executable(js_runtime_load_test
+        tests/js_runtime_load_test.c
+        src/core/ts_strip.c
+        src/graphics/color_util.c
+        src/graphics/js_canvas_bindings.c
+        src/graphics/js_core_bindings.c
+        src/graphics/js_gl_bindings.c)
+    target_include_directories(js_runtime_load_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(js_runtime_load_test PRIVATE c_std_11)
+    target_link_libraries(js_runtime_load_test PRIVATE
+        quickjs budo_desktop_host)
+    set(JS_RUNTIME_LOAD_TEST_ROOT "${CMAKE_BINARY_DIR}/test-data/js-runtime-load")
+    file(MAKE_DIRECTORY "${JS_RUNTIME_LOAD_TEST_ROOT}")
+    add_test(NAME js_runtime_load
+        COMMAND js_runtime_load_test "${JS_RUNTIME_LOAD_TEST_ROOT}")
 
     add_executable(wasm_network_security_test
         tests/wasm_network_security_test.c)
@@ -1883,6 +1931,10 @@ if(BUILD_TESTING)
             --arg lua=${LUA_CANVAS_TEST_ROOT_B}
             --runtime wasmtime=$<TARGET_FILE:wasm_canvas_binding_state_test>
             --arg wasmtime=${WASM_CANVAS_TEST_ROOT})
+    # These tests write and remove scripts in the same test-data folders.
+    set_tests_properties(js_canvas_binding_state lua_canvas_binding_state
+        wasm_canvas_binding_state canvas_host_runtime_conformance
+        PROPERTIES RESOURCE_LOCK canvas_test_data)
 
     add_executable(application_driver_test
         tests/application_driver_test.c
@@ -2337,6 +2389,21 @@ if(BUILD_TESTING)
             "-DPACKAGER=${CMAKE_SOURCE_DIR}/scripts/package-native-sdk.py"
             "-DTARGET_TUPLE=${BUDO_NATIVE_TARGET_TUPLE}"
             -P "${CMAKE_SOURCE_DIR}/tests/run_native_sdk_resolution.cmake")
+
+    # Tests check results with assert(), often wrapping calls with side
+    # effects, so assertions must stay enabled in Release (-DNDEBUG) builds.
+    if(MSVC)
+        set(BUDO_TEST_KEEP_ASSERTS /UNDEBUG)
+    else()
+        set(BUDO_TEST_KEEP_ASSERTS -UNDEBUG)
+    endif()
+    get_property(BUDO_DIRECTORY_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(BUDO_TARGET IN LISTS BUDO_DIRECTORY_TARGETS)
+        get_target_property(BUDO_TARGET_TYPE ${BUDO_TARGET} TYPE)
+        if(BUDO_TARGET MATCHES "_test$" AND BUDO_TARGET_TYPE STREQUAL "EXECUTABLE")
+            target_compile_options(${BUDO_TARGET} PRIVATE ${BUDO_TEST_KEEP_ASSERTS})
+        endif()
+    endforeach()
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -2462,9 +2529,12 @@ if(SKIA_EXPAT_LIBRARY)
     set(BUDO_SDK_EXPAT_TARGET "if(NOT TARGET budo_sdk_expat)\n  add_library(budo_sdk_expat STATIC IMPORTED)\n  set_target_properties(budo_sdk_expat PROPERTIES IMPORTED_LOCATION \"\${_BUDO_NATIVE_SDK_ROOT}/lib/budo/deps/${BUDO_SDK_EXPAT_NAME}\")\nendif()")
 endif()
 
+# SDL2_LIBRARIES may include SDL2::SDL2main, which the relocatable SDK does not
+# recreate; Budo supplies its own main(), so installed consumers need SDL2 only.
 target_link_libraries(budo_desktop_host PUBLIC
     skia
-    ${SDL2_LIBRARIES}
+    "$<BUILD_INTERFACE:${SDL2_LIBRARIES}>"
+    "$<INSTALL_INTERFACE:SDL2::SDL2>"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -2623,11 +2693,6 @@ else()
     install(FILES "${BUDO_SDK_SDL_LIBRARY}" DESTINATION lib/budo/deps COMPONENT NativeSDK)
 endif()
 install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION share/budo COMPONENT NativeSDK)
-install(FILES
-    documentation/pages/native-c-projects.md
-    documentation/pages/native-c-api.md
-    documentation/pages/native-c-debugging.md
-    DESTINATION share/budo/docs COMPONENT NativeSDK)
 install(FILES "${CMAKE_SOURCE_DIR}/third_party/skia/LICENSE"
     DESTINATION share/budo/licenses/skia COMPONENT NativeSDK)
 install(FILES "${CMAKE_SOURCE_DIR}/licenses/native-sdk/sdl2/LICENSE.txt"

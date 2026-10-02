@@ -556,6 +556,36 @@ static void handle_client(web_socket_t client, const char *root_dir, const char 
     fclose(f);
 }
 
+#ifndef _WIN32
+static volatile sig_atomic_t web_server_stop_requested = 0;
+
+static void web_server_request_stop(int signal_number)
+{
+    (void)signal_number;
+    web_server_stop_requested = 1;
+}
+
+static void web_server_install_stop_handlers(struct sigaction *old_int,
+                                             struct sigaction *old_term)
+{
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = web_server_request_stop;
+    sigemptyset(&action.sa_mask);
+    web_server_stop_requested = 0;
+    sigaction(SIGINT, &action, old_int);
+    sigaction(SIGTERM, &action, old_term);
+}
+
+static void web_server_restore_stop_handlers(const struct sigaction *old_int,
+                                             const struct sigaction *old_term)
+{
+    sigaction(SIGINT, old_int, NULL);
+    sigaction(SIGTERM, old_term, NULL);
+}
+#endif
+
 int web_server_serve_directory(const char *root_dir, const char *host, int port)
 {
     if (!root_dir || port <= 0 || port > 65535)
@@ -633,9 +663,19 @@ int web_server_serve_directory(const char *root_dir, const char *host, int port)
     printf("Press Ctrl+C to stop.\n\n");
     fflush(stdout);
 
+#ifndef _WIN32
+    struct sigaction old_int;
+    struct sigaction old_term;
+    web_server_install_stop_handlers(&old_int, &old_term);
+#endif
+
     for (;;)
     {
         struct sockaddr_in client_addr;
+#ifndef _WIN32
+        if (web_server_stop_requested)
+            break;
+#endif
 #ifdef _WIN32
         int client_len = sizeof(client_addr);
 #else
@@ -651,6 +691,9 @@ int web_server_serve_directory(const char *root_dir, const char *host, int port)
 #endif
             fprintf(stderr, "Error: HTTP accept failed (%d).\n", err);
             close_web_socket(server);
+#ifndef _WIN32
+            web_server_restore_stop_handlers(&old_int, &old_term);
+#endif
             return 1;
         }
 
@@ -658,4 +701,11 @@ int web_server_serve_directory(const char *root_dir, const char *host, int port)
         handle_client(client, canonical_root, canonical_root);
         close_web_socket(client);
     }
+
+#ifndef _WIN32
+    printf("\nStopping web server.\n");
+    close_web_socket(server);
+    web_server_restore_stop_handlers(&old_int, &old_term);
+    return 0;
+#endif
 }

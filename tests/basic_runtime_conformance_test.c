@@ -25,7 +25,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-#define TRACE_COUNT 10
+#define TRACE_COUNT 9
 #define TRACE_RESULT_CAPACITY 128
 #define TRACE_ERROR_KIND_CAPACITY 32
 #define TRACE_ERROR_CODE_CAPACITY API_ERROR_CODE_CAPACITY
@@ -223,20 +223,20 @@ static void run_javascript_trace(RuntimeTrace *trace)
 
     trace_init(trace);
     int capability_mask = js_get_global_integer(context, "capMask");
-    for (size_t index = 0; index < 6; index++)
+    for (size_t index = 0; index < 5; index++)
         trace_set_boolean(trace, index, (capability_mask & (1 << index)) != 0);
     assert(js_get_global_integer(context, "deviceResult") == 3);
-    trace_set_literal(trace, 6, "[true,true]");
+    trace_set_literal(trace, 5, "[true,true]");
     float vector[3] = {
         js_get_global_number(context, "vecX"),
         js_get_global_number(context, "vecY"),
         js_get_global_number(context, "vecZ"),
     };
-    trace_set_vector(trace, 7, vector, 3);
+    trace_set_vector(trace, 6, vector, 3);
     float diagonal = js_get_global_number(context, "identityDiag");
-    trace_set_vector(trace, 8, &diagonal, 1);
+    trace_set_vector(trace, 7, &diagonal, 1);
     assert(js_get_global_integer(context, "invalidBufferCaught") == 1);
-    trace_set_error(trace, 9, "programmer", "math.invalid_input_buffer");
+    trace_set_error(trace, 8, "programmer", "math.invalid_input_buffer");
 
     assert(device_binding_state_owns_screen_request(device_ctx) == false);
     assert(device_binding_state_keep_screen_on(device_ctx, true, NULL));
@@ -298,22 +298,22 @@ static void run_lua_trace(RuntimeTrace *trace)
 
     trace_init(trace);
     int capability_mask = (int)lua_get_global_number(state, "capMask");
-    for (size_t index = 0; index < 6; index++)
+    for (size_t index = 0; index < 5; index++)
         trace_set_boolean(trace, index, (capability_mask & (1 << index)) != 0);
     assert((int)lua_get_global_number(state, "deviceResult") == 3);
-    trace_set_literal(trace, 6, "[true,true]");
+    trace_set_literal(trace, 5, "[true,true]");
     float vector[3] = {
         (float)lua_get_global_number(state, "vecX"),
         (float)lua_get_global_number(state, "vecY"),
         (float)lua_get_global_number(state, "vecZ"),
     };
-    trace_set_vector(trace, 7, vector, 3);
+    trace_set_vector(trace, 6, vector, 3);
     float diagonal = (float)lua_get_global_number(state, "identityDiag");
-    trace_set_vector(trace, 8, &diagonal, 1);
+    trace_set_vector(trace, 7, &diagonal, 1);
     lua_getglobal(state, "invalidBufferCaught");
     assert(lua_toboolean(state, -1));
     lua_pop(state, 1);
-    trace_set_error(trace, 9, "programmer", "math.invalid_input_buffer");
+    trace_set_error(trace, 8, "programmer", "math.invalid_input_buffer");
 
     assert(device_binding_state_keep_screen_on(device_ctx, true, NULL));
     assert(device_is_screen_kept_on());
@@ -350,8 +350,7 @@ static const char WASM_CONFORMANCE_MODULE[] =
     "    call $cm i32.const 1 i32.shl i32.or\n"
     "    call $cu i32.const 2 i32.shl i32.or\n"
     "    call $ch i32.const 3 i32.shl i32.or\n"
-    "    call $cs i32.const 4 i32.shl i32.or\n"
-    "    call $cg i32.const 5 i32.shl i32.or)\n"
+    "    call $cs i32.const 4 i32.shl i32.or)\n"
     "  (func (export \"device\") (result i32)\n"
     "    i32.const 1 call $device\n"
     "    i32.const 0 call $device i32.const 1 i32.shl i32.or)\n"
@@ -492,26 +491,26 @@ static void run_wasmtime_trace(RuntimeTrace *trace)
 
     trace_init(trace);
     int capability_mask = wasm_call_integer(&runtime, &capabilities);
-    for (size_t index = 0; index < 6; index++)
+    for (size_t index = 0; index < 5; index++)
         trace_set_boolean(trace, index, (capability_mask & (1 << index)) != 0);
     assert(wasm_call_integer(&runtime, &device) == 3);
-    trace_set_literal(trace, 6, "[true,true]");
+    trace_set_literal(trace, 5, "[true,true]");
     wasm_call(&runtime, &math, NULL, 0, NULL, 0);
     float vector[3] = {
         wasm_load_float(&runtime, &load, 16),
         wasm_load_float(&runtime, &load, 20),
         wasm_load_float(&runtime, &load, 24),
     };
-    trace_set_vector(trace, 7, vector, 3);
+    trace_set_vector(trace, 6, vector, 3);
     float diagonal = wasm_load_float(&runtime, &load, 32) +
                      wasm_load_float(&runtime, &load, 52) +
                      wasm_load_float(&runtime, &load, 72) +
                      wasm_load_float(&runtime, &load, 92);
-    trace_set_vector(trace, 8, &diagonal, 1);
+    trace_set_vector(trace, 7, &diagonal, 1);
     wasm_call(&runtime, &invalid, NULL, 0, NULL, 0);
     const ApiError *math_error = wasm_math_binding_state_error(runtime.math_state);
     assert(math_error && math_error->status == API_STATUS_INVALID_ARGUMENT);
-    trace_set_error(trace, 9, "programmer", math_error->code);
+    trace_set_error(trace, 8, "programmer", math_error->code);
 
     assert(device_binding_state_keep_screen_on(runtime.device_ctx, true, NULL));
     assert(device_is_screen_kept_on());

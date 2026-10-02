@@ -2,6 +2,7 @@
 #define WASM_CANVAS_BINDINGS_H
 
 #include <stdbool.h>
+#include "core/graphics_activation.h"
 #include <stddef.h>
 #include <stdint.h>
 #include "graphics/skia_wrapper.h"
@@ -22,6 +23,13 @@ extern "C"
 
     SkiaCanvas *wasm_canvas_current_canvas(WasmCanvasContext *ctx);
     Window *wasm_canvas_current_window(WasmCanvasContext *ctx);
+    
+    bool wasm_canvas_exit_requested(const WasmCanvasContext *ctx, int *code);
+    
+    bool wasm_canvas_graphics_requested(const WasmCanvasContext *ctx);
+    
+    void wasm_canvas_set_graphics_activation(WasmCanvasContext *ctx,
+                                             BudoGraphicsActivateFn activate, void *opaque);
     bool wasm_canvas_read_string(WasmCanvasContext *ctx, int32_t pointer,
                                  int32_t length, char *output,
                                  size_t output_size);

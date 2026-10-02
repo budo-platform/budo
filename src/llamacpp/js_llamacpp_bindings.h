@@ -11,6 +11,8 @@ extern "C"
 #endif
     JsLlamaCppContext *js_llamacpp_init(JSContext *ctx, FileContext *files);
     void js_llamacpp_poll(JsLlamaCppContext *state);
+    
+    bool js_llamacpp_has_pending_work(JsLlamaCppContext *state);
     void js_llamacpp_cancel_all(JsLlamaCppContext *state);
     void js_llamacpp_cleanup(JsLlamaCppContext *state);
 #ifdef __cplusplus

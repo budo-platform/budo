@@ -9,10 +9,6 @@ class ShaderProgram {
         this.programId = programId
     }
 
-    use() {
-        sys.gl.use(this.programId)
-    }
-
     drawFullscreenImmediate() {
         sys.gl.drawFullscreenImmediate(this.programId);
     }

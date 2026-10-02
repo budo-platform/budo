@@ -1072,7 +1072,7 @@
             "Automatic placement cache records are keyed by the pinned llama.cpp revision, sandbox file identity and size, context size, and batch size; explicit placement bypasses the cache.",
             "CUDA and Vulkan are opt-in dynamic ggml backend profiles requiring their vendor SDK and shared-library staging beside budo."
           ],
-          "source": "src/core/main.c"
+          "source": "src/desktop/managed_desktop.c"
         },
         "web": {
           "details": [
@@ -1444,13 +1444,13 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 4,
+      "operationCount": 5,
       "platformDifferences": {
         "desktop": {
           "details": [
             "Desktop chooses JavaScript, Lua, or Wasmtime from the configured entrypoint; Wasmtime wires guest memory before optional init so init may safely call memory-dependent imports."
           ],
-          "source": "src/core/main.c"
+          "source": "src/desktop/managed_desktop.c"
         },
         "web": {
           "details": [
@@ -1465,7 +1465,7 @@
       "runtimes": {
         "browser_wasm": {
           "constantExportCount": 0,
-          "exportCount": 3,
+          "exportCount": 4,
           "namespace": [
             "guest.exports",
             "runtime"
@@ -1479,7 +1479,7 @@
         },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 2,
+          "exportCount": 3,
           "namespace": [
             "language",
             "runtime"
@@ -1496,7 +1496,7 @@
         },
         "lua": {
           "constantExportCount": 0,
-          "exportCount": 2,
+          "exportCount": 3,
           "namespace": [
             "language",
             "runtime"
@@ -1513,7 +1513,7 @@
         },
         "wasmtime": {
           "constantExportCount": 0,
-          "exportCount": 3,
+          "exportCount": 4,
           "namespace": [
             "guest.exports",
             "runtime"
@@ -1579,7 +1579,7 @@
             "Wasmtime network state is shut down before reverse subsystem teardown, while its callback environment allocation remains alive until the owning linker and store have been destroyed.",
             "Managed and Wasmtime two-instance tests use a controllable mock backend and cover a completion arriving after one peer runtime has been destroyed."
           ],
-          "source": "src/core/main.c"
+          "source": "src/desktop/managed_desktop.c"
         },
         "web": {
           "details": [
@@ -1764,7 +1764,7 @@
             "javascript",
             "lua"
           ],
-          "source": "src/core/main.c",
+          "source": "src/core/managed_subsystems.c",
           "source_symbols": [
             "neural_enabled",
             "js_neural_init",
@@ -1781,7 +1781,7 @@
           "runtimes": [
             "wasmtime"
           ],
-          "source": "src/core/main.c",
+          "source": "src/desktop/managed_desktop.c",
           "source_symbols": [
             "neural_enabled",
             "wasm_canvas_enable_neural"
@@ -1798,7 +1798,7 @@
             "javascript",
             "lua"
           ],
-          "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+          "source": "src/core/managed_subsystems.c",
           "source_symbols": [
             "neural_enabled",
             "js_neural_init",
@@ -2024,7 +2024,7 @@
           "details": [
             "The host calls managed animation callbacks and JavaScript timers explicitly; Wasmtime frame is discovered from the guest module and receives an f32 millisecond timestamp."
           ],
-          "source": "src/core/main.c"
+          "source": "src/desktop/managed_desktop.c"
         },
         "web": {
           "details": [

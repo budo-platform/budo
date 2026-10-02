@@ -135,7 +135,7 @@ MagnetoContext *lua_magneto_init(void *L_void)
     lua_newtable(L);
     lua_pushlightuserdata(L, magneto_ctx);
     luaL_setfuncs(L, magneto_funcs, 1);
-    lua_setfield(L, -2, "magneto");
+    lua_setfield(L, -2, "sensors");
 
     lua_pop(L, 1); 
 

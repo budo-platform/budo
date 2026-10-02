@@ -225,7 +225,14 @@ JsUdpContext *js_udp_init(JSContext *ctx)
 
     JSValue global = JS_GetGlobalObject(ctx);
     JSValue sys_obj = JS_GetPropertyStr(ctx, global, "sys");
-    JSValue network_obj = JS_GetPropertyStr(ctx, sys_obj, "network");
+    JSValue network_obj = JS_GetPropertyStr(ctx, sys_obj, "net");
+    if (!JS_IsObject(network_obj))
+    {
+        
+        JS_FreeValue(ctx, network_obj);
+        network_obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, sys_obj, "net", JS_DupValue(ctx, network_obj));
+    }
 
     JSValue udp_obj = JS_NewObject(ctx);
     for (size_t index = 0;
@@ -278,6 +285,18 @@ void js_udp_cleanup(JsUdpContext *state)
     udp_destroy(state->udp_ctx);
     state->udp_ctx = NULL;
     free(state);
+}
+
+bool js_udp_has_pending_work(JsUdpContext *state)
+{
+    if (!state)
+        return false;
+    for (int i = 0; i < MAX_UDP_CALLBACKS; i++)
+    {
+        if (state->callbacks_active[i])
+            return true;
+    }
+    return false;
 }
 
 void js_udp_poll(JsUdpContext *state)

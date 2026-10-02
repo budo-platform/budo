@@ -5,8 +5,10 @@ import pathlib
 import sys
 
 
+SHARED_COMPOSITION = "src/core/managed_subsystems.c"
+
 HOSTS = (
-    "src/core/main.c",
+    "src/desktop/managed_desktop.c",
     "src/web/web_main.c",
     "private/android/android/app/src/main/cpp/android_main.cpp",
 )
@@ -40,11 +42,17 @@ def main() -> int:
                 f"{registration['subsystem']}/{registration['runtime']}: "
                 f"registration symbol {symbol} missing from {registration['source']}")
 
-    for relative_path in HOSTS:
+    shared = (root / SHARED_COMPOSITION).read_text(encoding="utf-8")
+    if shared.count("subsystem_compose(") != 1:
+        errors.append(
+            f"{SHARED_COMPOSITION}: expected exactly one subsystem_compose call")
+
+    for relative_path in HOSTS + (SHARED_COMPOSITION,):
         source = (root / relative_path).read_text(encoding="utf-8")
-        if source.count("subsystem_compose(") != 1:
+        if relative_path != SHARED_COMPOSITION and \
+                source.count("managed_subsystems_compose(") != 1:
             errors.append(
-                f"{relative_path}: expected exactly one subsystem_compose call")
+                f"{relative_path}: expected exactly one managed_subsystems_compose call")
         if "subsystem_registry_register(" in source:
             errors.append(
                 f"{relative_path}: host must not register subsystems directly")

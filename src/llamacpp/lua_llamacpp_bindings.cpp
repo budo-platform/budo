@@ -363,7 +363,7 @@ static int l_devices(lua_State *L)
 {
     lua_newtable(L);
     BudoLlamaDeviceInfo devices[16];
-    size_t count = std::min(budo_llama_get_devices(devices, 16), (size_t)16);
+    size_t count = std::min(llamacpp_service_get_devices(binding(L)->service, devices, 16), (size_t)16);
     for (size_t index = 0; index < count; ++index)
     {
         lua_createtable(L, 0, 6);
@@ -399,7 +399,7 @@ static bool parse_load_options(lua_State *L, int table,
         if (device && !supported)
         {
             BudoLlamaDeviceInfo devices[16];
-            size_t count = std::min(budo_llama_get_devices(devices, 16), (size_t)16);
+            size_t count = std::min(llamacpp_service_get_devices(binding(L)->service, devices, 16), (size_t)16);
             for (size_t index = 0; index < count; ++index)
                 supported = supported || std::strcmp(device, devices[index].id) == 0;
         }
@@ -625,6 +625,11 @@ LuaLlamaCppContext *lua_llamacpp_init(void *opaque, FileContext *files)
     lua_setfield(L, -2, "llamacpp");
     lua_pop(L, 1);
     return state;
+}
+
+bool lua_llamacpp_has_pending_work(LuaLlamaCppContext *state)
+{
+    return state && !state->requests.empty();
 }
 
 void lua_llamacpp_poll(LuaLlamaCppContext *state)

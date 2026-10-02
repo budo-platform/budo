@@ -1,131 +1,70 @@
 {
-  "version": 1,
+  "version": 2,
+  "shared": {
+    "source": "src/core/managed_subsystems.c",
+    "register_function": "MANAGED_SUBSYSTEM",
+    "compose_function": "managed_subsystems_compose",
+    "runtimes": {
+      "javascript": [
+        "JavaScript core",
+        "JavaScript canvas",
+        "JavaScript audio",
+        "JavaScript SQLite",
+        "JavaScript file",
+        "JavaScript llama.cpp",
+        "JavaScript network",
+        "JavaScript magnetometer",
+        "JavaScript device",
+        "JavaScript UDP",
+        "RTP-MIDI",
+        "JavaScript MIDI",
+        "JavaScript neural"
+      ],
+      "lua": [
+        "Lua canvas",
+        "Lua audio",
+        "Lua SQLite",
+        "Lua file",
+        "Lua llama.cpp",
+        "Lua network",
+        "Lua magnetometer",
+        "Lua device",
+        "Lua UDP",
+        "RTP-MIDI",
+        "Lua MIDI",
+        "Lua neural"
+      ]
+    },
+    "poll": {
+      "JavaScript file": "managed_js_file_poll",
+      "JavaScript llama.cpp": "managed_js_llamacpp_poll",
+      "JavaScript network": "managed_js_network_poll",
+      "JavaScript UDP": "js_udp_poll_adapter",
+      "JavaScript MIDI": "managed_js_midi_poll",
+      "Lua llama.cpp": "managed_lua_llamacpp_poll",
+      "Lua network": "managed_lua_network_poll",
+      "Lua UDP": "lua_udp_poll_adapter",
+      "Lua MIDI": "managed_lua_midi_poll"
+    }
+  },
   "hosts": {
     "desktop": {
-      "source": "src/core/main.c",
+      "source": "src/desktop/managed_desktop.c",
       "register_function": "RUNTIME_SUBSYSTEM",
       "runtimes": {
-        "javascript": [
-          "JavaScript canvas",
-          "JavaScript audio",
-          "JavaScript SQLite",
-          "JavaScript file",
-          "JavaScript llama.cpp",
-          "JavaScript network",
-          "JavaScript magnetometer",
-          "JavaScript device",
-          "JavaScript UDP",
-          "RTP-MIDI",
-          "JavaScript MIDI",
-          "JavaScript neural"
-        ],
-        "lua": [
-          "Lua canvas",
-          "Lua audio",
-          "Lua SQLite",
-          "Lua file",
-          "Lua llama.cpp",
-          "Lua network",
-          "Lua magnetometer",
-          "Lua device",
-          "Lua UDP",
-          "RTP-MIDI",
-          "Lua MIDI",
-          "Lua neural"
-        ],
         "wasmtime": [
           "WebAssembly canvas"
         ]
       },
       "poll": {
-        "JavaScript file": "managed_js_file_poll",
-        "JavaScript llama.cpp": "managed_js_llamacpp_poll",
-        "JavaScript network": "managed_js_network_poll",
-        "JavaScript UDP": "js_udp_poll_adapter",
-        "JavaScript MIDI": "managed_js_midi_poll",
-        "Lua llama.cpp": "managed_lua_llamacpp_poll",
-        "Lua network": "managed_lua_network_poll",
-        "Lua UDP": "lua_udp_poll_adapter",
-        "Lua MIDI": "managed_lua_midi_poll"
+        "WebAssembly canvas": "wasm_canvas_poll_adapter"
       }
     },
     "web": {
-      "source": "src/web/web_main.c",
-      "register_function": "WEB_SUBSYSTEM",
-      "runtimes": {
-        "javascript": [
-          "JavaScript canvas",
-          "JavaScript audio",
-          "JavaScript MIDI",
-          "JavaScript network",
-          "JavaScript SQLite",
-          "JavaScript file",
-          "JavaScript magnetometer",
-          "JavaScript device"
-        ],
-        "lua": [
-          "Lua canvas",
-          "Lua audio",
-          "Lua MIDI",
-          "Lua network",
-          "Lua SQLite",
-          "Lua file",
-          "Lua magnetometer",
-          "Lua device"
-        ]
-      },
-      "poll": {
-        "JavaScript MIDI": "managed_js_midi_poll",
-        "JavaScript network": "managed_js_network_poll",
-        "JavaScript file": "managed_js_file_poll",
-        "Lua MIDI": "managed_lua_midi_poll",
-        "Lua network": "managed_lua_network_poll"
-      }
+      "source": "src/web/web_main.c"
     },
     "android": {
-      "source": "private/android/android/app/src/main/cpp/android_main.cpp",
-      "register_function": "ANDROID_SUBSYSTEM",
-      "runtimes": {
-        "javascript": [
-          "JavaScript canvas",
-          "JavaScript audio",
-          "JavaScript SQLite",
-          "JavaScript file",
-          "JavaScript llama.cpp",
-          "JavaScript network",
-          "JavaScript magnetometer",
-          "JavaScript device",
-          "JavaScript UDP",
-          "RTP-MIDI",
-          "JavaScript MIDI",
-          "Neural"
-        ],
-        "lua": [
-          "Lua canvas",
-          "Lua audio",
-          "Lua SQLite",
-          "Lua file",
-          "Lua llama.cpp",
-          "Lua network",
-          "Lua magnetometer",
-          "Lua device",
-          "Lua UDP",
-          "RTP-MIDI",
-          "Lua MIDI",
-          "Neural"
-        ]
-      },
-      "poll": {
-        "JavaScript file": "managed_js_file_poll",
-        "JavaScript llama.cpp": "managed_js_llamacpp_poll",
-        "JavaScript network": "managed_js_network_poll",
-        "JavaScript UDP": "android_js_udp_poll",
-        "JavaScript MIDI": "managed_js_midi_poll",
-        "Lua llama.cpp": "managed_lua_llamacpp_poll",
-        "Lua network": "managed_lua_network_poll",
-        "Lua UDP": "android_lua_udp_poll",
-        "Lua MIDI": "managed_lua_midi_poll"
-      }
+      "source": "private/android/android/app/src/main/cpp/android_main.cpp"
     }
   }
 }

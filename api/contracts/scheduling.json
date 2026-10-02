@@ -94,7 +94,7 @@
             ]
         },
         "desktop": {
-            "source": "src/core/main.c",
+            "source": "src/desktop/managed_desktop.c",
             "details": [
                 "The host calls managed animation callbacks and JavaScript timers explicitly; Wasmtime frame is discovered from the guest module and receives an f32 millisecond timestamp."
             ]

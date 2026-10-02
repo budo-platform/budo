@@ -48,6 +48,8 @@ extern "C"
     const BudoBuildIdentity *budo_host_build_identity(const BudoHost *host);
     const BudoInput *budo_host_input(const BudoHost *host);
 
+    void budo_host_request_exit(BudoHost *host, int exit_code);
+
 #ifdef __cplusplus
 }
 #endif

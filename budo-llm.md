@@ -181,6 +181,8 @@ sys.input.get(); sys.input.isKeyDown(scancode); sys.input.isKeyPressed(scancode)
 
 `sys.input.get()` creates a fresh aggregate JS object; call it once per frame and pass that snapshot through update/render. Its `focused` field means **host window focus**, not editor/widget focus; track widget focus separately and use window focus only to pause/blur as intended.
 
+Window-less apps: the window (web canvas, Android surface) opens only on the first graphics call (`sys.canvas`, `sys.gl`, `sys.window`, `sys.animation`, `sys.input`, ...), even from a later timer. An app that never uses graphics shows nothing and ends once no timers, promise jobs, fetches, UDP/MIDI listeners, file pickers, or llama.cpp requests remain. `sys.exit(code = 0)` ends any app at once with that status (`budo run` exit status; web dispatches a `budoexit` event with `detail.code`). Load errors exit with 1.
+
 Width/height, pointer, canvas, and `u_resolution` are matching physical pixels; density scales only authored constants (e.g. `margin=16*density`, `fontSize=18*density`, `hitRadius=Math.max(visualRadius,22*density)`). On resize, recompute UI, resize targets, and clamp or preserve relative placement (`x*=newWidth/oldWidth`) without recreating unrelated state. Measure text; no automatic layout/wrap.
 
 `sys.input.get()` shape:
@@ -302,7 +304,7 @@ sys.gl.bindCanvasTexture(program,'u_ui',surface,1); shader.canvasTexture('u_ui',
 
 A render target exposes its color texture through the target ID. Sample it with `shader.renderTargetTexture(name,targetId,unit)` (or numeric `bindTexture`); `shader.texture()` is for ordinary texture IDs/CanvasTexture, not render-target IDs. `depth=true` adds an internal depth renderbuffer for testing, not a sampleable depth texture/`target.depth`; encode linear depth into a color channel for depth post-processing. Shaders come from project-relative files or ArrayBuffer-backed `create*FromBuffer`; there is no inline pipeline-description API.
 
-Render-target color persists across frames and Budo exposes no `sys.gl.clear`; clear it with a fullscreen/region pass whose fragment shader outputs the clear color, e.g. `clearShader.drawRegion(0,0,w,h,targetId)`. Create/resize targets only with positive dimensions. Each depth-tested mesh draw to an offscreen depth target currently clears that target's depth before drawing, so separate draws do not depth-occlude one another. Batch mutually occluding objects into one indexed draw or design passes so cross-draw depth is unnecessary.
+Render-target color persists across frames and Budo exposes no `sys.gl.clear`; clear it with a fullscreen/region pass whose fragment shader outputs the clear color, e.g. `clearShader.drawRegion(0,0,w,h,targetId)`. Create/resize targets only with positive dimensions. `drawMesh` without `target` draws into the render target selected by `sys.gl.bindRenderTarget(rt)`, otherwise to the screen; `target: -1` forces the screen. Each depth-tested mesh draw to an offscreen depth target currently clears that target's depth before drawing, so separate draws do not depth-occlude one another. Batch mutually occluding objects into one indexed draw or design passes so cross-draw depth is unnecessary.
 
 Multi-pass order is explicit: draw source texture → target A; bind A to pass B with `renderTargetTexture`; draw B → target B; draw/flush transparent canvas; bind screen; final shader samples target B plus built-in `u_canvas`. Before/after mode should feed the chosen source/effect texture into the same final HUD compositor, not bypass it. Resize existing render targets with `resizeRenderTarget()`; do not destroy/recreate unchanged programs/source textures on every window resize. A fullscreen pass overwrites every target pixel, so no separate color-clear pass is needed when that pass is guaranteed to cover the full target.
 
@@ -518,6 +520,7 @@ Arrays/lists are 1-based Lua tables.
 No sys.timer. No sys.graphics/CanvasTexture.
 Lua `sys.input` supports the same committed text, textEdit, composition, and start/update/stopTextInput session contract as JS.
 sys.animation.start(callback) aliases requestFrame.
+sys.exit(code) sets the status; the app ends after the current script or callback returns.
 fetch(url, callback) or fetch(url, options, callback); callback(response,error).
 response table: status,statusText,ok,url,redirected,headers,body,bodyLen.
 json_parse(jsonString) returns Lua table.
@@ -538,7 +541,7 @@ Lua `sys.gl` includes: `createProgram`, `createProgramFromBuffer`, `destroyProgr
 
 ## WebAssembly runtime
 
-WASM runs through Wasmtime. Imports are from module `env`. Exports: optional `init`, recommended `frame(timestamp:f32)`, optional `memory`. `init` runs once; `frame` runs per frame. String-backed host calls require exported memory, but current runtime resolves exported `memory` after `init`; therefore do string-backed calls from `frame` or later, not `init`.
+WASM runs through Wasmtime. Imports are from module `env`. Exports: optional `init`, recommended `frame(timestamp:f32)`, optional `memory`. `init` runs once; `frame` runs per frame. A module without `frame` that never draws runs `init` without a window and ends. Import `app_exit(i32)` ends the app with that status (it traps to stop the module). String-backed host calls require exported memory, but current runtime resolves exported `memory` after `init`; therefore do string-backed calls from `frame` or later, not `init`.
 
 Numeric-only imports can be used in `init`: drawing shapes, transforms, scalar input/window, math, capability probes. String-backed calls needing memory include GL program/uniform names, DB, file, SVG, UDP host strings, network, raw MIDI/RTP-MIDI strings, neural strings, text draw/measure.
 

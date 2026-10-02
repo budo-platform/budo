@@ -36,18 +36,35 @@ MANUAL_POLLS = {
 
 
 def registered_names(source, function):
-    pattern = re.compile(rf"\b{re.escape(function)}\s*\(\s*(?:runtime\s*,\s*)?\"([^\"]+)\"")
+    # MANAGED_SUBSYSTEM_BUSY declares the same registration plus pending work.
+    pattern = re.compile(rf"\b{re.escape(function)}(?:_BUSY)?\s*\(\s*\"([^\"]+)\"")
     return pattern.findall(source)
 
 
 def registration_arguments(source, function, name):
+    # Descriptor macro arguments are plain identifiers and constants, so the
+    # invocation ends at its first closing parenthesis.
     pattern = re.compile(
-        rf"\b{re.escape(function)}\s*\(\s*(?:runtime\s*,\s*)?"
-        rf"\"{re.escape(name)}\"\s*,(?P<arguments>.*?)\)\s*\)",
-        re.DOTALL,
-    )
+        rf"\b{re.escape(function)}(?:_BUSY)?\s*\(\s*\"{re.escape(name)}\"\s*,(?P<arguments>[^)]*)\)")
     match = pattern.search(source)
     return match.group("arguments") if match else ""
+
+
+def check_table(errors, label, source, function, runtimes, polls):
+    actual = Counter(registered_names(source, function))
+    expected = Counter(name for names in runtimes.values() for name in names)
+    if actual != expected:
+        missing = sorted((expected - actual).elements())
+        extra = sorted((actual - expected).elements())
+        if missing:
+            errors.append(f"{label}: missing registrations: {', '.join(missing)}")
+        if extra:
+            errors.append(f"{label}: unmanifested registrations: {', '.join(extra)}")
+
+    for name, poll_adapter in polls.items():
+        arguments = registration_arguments(source, function, name)
+        if not re.search(rf"\b{re.escape(poll_adapter)}\b", arguments):
+            errors.append(f"{label}: {name} missing poll adapter {poll_adapter}")
 
 
 def main():
@@ -55,43 +72,33 @@ def main():
     manifest_path = root / "api" / "managed-lifecycle.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     errors = []
-    if manifest.get("version") != 1:
-        errors.append("managed lifecycle manifest version must be 1")
+    if manifest.get("version") != 2:
+        errors.append("managed lifecycle manifest version must be 2")
 
+    shared = manifest.get("shared", {})
+    shared_source = (root / shared["source"]).read_text(encoding="utf-8")
+    check_table(errors, "shared", shared_source, shared["register_function"],
+                shared.get("runtimes", {}), shared.get("poll", {}))
+    if "subsystem_compose(" not in shared_source:
+        errors.append("shared: tables are not composed through subsystem_compose")
+
+    compose_call = shared["compose_function"] + "("
     for host, details in manifest.get("hosts", {}).items():
-        source_path = root / details["source"]
-        source = source_path.read_text(encoding="utf-8")
-        function = details["register_function"]
-        actual = Counter(registered_names(source, function))
-        expected = Counter(
-            name
-            for names in details.get("runtimes", {}).values()
-            for name in names
-        )
-        if actual != expected:
-            missing = sorted((expected - actual).elements())
-            extra = sorted((actual - expected).elements())
-            if missing:
-                errors.append(f"{host}: missing registrations: {', '.join(missing)}")
-            if extra:
-                errors.append(f"{host}: unmanifested registrations: {', '.join(extra)}")
-
-        for name, poll_adapter in details.get("poll", {}).items():
-            arguments = registration_arguments(source, function, name)
-            if not arguments or poll_adapter not in arguments:
-                errors.append(
-                    f"{host}: {name} missing poll adapter {poll_adapter}"
-                )
-
-        if "subsystem_registry_shutdown" not in source:
+        source = (root / details["source"]).read_text(encoding="utf-8")
+        if "register_function" in details:
+            check_table(errors, host, source, details["register_function"],
+                        details.get("runtimes", {}), details.get("poll", {}))
+        if source.count(compose_call) != 1:
+            errors.append(f"{host}: expected exactly one {compose_call}...) call")
+        if "managed_runtime_shutdown(" not in source:
             errors.append(f"{host}: missing registry shutdown")
-        if host in ("desktop", "android") and "subsystem_registry_poll" not in source:
+        if "managed_runtime_frame(" not in source:
             errors.append(f"{host}: missing registry poll dispatch")
         for call in MANUAL_POLLS.get(host, ()):
             if call in source:
                 errors.append(f"{host}: manual poll bypass remains: {call}")
 
-    desktop = (root / "src" / "core" / "main.c").read_text(encoding="utf-8")
+    desktop = (root / "src" / "desktop" / "managed_desktop.c").read_text(encoding="utf-8")
     for field in ("pause", "resume", "context_lost"):
         if not re.search(rf"\.{field}\s*=\s*runtime_adapter_{field}", desktop):
             errors.append(f"desktop: ApplicationDriver does not forward {field}")

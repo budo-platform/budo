@@ -114,6 +114,21 @@ void subsystem_registry_shutdown(SubsystemRegistry *registry)
             registry->entries[i - 1].context);
 }
 
+bool subsystem_registry_has_pending_work(const SubsystemRegistry *registry)
+{
+    size_t i;
+
+    if (!registry || registry->shutdown_called)
+        return false;
+    for (i = 0; i < registry->count; i++)
+    {
+        const SubsystemRegistryEntry *entry = &registry->entries[i];
+        if (entry->ops.has_pending_work && entry->ops.has_pending_work(entry->context))
+            return true;
+    }
+    return false;
+}
+
 size_t subsystem_registry_count(const SubsystemRegistry *registry)
 {
     return registry ? registry->count : 0;

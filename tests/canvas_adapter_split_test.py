@@ -5,8 +5,10 @@ import sys
 
 
 ADAPTERS = {
+    # JavaScript transforms are part of sys.canvas (see js_canvas_bindings.c);
+    # only the GL surface is split out.
     "javascript": ("src/graphics/js_canvas_bindings.c", 3200,
-           ("js_transform_register", "js_gl_register")),
+           ("js_gl_register",)),
     "lua": ("src/graphics/lua_canvas_bindings.c", 2000,
         ("lua_transform_register", "lua_gl_register")),
     "wasmtime": ("src/graphics/wasm_canvas_bindings.c", 2500,

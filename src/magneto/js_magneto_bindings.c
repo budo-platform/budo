@@ -210,7 +210,7 @@ MagnetoContext *js_magneto_init(JSContext *ctx)
         }
     }
 
-    JS_SetPropertyStr(ctx, sys_obj, "magneto", magneto_obj);
+    JS_SetPropertyStr(ctx, sys_obj, "sensors", magneto_obj);
     JS_FreeValue(ctx, sys_obj);
     JS_FreeValue(ctx, global);
 

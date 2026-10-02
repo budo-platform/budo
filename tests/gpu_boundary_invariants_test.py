@@ -11,6 +11,12 @@ BACKENDS = (
     Path("src/web/web_window.c"),
     Path("private/android/android/app/src/main/cpp/android_window.c"),
 )
+# Shared backend sources each window backend must include; their contents are
+# checked as part of the backend, as the compiler sees them.
+SHARED_INCLUDES = (
+    "graphics/gl_window_types.inc",
+    "graphics/gl_window_resources.inc",
+)
 ALLOWED_FLUSH_FUNCTIONS = {
     "flush_canvas_texture_transition",
     "flush_skia_canvas_transition",
@@ -45,6 +51,11 @@ def main():
     errors = []
     for relative in BACKENDS:
         source = (root / relative).read_text(encoding="utf-8")
+        for include in SHARED_INCLUDES:
+            if f'#include "{include}"' not in source:
+                errors.append(f"{relative}: missing shared backend include {include}")
+            else:
+                source += "\n" + (root / "src" / include).read_text(encoding="utf-8")
         scan_source = strip_comments(source)
         if '#include "graphics/gl_state_guard_gl.inc"' not in source:
             errors.append(f"{relative}: missing shared GL transition guard")

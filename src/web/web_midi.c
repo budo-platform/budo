@@ -33,6 +33,7 @@ struct MidiContext
 };
 
 static MidiContext *g_midi_web_ctx = NULL;
+static int g_midi_web_ctx_refs = 0;
 
 EM_JS(int, js_hw_midi_init, (void), {
     if (Module._hw_midi)
@@ -341,13 +342,17 @@ void web_midi_on_sysex(int handle, const uint8_t *data, int length)
 MidiContext *midi_create(void)
 {
     if (g_midi_web_ctx)
+    {
+        g_midi_web_ctx_refs++;
         return g_midi_web_ctx;
+    }
 
     MidiContext *ctx = (MidiContext *)calloc(1, sizeof(MidiContext));
     if (!ctx)
         return NULL;
 
     g_midi_web_ctx = ctx;
+    g_midi_web_ctx_refs = 1;
 
     js_hw_midi_init();
 
@@ -357,6 +362,8 @@ MidiContext *midi_create(void)
 void midi_destroy(MidiContext *ctx)
 {
     if (!ctx)
+        return;
+    if (ctx == g_midi_web_ctx && --g_midi_web_ctx_refs > 0)
         return;
 
     for (int i = 0; i < MIDI_MAX_DEVICES; i++)
@@ -371,7 +378,10 @@ void midi_destroy(MidiContext *ctx)
     free(ctx);
 
     if (g_midi_web_ctx == ctx)
+    {
         g_midi_web_ctx = NULL;
+        g_midi_web_ctx_refs = 0;
+    }
 }
 
 int midi_get_input_count(MidiContext *ctx)

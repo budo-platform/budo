@@ -16,6 +16,8 @@ extern "C"
     NetworkContext *lua_network_context(LuaNetworkContext *state);
 
     void lua_network_poll(LuaNetworkContext *state);
+    
+    bool lua_network_has_pending_work(LuaNetworkContext *state);
 
     void lua_network_cleanup(LuaNetworkContext *state);
 

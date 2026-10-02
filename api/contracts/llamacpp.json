@@ -44,7 +44,7 @@
     },
     "unsupported_runtimes": {
         "wasmtime": {
-            "source": "src/core/main.c",
+            "source": "src/desktop/managed_desktop.c",
             "registration_symbol": "runtime_wasm_subsystems",
             "platforms": [
                 "desktop",
@@ -152,7 +152,7 @@
     },
     "platform_differences": {
         "desktop": {
-            "source": "src/core/main.c",
+            "source": "src/desktop/managed_desktop.c",
             "details": [
                 "CPU is mandatory; Metal is compiled on macOS.",
                 "Models are opened through FileContext using no-follow traversal and passed to llama.cpp as caller-owned FILE streams.",

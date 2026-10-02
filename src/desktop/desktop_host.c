@@ -8,6 +8,8 @@ int desktop_host_run(Window *window, InputState *input,
 
     while (window_poll_events(window, input))
     {
+        if (application->keep_running && !application->keep_running(application->context))
+            break;
         ApplicationDriver *driver;
         double now = window_get_time(window);
         double timestamp_ms = now * 1000.0;

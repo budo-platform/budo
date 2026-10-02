@@ -1,3 +1,5 @@
+/// <reference path="../../budo.d.ts" />
+
 /**
  * Network Demo
  *
@@ -38,7 +40,7 @@ function loadPosts() {
                 return;
             }
 
-            state.posts = response.json();
+            state.posts = JSON.parse(response.text());// this one does not work: response.json();
             state.fetchTime = sys.input.get().totalTime - startTime;
             state.status = 'loaded';
             sys.log(`Fetched ${state.posts.length} posts in ${state.fetchTime.toFixed(2)}s`);
@@ -249,7 +251,7 @@ function handleInput(input, width, height) {
     // Scroll
     if (mouse.wheelY) {
         const maxScroll = Math.max(0, state.posts.length * (CARD_HEIGHT + CARD_GAP) - (height - HEADER_HEIGHT - PADDING * 2));
-        state.scrollY = Math.max(0, Math.min(maxScroll, state.scrollY + mouse.wheelY * 40));
+        state.scrollY = Math.max(0, Math.min(maxScroll, state.scrollY - mouse.wheelY * 40));
     }
 
     // Hover detection on posts

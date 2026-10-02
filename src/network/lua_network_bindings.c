@@ -523,7 +523,7 @@ LuaNetworkContext *lua_network_init(void *L_void, const char *project_dir)
     lua_newtable(L);
     lua_rawgeti(L, LUA_REGISTRYINDEX, state->token_ref);
     luaL_setfuncs(L, network_funcs, 1);
-    lua_setfield(L, -2, "network");
+    lua_setfield(L, -2, "net");
 
     lua_pop(L, 1); 
 
@@ -548,6 +548,18 @@ LuaNetworkContext *lua_network_init(void *L_void, const char *project_dir)
 NetworkContext *lua_network_context(LuaNetworkContext *state)
 {
     return state ? state->network_ctx : NULL;
+}
+
+bool lua_network_has_pending_work(LuaNetworkContext *state)
+{
+    if (!state || state->shutting_down || !state->pending)
+        return false;
+    for (int i = 0; i < MAX_LUA_PENDING_FETCHES; i++)
+    {
+        if (state->pending[i].active)
+            return true;
+    }
+    return false;
 }
 
 void lua_network_poll(LuaNetworkContext *state)

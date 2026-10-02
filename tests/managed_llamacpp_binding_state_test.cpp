@@ -137,6 +137,10 @@ static void lua_assert_available(LuaLlamaRuntime &runtime)
 
 int main()
 {
+    JsLlamaRuntime js_unused;
+    js_runtime_create(js_unused, ".");
+    js_runtime_destroy(js_unused);
+
     JsLlamaRuntime js_a, js_b;
     js_runtime_create(js_a, ".");
     js_runtime_create(js_b, ".");
@@ -145,6 +149,10 @@ int main()
     js_runtime_destroy(js_b);
     js_assert_available(js_a);
     js_runtime_destroy(js_a);
+
+    LuaLlamaRuntime lua_unused;
+    lua_runtime_create(lua_unused, ".");
+    lua_runtime_destroy(lua_unused);
 
     LuaLlamaRuntime lua_a, lua_b;
     lua_runtime_create(lua_a, ".");

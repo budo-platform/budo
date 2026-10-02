@@ -21,6 +21,8 @@ extern "C"
     void js_file_cleanup(JsFileContext *state);
 
     void js_file_poll(JsFileContext *state);
+    
+    bool js_file_has_pending_work(JsFileContext *state);
 
     JsFileBridgeToken js_file_bridge_token(const JsFileContext *state);
 

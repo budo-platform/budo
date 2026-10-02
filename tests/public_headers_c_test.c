@@ -32,7 +32,7 @@ int main(void)
     assert(BUDO_GRAPHICS_FEATURE_RENDER_TARGET_RGBA8 != 0);
     assert(BUDO_GRAPHICS_FEATURE_FULLSCREEN_PASSES != 0);
     assert(BUDO_GRAPHICS_FEATURE_REGION_PASSES != 0);
-    assert(BUDO_NATIVE_API_VERSION_MINOR == 4u);
+    assert(BUDO_NATIVE_API_VERSION_MINOR == 5u);
     assert(BUDO_GPU_BUFFER_VERTEX == 0);
     assert(graphics.struct_size > 0 && draw.struct_size > 0);
     return 0;

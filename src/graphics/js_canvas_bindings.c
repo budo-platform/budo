@@ -46,10 +46,13 @@ JSGraphicContext *js_graphic_context(JSContext *ctx, JSValueConst *func_data)
     if (data && size == sizeof(graphic_ctx))
         memcpy(&graphic_ctx, data, size);
 
+    if (graphic_ctx)
+        budo_graphics_activation_request(&graphic_ctx->activation);
+
     return graphic_ctx;
 }
 
-static const JsGraphicFunction js_canvas_texture_funcs[3];
+static const JsGraphicFunction js_canvas_texture_funcs[2];
 
 typedef struct
 {
@@ -440,7 +443,7 @@ static JSValue op_canvas_draw_point(JSContext *ctx, SkiaCanvas *canvas, SkiaPain
 
 static JSValue op_canvas_measure_text(JSContext *ctx, SkiaFont *font, int argc, JSValue *argv)
 {
-    if (!font || argc < 1)
+    if (argc < 1)
         return JS_NewFloat64(ctx, 0.0);
 
     const char *text = JS_ToCString(ctx, argv[0]);
@@ -458,7 +461,7 @@ static JSValue op_canvas_measure_text(JSContext *ctx, SkiaFont *font, int argc, 
 
 static JSValue op_canvas_measure_text_rect(JSContext *ctx, SkiaFont *font, int argc, JSValue *argv)
 {
-    if (!font || argc < 1)
+    if (argc < 1)
     {
         JSValue obj = JS_NewObject(ctx);
         JS_SetPropertyStr(ctx, obj, "width", JS_NewFloat64(ctx, 0.0));
@@ -2774,7 +2777,7 @@ JSGraphicContext *js_graphic_init(JSRuntimeContext *ctx)
     JSValue global = JS_GetGlobalObject(ctx->context);
     JSValue sys_obj = JS_GetPropertyStr(ctx->context, global, "sys");
 
-    JSValue canvas_obj = ADD_SYS_OBJECT_MEMBER(sys_obj, "canvas", js_sys_canvas_funcs);
+    ADD_SYS_OBJECT_MEMBER(sys_obj, "canvas", js_sys_canvas_funcs);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "path", js_sys_path_funcs);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "svg", js_sys_svg_funcs);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "font", js_sys_font_funcs);

@@ -10,10 +10,8 @@
 #include "core/input.h"
 #include "core/app_entrypoint.h"
 #include "core/app_metadata.h"
-#include "core/managed_basics.h"
 #include "core/managed_runtime.h"
-#include "core/managed_subsystem_adapters.h"
-#include "core/subsystem_composition.h"
+#include "core/managed_subsystems.h"
 #include "core/subsystem_registry.h"
 #include "graphics/skia_wrapper.h"
 #include "graphics/js_canvas_bindings.h"
@@ -47,14 +45,6 @@ EM_JS(void, js_hw_lock_orientation, (const char *orientation_cstr), {
     screen.orientation.lock(orientation).catch(function(){});
 });
 
-typedef enum
-{
-    RT_JAVASCRIPT,
-    RT_LUA,
-    RT_WEBASSEMBLY,
-    RT_NONE
-} RuntimeType;
-
 static const char *detect_js_entrypoint(void)
 {
     AppEntrypoint entrypoint;
@@ -64,27 +54,28 @@ static const char *detect_js_entrypoint(void)
                : NULL;
 }
 
-static RuntimeType detect_runtime(void)
+static bool detect_runtime(ManagedRuntimeKind *kind)
 {
     AppEntrypoint entrypoint;
     char error[256];
     if (!app_entrypoint_resolve("/", APP_ENTRYPOINT_JAVASCRIPT | APP_ENTRYPOINT_LUA | APP_ENTRYPOINT_WEBASSEMBLY,
                                 &entrypoint, error, sizeof(error)))
     {
-        if (error[0] && strstr(error, "Ambiguous"))
+        if (strstr(error, "Ambiguous"))
             fprintf(stderr, "budo-web: %s\n", error);
-        return RT_NONE;
+        else
+            fprintf(stderr, "budo-web: No main.ts, main.js, main.lua, main.wat, or main.wasm found in virtual FS.\n"
+                            "budo-web: Preload project files with --preload-file.\n");
+        return false;
     }
-    return entrypoint.runtime == APP_ENTRYPOINT_JAVASCRIPT ? RT_JAVASCRIPT
-           : entrypoint.runtime == APP_ENTRYPOINT_LUA      ? RT_LUA
-                                                           : RT_WEBASSEMBLY;
+    return managed_runtime_kind_from_entrypoint(entrypoint.runtime, kind);
 }
 
 typedef struct
 {
     SubsystemRegistry subsystems;
 
-    RuntimeType runtime_type;
+    ManagedRuntimeKind runtime_kind;
     AppMetadata metadata;
     bool managed_shutdown_called;
     const char *js_entrypoint;
@@ -93,197 +84,97 @@ typedef struct
     SkiaPath *wasm_paths[1024];
     int wasm_path_count;
 
-    Window *window;
+    Window *window; 
     InputState input;
 
     ManagedRuntimeCommon common_contexts;
+
+    bool graphics_failed;
+    bool wasm_started;        
+    bool wasm_exit_requested; 
+    int wasm_exit_code;
+    bool finished;
 } AppState;
 
 static AppState g_state;
 
-#define WEB_SUBSYSTEM(name_, role_, initialize_, poll_, cleanup_, optional_) \
-    {                                                                        \
-        name_, role_, initialize_, {.poll = poll_, .cleanup = cleanup_}, optional_}
-
-static void *web_init_js_core(void *opaque)
+static ManagedFrameContext web_frame_context(AppState *state)
 {
-    AppState *state = opaque;
-    state->common_contexts.js_ctx = js_runtime_create("/");
-    return state->common_contexts.js_ctx;
+    ManagedFrameContext frame = {
+        .canvas = window_get_canvas(state->window),
+        .window = state->window,
+        .input = &state->input,
+        .display_density = window_get_dpi_scale(state->window),
+    };
+    window_get_size(state->window, &frame.width, &frame.height);
+    return frame;
 }
 
-static void *web_init_js_canvas(void *opaque)
+EM_JS(void, js_web_set_canvas_visible, (int visible), {
+    var canvas = document.getElementById('canvas');
+    if (!canvas) return;
+    if (visible) canvas.style.removeProperty('display');
+    else canvas.style.display = 'none';
+});
+
+EM_JS(void, js_web_report_exit, (int code), {
+    Module.budoExitStatus = code;
+    if (typeof dispatchEvent === 'function' && typeof CustomEvent === 'function')
+        dispatchEvent(new CustomEvent('budoexit', {detail: {code: code}}));
+});
+
+static void web_activate_graphics(void *opaque)
 {
-    AppState *state = opaque;
-    state->common_contexts.js_graphic_ctx = js_graphic_init(state->common_contexts.js_ctx);
-    return state->common_contexts.js_graphic_ctx;
+    (void)opaque;
+    if (!g_state.window && !g_state.graphics_failed)
+    {
+        WindowConfig window_config = {
+            .title = g_state.metadata.name,
+            .project_dir = "/",
+            .width = 0,  
+            .height = 0, 
+            .resizable = true,
+            .fullscreen = false,
+            .vsync = true};
+
+        js_web_set_canvas_visible(1);
+        g_state.window = window_create(&window_config);
+        if (!g_state.window)
+        {
+            fprintf(stderr, "budo-web: Failed to create window\n");
+            js_web_set_canvas_visible(0);
+            g_state.graphics_failed = true;
+            return;
+        }
+    }
+    if (g_state.window && g_state.runtime_kind != MANAGED_RUNTIME_WEBASSEMBLY)
+    {
+        ManagedFrameContext frame = web_frame_context(&g_state);
+        managed_runtime_set_frame_context(g_state.runtime_kind, &g_state.common_contexts, &frame);
+    }
 }
 
-static void *web_init_js_audio(void *opaque)
+static Window *web_graphics_window(void)
 {
-    AppState *state = opaque;
-    state->common_contexts.js_audio_ctx = js_audio_init(state->common_contexts.js_ctx->context, "/");
-    return state->common_contexts.js_audio_ctx;
+    if (!g_state.window)
+        web_activate_graphics(NULL);
+    return g_state.window;
 }
 
-static void *web_init_js_midi(void *opaque)
+static bool web_compose_subsystems(ManagedRuntimeKind kind)
 {
-    AppState *state = opaque;
-    state->common_contexts.js_midi_ctx = js_midi_init(state->common_contexts.js_ctx->context);
-    return state->common_contexts.js_midi_ctx;
-}
-
-static void *web_init_js_network(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.js_network_ctx = js_network_init(state->common_contexts.js_ctx->context, "/");
-    state->common_contexts.net_ctx = js_network_context(state->common_contexts.js_network_ctx);
-    if (state->common_contexts.net_ctx)
-        web_network_set_context(state->common_contexts.net_ctx);
-    return state->common_contexts.js_network_ctx;
-}
-
-static void *web_init_js_sqlite(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.sqlite_ctx = js_sqlite_init(state->common_contexts.js_ctx->context, "/db");
-    return state->common_contexts.sqlite_ctx;
-}
-
-static void *web_init_js_file(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.js_file_ctx = js_file_init(state->common_contexts.js_ctx->context, "/");
-    state->common_contexts.file_ctx = js_file_context(state->common_contexts.js_file_ctx);
-    if (state->common_contexts.file_ctx)
-        file_set_write_root(state->common_contexts.file_ctx, "/files");
-    return state->common_contexts.js_file_ctx;
-}
-
-static void *web_init_js_magneto(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.magneto_ctx = js_magneto_init(state->common_contexts.js_ctx->context);
-    return state->common_contexts.magneto_ctx;
-}
-
-static void *web_init_js_device(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.device_ctx = managed_basics_init_js(state->common_contexts.js_ctx->context);
-    return state->common_contexts.device_ctx;
-}
-
-static void *web_init_lua_canvas(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.lua_ctx = lua_canvas_create("/");
-    return state->common_contexts.lua_ctx;
-}
-
-static void *web_init_lua_audio(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.lua_audio_ctx = lua_audio_init(state->common_contexts.lua_ctx->L, "/");
-    return state->common_contexts.lua_audio_ctx;
-}
-
-static void *web_init_lua_midi(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.lua_midi_ctx = lua_midi_init(state->common_contexts.lua_ctx->L);
-    return state->common_contexts.lua_midi_ctx;
-}
-
-static void *web_init_lua_network(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.lua_network_ctx = lua_network_init(state->common_contexts.lua_ctx->L, "/");
-    state->common_contexts.net_ctx = lua_network_context(state->common_contexts.lua_network_ctx);
-    if (state->common_contexts.net_ctx)
-        web_network_set_context(state->common_contexts.net_ctx);
-    return state->common_contexts.lua_network_ctx;
-}
-
-static void *web_init_lua_sqlite(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.sqlite_ctx = lua_sqlite_init(state->common_contexts.lua_ctx->L, "/db");
-    return state->common_contexts.sqlite_ctx;
-}
-
-static void *web_init_lua_file(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.file_ctx = lua_file_init(state->common_contexts.lua_ctx->L, "/");
-    if (state->common_contexts.file_ctx)
-        file_set_write_root(state->common_contexts.file_ctx, "/files");
-    return state->common_contexts.file_ctx;
-}
-
-static void *web_init_lua_magneto(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.magneto_ctx = lua_magneto_init(state->common_contexts.lua_ctx->L);
-    return state->common_contexts.magneto_ctx;
-}
-
-static void *web_init_lua_device(void *opaque)
-{
-    AppState *state = opaque;
-    state->common_contexts.device_ctx = managed_basics_init_lua(state->common_contexts.lua_ctx->L);
-    return state->common_contexts.device_ctx;
-}
-
-static const SubsystemDescriptor web_js_subsystems[] = {
-    WEB_SUBSYSTEM("JavaScript core", SUBSYSTEM_ROLE_CORE, web_init_js_core,
-                  NULL, managed_js_core_cleanup, false),
-    WEB_SUBSYSTEM("JavaScript canvas", SUBSYSTEM_ROLE_CANVAS, web_init_js_canvas,
-                  NULL, managed_js_canvas_cleanup, false),
-    WEB_SUBSYSTEM("JavaScript audio", SUBSYSTEM_ROLE_SERVICE, web_init_js_audio,
-                  NULL, managed_js_audio_cleanup, true),
-    WEB_SUBSYSTEM("JavaScript MIDI", SUBSYSTEM_ROLE_MIDI, web_init_js_midi,
-                  managed_js_midi_poll, managed_js_midi_cleanup, false),
-    WEB_SUBSYSTEM("JavaScript network", SUBSYSTEM_ROLE_SERVICE, web_init_js_network,
-                  managed_js_network_poll, managed_js_network_cleanup, true),
-    WEB_SUBSYSTEM("JavaScript SQLite", SUBSYSTEM_ROLE_SERVICE, web_init_js_sqlite,
-                  NULL, managed_js_sqlite_cleanup, true),
-    WEB_SUBSYSTEM("JavaScript file", SUBSYSTEM_ROLE_SERVICE, web_init_js_file,
-                  managed_js_file_poll, managed_js_file_cleanup, true),
-    WEB_SUBSYSTEM("JavaScript magnetometer", SUBSYSTEM_ROLE_SERVICE, web_init_js_magneto,
-                  NULL, managed_js_magneto_cleanup, true),
-    WEB_SUBSYSTEM("JavaScript device", SUBSYSTEM_ROLE_SERVICE, web_init_js_device,
-                  NULL, managed_device_cleanup, false),
-};
-
-static const SubsystemDescriptor web_lua_subsystems[] = {
-    WEB_SUBSYSTEM("Lua canvas", SUBSYSTEM_ROLE_CANVAS, web_init_lua_canvas,
-                  NULL, managed_lua_canvas_cleanup, false),
-    WEB_SUBSYSTEM("Lua audio", SUBSYSTEM_ROLE_SERVICE, web_init_lua_audio,
-                  NULL, managed_lua_audio_cleanup, true),
-    WEB_SUBSYSTEM("Lua MIDI", SUBSYSTEM_ROLE_MIDI, web_init_lua_midi,
-                  managed_lua_midi_poll, managed_lua_midi_cleanup, false),
-    WEB_SUBSYSTEM("Lua network", SUBSYSTEM_ROLE_SERVICE, web_init_lua_network,
-                  managed_lua_network_poll, managed_lua_network_cleanup, true),
-    WEB_SUBSYSTEM("Lua SQLite", SUBSYSTEM_ROLE_SERVICE, web_init_lua_sqlite,
-                  NULL, managed_lua_sqlite_cleanup, true),
-    WEB_SUBSYSTEM("Lua file", SUBSYSTEM_ROLE_SERVICE, web_init_lua_file,
-                  NULL, managed_lua_file_cleanup, true),
-    WEB_SUBSYSTEM("Lua magnetometer", SUBSYSTEM_ROLE_SERVICE, web_init_lua_magneto,
-                  NULL, managed_lua_magneto_cleanup, true),
-    WEB_SUBSYSTEM("Lua device", SUBSYSTEM_ROLE_SERVICE, web_init_lua_device,
-                  NULL, managed_device_cleanup, false),
-};
-
-#undef WEB_SUBSYSTEM
-
-static bool web_compose_subsystems(const SubsystemDescriptor *descriptors,
-                                   size_t descriptor_count)
-{
+    const ManagedHostConfig host = {
+        .project_dir = "/",
+        .sqlite_dir = "/db",
+        .files_root = "/files",
+        .metadata = &g_state.metadata,
+        .network_created = web_network_set_context,
+    };
     const char *failed_subsystem = NULL;
 
-    if (subsystem_compose(&g_state.subsystems, &g_state, descriptors,
-                          descriptor_count, &failed_subsystem))
+    if (managed_subsystems_compose(kind, &g_state.subsystems,
+                                   &g_state.common_contexts, &host,
+                                   &failed_subsystem))
         return true;
 
     fprintf(stderr, "budo-web: Failed to initialize %s subsystem\n",
@@ -335,7 +226,8 @@ EM_JS(void, js_web_install_managed_pagehide, (void), {
 
 static SkiaCanvas *wasm_canvas(void)
 {
-    return g_state.window ? window_get_canvas(g_state.window) : NULL;
+    Window *window = web_graphics_window();
+    return window ? window_get_canvas(window) : NULL;
 }
 
 static SkiaPaint *wasm_paint(void)
@@ -352,6 +244,20 @@ static SkiaPaint *wasm_paint(void)
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_mark_ready(void)
 {
+    g_state.wasm_started = true;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_app_exit(int code)
+{
+    g_state.wasm_exit_requested = true;
+    g_state.wasm_exit_code = code;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_request_graphics(void)
+{
+    web_graphics_window();
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -556,8 +462,8 @@ EMSCRIPTEN_KEEPALIVE
 int budo_web_wasm_window_get_width(void)
 {
     int width = 0, height = 0;
-    if (g_state.window)
-        window_get_size(g_state.window, &width, &height);
+    if (web_graphics_window())
+        window_get_size(web_graphics_window(), &width, &height);
     return width;
 }
 
@@ -565,8 +471,8 @@ EMSCRIPTEN_KEEPALIVE
 int budo_web_wasm_window_get_height(void)
 {
     int width = 0, height = 0;
-    if (g_state.window)
-        window_get_size(g_state.window, &width, &height);
+    if (web_graphics_window())
+        window_get_size(web_graphics_window(), &width, &height);
     return height;
 }
 
@@ -593,51 +499,51 @@ int budo_web_wasm_input_get_mouse_button(int button)
 EMSCRIPTEN_KEEPALIVE
 int budo_web_wasm_gl_create_program(const char *vertex_path, const char *fragment_path)
 {
-    if (!g_state.window || !vertex_path || !fragment_path)
+    if (!web_graphics_window() || !vertex_path || !fragment_path)
         return -1;
-    return window_gl_create_program(g_state.window, vertex_path, fragment_path);
+    return window_gl_create_program(web_graphics_window(), vertex_path, fragment_path);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_draw_fullscreen(int program_id)
 {
-    if (g_state.window)
-        window_gl_draw_fullscreen(g_state.window, program_id);
+    if (web_graphics_window())
+        window_gl_draw_fullscreen(web_graphics_window(), program_id);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_set_uniform_1f(int program_id, const char *name, float value)
 {
-    if (g_state.window && name)
-        window_gl_set_uniform_1f(g_state.window, program_id, name, value);
+    if (web_graphics_window() && name)
+        window_gl_set_uniform_1f(web_graphics_window(), program_id, name, value);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_set_uniform_2f(int program_id, const char *name, float v0, float v1)
 {
-    if (g_state.window && name)
-        window_gl_set_uniform_2f(g_state.window, program_id, name, v0, v1);
+    if (web_graphics_window() && name)
+        window_gl_set_uniform_2f(web_graphics_window(), program_id, name, v0, v1);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_set_uniform_matrix4fv(int program_id, const char *name, int values_ptr, int count)
 {
-    if (g_state.window && name && values_ptr)
-        window_gl_set_uniform_matrix4fv(g_state.window, program_id, name, (const float *)(uintptr_t)values_ptr, count);
+    if (web_graphics_window() && name && values_ptr)
+        window_gl_set_uniform_matrix4fv(web_graphics_window(), program_id, name, (const float *)(uintptr_t)values_ptr, count);
 }
 
 EMSCRIPTEN_KEEPALIVE
 int budo_web_wasm_gl_create_buffer(void)
 {
-    return g_state.window ? window_gl_create_buffer(g_state.window) : -1;
+    return web_graphics_window() ? window_gl_create_buffer(web_graphics_window()) : -1;
 }
 
 EMSCRIPTEN_KEEPALIVE
 int budo_web_wasm_gl_buffer_data(int buffer_id, int target, int data_ptr, int len, int usage)
 {
-    if (!g_state.window)
+    if (!web_graphics_window())
         return 0;
-    return window_gl_buffer_data(g_state.window, buffer_id, (WindowGLBufferTarget)target,
+    return window_gl_buffer_data(web_graphics_window(), buffer_id, (WindowGLBufferTarget)target,
                                  (const void *)(uintptr_t)data_ptr, (size_t)len,
                                  (WindowGLBufferUsage)usage)
                ? 1
@@ -647,28 +553,28 @@ int budo_web_wasm_gl_buffer_data(int buffer_id, int target, int data_ptr, int le
 EMSCRIPTEN_KEEPALIVE
 int budo_web_wasm_gl_create_vertex_layout(void)
 {
-    return g_state.window ? window_gl_create_vertex_layout(g_state.window) : -1;
+    return web_graphics_window() ? window_gl_create_vertex_layout(web_graphics_window()) : -1;
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_set_attribute(int layout_id, int location, int buffer_id, int size, int type, int normalized, int stride, int offset, int divisor)
 {
-    if (g_state.window)
-        window_gl_set_attribute(g_state.window, layout_id, location, buffer_id, size,
+    if (web_graphics_window())
+        window_gl_set_attribute(web_graphics_window(), layout_id, location, buffer_id, size,
                                 (WindowGLAttrType)type, normalized != 0, stride, offset, divisor);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_set_index_buffer(int layout_id, int buffer_id, int type)
 {
-    if (g_state.window)
-        window_gl_set_index_buffer(g_state.window, layout_id, buffer_id, (WindowGLIndexType)type);
+    if (web_graphics_window())
+        window_gl_set_index_buffer(web_graphics_window(), layout_id, buffer_id, (WindowGLIndexType)type);
 }
 
 EMSCRIPTEN_KEEPALIVE
 void budo_web_wasm_gl_draw_mesh(int program_id, int layout_id, int mode, int first, int count, int target_id, int depth_test, int depth_write, int cull, int blend, int instance_count)
 {
-    if (!g_state.window)
+    if (!web_graphics_window())
         return;
     WindowGLDrawState state = {
         .depth_test = depth_test != 0,
@@ -676,7 +582,7 @@ void budo_web_wasm_gl_draw_mesh(int program_id, int layout_id, int mode, int fir
         .cull = (WindowGLCullMode)cull,
         .blend = (WindowGLBlendMode)blend,
     };
-    window_gl_draw_mesh_immediate(g_state.window, program_id, layout_id,
+    window_gl_draw_mesh_immediate(web_graphics_window(), program_id, layout_id,
                                   (WindowGLPrimitive)mode, first, count, target_id,
                                   &state, instance_count);
 }
@@ -1079,8 +985,14 @@ EM_JS(void, js_web_wasm_start, (void), {
                 return count;
             }),
             network_fetch_release: (id) => cwrap0('budo_web_wasm_network_fetch_release')(id),
+            app_exit: (code) => {
+                Module._budo_web_wasm_app_exit(code | 0);
+                throw new Error(BUDO_APP_EXIT);
+            },
         };
 
+        const BUDO_APP_EXIT = 'budo:app_exit';
+        const isAppExit = (error) => error && error.message === BUDO_APP_EXIT;
         Module.BudoWasmRunner = {
             start: async function() {
                 try {
@@ -1096,17 +1008,22 @@ EM_JS(void, js_web_wasm_start, (void), {
                     Module.BudoWasmRunner.instance = result.instance;
                     wasmMemory = result.instance.exports.memory || null;
                     if (!wasmMemory) throw new Error('WASM app does not export memory.');
+                    if (typeof result.instance.exports.frame === 'function') Module._budo_web_wasm_request_graphics();
                     if (typeof result.instance.exports.init === 'function') result.instance.exports.init();
-                    Module._budo_web_wasm_mark_ready();
                     console.log('[budo-web] WebAssembly loaded successfully.');
                 } catch (error) {
-                    console.error('[budo-web] WebAssembly load failed:', error);
+                    if (!isAppExit(error)) console.error('[budo-web] WebAssembly load failed:', error);
                 }
+                Module._budo_web_wasm_mark_ready();
             },
             frame: function(timestamp) {
                 const instance = Module.BudoWasmRunner.instance;
                 if (instance && typeof instance.exports.frame === 'function') {
-                    instance.exports.frame(timestamp);
+                    try {
+                        instance.exports.frame(timestamp);
+                    } catch (error) {
+                        if (!isAppExit(error)) throw error;
+                    }
                 }
             },
             shutdown: function() {
@@ -1123,41 +1040,91 @@ EM_JS(void, js_web_wasm_frame, (double timestamp_ms), {
     if (Module.BudoWasmRunner) Module.BudoWasmRunner.frame(timestamp_ms);
 });
 
+EM_JS(void, js_web_wasm_shutdown, (void), {
+    if (Module.BudoWasmRunner) Module.BudoWasmRunner.shutdown();
+});
+
+static bool web_exit_requested(const AppState *state, int *code)
+{
+    if (state->runtime_kind == MANAGED_RUNTIME_WEBASSEMBLY)
+    {
+        if (state->wasm_exit_requested && code)
+            *code = state->wasm_exit_code;
+        return state->wasm_exit_requested;
+    }
+    return managed_runtime_exit_requested(state->runtime_kind, &state->common_contexts, code);
+}
+
+static void web_finish(AppState *state, int code)
+{
+    state->finished = true;
+    printf("[budo-web] Application exited with code %d\n", code);
+    if (state->runtime_kind == MANAGED_RUNTIME_WEBASSEMBLY)
+        js_web_wasm_shutdown();
+    else
+        budo_web_managed_shutdown();
+    js_web_report_exit(code);
+}
+
+static bool web_tick_without_window(AppState *state, double timestamp_ms)
+{
+    if (state->runtime_kind == MANAGED_RUNTIME_WEBASSEMBLY)
+    {
+        
+        if (state->common_contexts.net_ctx)
+            network_async_poll(state->common_contexts.net_ctx);
+        return !state->wasm_started;
+    }
+    managed_runtime_tick(state->runtime_kind, &state->subsystems,
+                         &state->common_contexts, timestamp_ms);
+    return state->window || web_exit_requested(state, NULL) ||
+           managed_runtime_has_pending_work(state->runtime_kind, &state->subsystems,
+                                            &state->common_contexts);
+}
+
 static EM_BOOL frame_tick(double timestamp_ms, void *user_data)
 {
     AppState *state = (AppState *)user_data;
-    if (!state || !state->window)
+    int exit_code = 0;
+
+    if (!state || state->finished)
         return EM_FALSE;
+
+    if (!state->window)
+    {
+        bool running = web_tick_without_window(state, timestamp_ms);
+        if (web_exit_requested(state, &exit_code) || state->graphics_failed || !running)
+        {
+            web_finish(state, state->graphics_failed ? 1 : exit_code);
+            return EM_FALSE;
+        }
+        if (!state->window)
+            return EM_TRUE;
+    }
 
     if (!window_poll_events(state->window, &state->input))
         return EM_FALSE; 
 
-    SkiaCanvas *canvas = window_get_canvas(state->window);
-    int width, height;
-    double time_s = window_get_time(state->window);
+    ManagedFrameContext frame = web_frame_context(state);
+    window_begin_frame(state->window, window_get_time(state->window));
 
-    window_get_size(state->window, &width, &height);
-    window_begin_frame(state->window, time_s);
-
-    if (state->runtime_type == RT_JAVASCRIPT && state->common_contexts.js_ctx)
+    if (state->runtime_kind == MANAGED_RUNTIME_WEBASSEMBLY)
     {
-        managed_runtime_frame(MANAGED_RUNTIME_JAVASCRIPT, &state->subsystems,
-                              state->common_contexts.js_ctx, state->common_contexts.js_graphic_ctx, NULL, NULL,
-                              canvas, width, height, state->window, &state->input,
-                              window_get_dpi_scale(state->window), timestamp_ms);
-    }
-    else if (state->runtime_type == RT_LUA && state->common_contexts.lua_ctx)
-    {
-        managed_runtime_frame(MANAGED_RUNTIME_LUA, &state->subsystems,
-                              NULL, NULL, state->common_contexts.lua_ctx, NULL,
-                              canvas, width, height, state->window, &state->input,
-                              window_get_dpi_scale(state->window), timestamp_ms);
-    }
-    else if (state->runtime_type == RT_WEBASSEMBLY)
-    {
+        
         if (state->common_contexts.net_ctx)
             network_async_poll(state->common_contexts.net_ctx);
         js_web_wasm_frame(timestamp_ms);
+    }
+    else
+    {
+        managed_runtime_frame(state->runtime_kind, &state->subsystems,
+                              &state->common_contexts, &frame, timestamp_ms);
+    }
+
+    if (web_exit_requested(state, &exit_code))
+    {
+        web_finish(state, exit_code);
+        return EM_FALSE;
     }
 
     window_present(state->window);
@@ -1181,17 +1148,11 @@ int main(void)
 static void app_start(void)
 {
     
-    RuntimeType rt = detect_runtime();
-    if (rt == RT_NONE)
-    {
-        fprintf(stderr, "budo-web: No main.ts, main.js, main.lua, main.wat, or main.wasm found in virtual FS.\n");
-        fprintf(stderr, "budo-web: Preload project files with --preload-file.\n");
+    ManagedRuntimeKind rt;
+    if (!detect_runtime(&rt))
         return;
-    }
 
-    const char *rt_name = (rt == RT_JAVASCRIPT) ? "JavaScript (QuickJS)" : (rt == RT_LUA) ? "Lua"
-                                                                                          : "WebAssembly";
-    printf("[budo-web] Detected runtime: %s\n", rt_name);
+    printf("[budo-web] Detected runtime: %s\n", managed_runtime_kind_name(rt));
 
     AppMetadata metadata;
     app_metadata_load("/", &metadata);
@@ -1201,27 +1162,11 @@ static void app_start(void)
         return;
     }
 
-    WindowConfig window_config = {
-        .title = metadata.name,
-        .project_dir = "/",
-        .width = 0,  
-        .height = 0, 
-        .resizable = true,
-        .fullscreen = false,
-        .vsync = true};
-
-    Window *window = window_create(&window_config);
-    if (!window)
-    {
-        fprintf(stderr, "budo-web: Failed to create window\n");
-        return;
-    }
-
     memset(&g_state, 0, sizeof(g_state));
     subsystem_registry_init(&g_state.subsystems);
-    g_state.window = window;
-    g_state.runtime_type = rt;
-    g_state.js_entrypoint = (rt == RT_JAVASCRIPT) ? detect_js_entrypoint() : NULL;
+    js_web_set_canvas_visible(0);
+    g_state.runtime_kind = rt;
+    g_state.js_entrypoint = (rt == MANAGED_RUNTIME_JAVASCRIPT) ? detect_js_entrypoint() : NULL;
     g_state.metadata = metadata;
 
     if (metadata.orientation[0] != '\0')
@@ -1232,58 +1177,31 @@ static void app_start(void)
     input_init(&g_state.input);
     web_input_init(&g_state.input);
 
-    if (rt == RT_JAVASCRIPT)
+    if (rt != MANAGED_RUNTIME_WEBASSEMBLY)
     {
-        if (!web_compose_subsystems(
-                web_js_subsystems,
-                sizeof(web_js_subsystems) / sizeof(web_js_subsystems[0])))
+        const bool is_js = rt == MANAGED_RUNTIME_JAVASCRIPT;
+        const char *entrypoint = is_js ? (g_state.js_entrypoint ? g_state.js_entrypoint : "/main.js")
+                                       : "/main.lua";
+
+        if (!web_compose_subsystems(rt))
         {
             budo_web_managed_shutdown();
             return;
         }
 
-        int width, height;
-        SkiaCanvas *canvas = window_get_canvas(window);
-        window_get_size(window, &width, &height);
-        js_graphic_set_frame_context(g_state.common_contexts.js_graphic_ctx, canvas, &g_state.input,
-                                     window, width, height,
-                                     window_get_dpi_scale(window));
+        managed_runtime_set_graphics_activation(rt, &g_state.common_contexts,
+                                                web_activate_graphics, NULL);
 
-        const char *js_entrypoint = g_state.js_entrypoint ? g_state.js_entrypoint : "/main.js";
-        if (!js_runtime_load_file(g_state.common_contexts.js_ctx, js_entrypoint))
+        bool loaded = is_js ? js_runtime_load_file(g_state.common_contexts.js_ctx, entrypoint)
+                            : lua_canvas_load_file(g_state.common_contexts.lua_ctx, entrypoint);
+        if (!loaded)
         {
-            fprintf(stderr, "budo-web: Failed to load %s\n", js_entrypoint);
+            fprintf(stderr, "budo-web: Failed to load %s\n", entrypoint);
             budo_web_managed_shutdown();
             return;
         }
 
-        printf("[budo-web] JavaScript loaded successfully.\n");
-    }
-    else if (rt == RT_LUA)
-    {
-        if (!web_compose_subsystems(
-                web_lua_subsystems,
-                sizeof(web_lua_subsystems) / sizeof(web_lua_subsystems[0])))
-        {
-            budo_web_managed_shutdown();
-            return;
-        }
-
-        int width, height;
-        SkiaCanvas *canvas = window_get_canvas(window);
-        window_get_size(window, &width, &height);
-        lua_canvas_set_context(g_state.common_contexts.lua_ctx, canvas, &g_state.input,
-                               window, width, height,
-                               window_get_dpi_scale(window));
-
-        if (!lua_canvas_load_file(g_state.common_contexts.lua_ctx, "/main.lua"))
-        {
-            fprintf(stderr, "budo-web: Failed to load /main.lua\n");
-            budo_web_managed_shutdown();
-            return;
-        }
-
-        printf("[budo-web] Lua loaded successfully.\n");
+        printf("[budo-web] %s loaded successfully.\n", is_js ? "JavaScript" : "Lua");
     }
     else
     {
@@ -1293,14 +1211,13 @@ static void app_start(void)
         if (!g_state.common_contexts.net_ctx)
         {
             fprintf(stderr, "budo-web: Failed to create WebAssembly network context\n");
-            window_destroy(window);
             return;
         }
         web_network_set_context(g_state.common_contexts.net_ctx);
         js_web_wasm_start();
     }
 
-    if (rt == RT_JAVASCRIPT || rt == RT_LUA)
+    if (rt != MANAGED_RUNTIME_WEBASSEMBLY)
         js_web_install_managed_pagehide();
 
     printf("[budo-web] App: %s v%s by %s\n",

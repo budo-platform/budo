@@ -1,4 +1,5 @@
 #include "graphics/wasm_canvas_bindings.h"
+#include "core/graphics_activation.h"
 #include "graphics/wasm_gl_bindings.h"
 #include "graphics/wasm_transform_bindings.h"
 #include "audio/wasm_audio_bindings.h"
@@ -76,6 +77,11 @@ struct WasmCanvasContext
 
     char error_msg[512];
     char project_dir[1024];
+
+    BudoGraphicsActivation activation;
+
+    bool exit_requested;
+    int exit_code;
 };
 
 static void set_error(WasmCanvasContext *ctx, const char *msg)
@@ -193,7 +199,15 @@ static const uint8_t *read_wasm_bytes(WasmCanvasContext *ctx, int32_t ptr, int32
     return memory_data + ptr;
 }
 
-#define CANVAS_CALLBACK_CONTEXT ((WasmCanvasContext *)env)
+static WasmCanvasContext *wasm_canvas_graphics_context(void *env)
+{
+    WasmCanvasContext *ctx = (WasmCanvasContext *)env;
+    if (ctx)
+        budo_graphics_activation_request(&ctx->activation);
+    return ctx;
+}
+
+#define CANVAS_CALLBACK_CONTEXT wasm_canvas_graphics_context(env)
 
 static wasm_trap_t *host_canvas_clear(
     void *env, wasmtime_caller_t *caller,
@@ -967,6 +981,24 @@ static wasm_trap_t *host_log_int(
     return NULL;
 }
 
+static wasm_trap_t *host_app_exit(
+    void *env, wasmtime_caller_t *caller,
+    const wasmtime_val_t *args, size_t nargs,
+    wasmtime_val_t *results, size_t nresults)
+{
+    WasmCanvasContext *ctx = (WasmCanvasContext *)env;
+    static const char message[] = "app_exit";
+    (void)caller;
+    (void)results;
+    (void)nresults;
+    if (ctx)
+    {
+        ctx->exit_requested = true;
+        ctx->exit_code = nargs > 0 ? args[0].of.i32 : 0;
+    }
+    return wasmtime_trap_new(message, sizeof(message) - 1);
+}
+
 static wasm_trap_t *host_log_float(
     void *env, wasmtime_caller_t *caller,
     const wasmtime_val_t *args, size_t nargs,
@@ -1218,12 +1250,39 @@ static wasmtime_error_t *define_canvas_host_function(
 
 SkiaCanvas *wasm_canvas_current_canvas(WasmCanvasContext *ctx)
 {
-    return ctx ? ctx->canvas : NULL;
+    if (!ctx)
+        return NULL;
+    budo_graphics_activation_request(&ctx->activation);
+    return ctx->canvas;
 }
 
 Window *wasm_canvas_current_window(WasmCanvasContext *ctx)
 {
-    return ctx ? ctx->window : NULL;
+    if (!ctx)
+        return NULL;
+    budo_graphics_activation_request(&ctx->activation);
+    return ctx->window;
+}
+
+bool wasm_canvas_exit_requested(const WasmCanvasContext *ctx, int *code)
+{
+    if (!ctx || !ctx->exit_requested)
+        return false;
+    if (code)
+        *code = ctx->exit_code;
+    return true;
+}
+
+bool wasm_canvas_graphics_requested(const WasmCanvasContext *ctx)
+{
+    return ctx && (ctx->activation.requested || ctx->has_frame_func);
+}
+
+void wasm_canvas_set_graphics_activation(WasmCanvasContext *ctx,
+                                         BudoGraphicsActivateFn activate, void *opaque)
+{
+    if (ctx)
+        budo_graphics_activation_set(&ctx->activation, activate, opaque);
 }
 
 bool wasm_canvas_read_string(WasmCanvasContext *ctx, int32_t pointer,
@@ -1786,6 +1845,12 @@ WasmCanvasContext *wasm_canvas_create(const char *project_dir)
         if (error)
             goto error_cleanup;
     }
+    {
+        wasm_valkind_t params[] = {WASM_I32};
+        error = define_host_function(ctx->linker, "env", "app_exit", host_app_exit, params, 1, NULL, 0);
+        if (error)
+            goto error_cleanup;
+    }
 
     {
         wasm_valkind_t params[] = {WASM_F32};
@@ -2097,7 +2162,8 @@ bool wasm_canvas_load_wat_file(WasmCanvasContext *ctx, const char *filename)
     if (error || trap)
     {
         set_wasmtime_error(ctx, error, trap);
-        return false;
+        
+        return ctx->exit_requested;
     }
 
     wasmtime_extern_t ext;
@@ -2113,7 +2179,8 @@ bool wasm_canvas_load_wat_file(WasmCanvasContext *ctx, const char *filename)
         if (error || trap)
         {
             set_wasmtime_error(ctx, error, trap);
-            fprintf(stderr, "Warning: init function failed: %s\n", ctx->error_msg);
+            if (!ctx->exit_requested)
+                fprintf(stderr, "Warning: init function failed: %s\n", ctx->error_msg);
         }
     }
 
@@ -2157,7 +2224,8 @@ bool wasm_canvas_load_wasm_file(WasmCanvasContext *ctx, const char *filename)
     if (error || trap)
     {
         set_wasmtime_error(ctx, error, trap);
-        return false;
+        
+        return ctx->exit_requested;
     }
 
     wasmtime_extern_t ext;
@@ -2173,7 +2241,8 @@ bool wasm_canvas_load_wasm_file(WasmCanvasContext *ctx, const char *filename)
         if (error || trap)
         {
             set_wasmtime_error(ctx, error, trap);
-            fprintf(stderr, "Warning: init function failed: %s\n", ctx->error_msg);
+            if (!ctx->exit_requested)
+                fprintf(stderr, "Warning: init function failed: %s\n", ctx->error_msg);
         }
     }
 
@@ -2219,7 +2288,8 @@ bool wasm_canvas_call_animation(WasmCanvasContext *ctx, double timestamp)
     if (error || trap)
     {
         set_wasmtime_error(ctx, error, trap);
-        fprintf(stderr, "Frame function error: %s\n", ctx->error_msg);
+        if (!ctx->exit_requested)
+            fprintf(stderr, "Frame function error: %s\n", ctx->error_msg);
         return false;
     }
 

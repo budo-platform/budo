@@ -108,6 +108,23 @@ bool budo_native_host_graphics_available(BudoHost *host)
            host->callback_thread == current_thread_token();
 }
 
+void budo_host_request_exit(BudoHost *host, int exit_code)
+{
+    if (!host)
+        return;
+    host->exit_requested = true;
+    host->exit_code = exit_code;
+}
+
+bool budo_native_host_exit_requested(const BudoHost *host, int *exit_code)
+{
+    if (!host || !host->exit_requested)
+        return false;
+    if (exit_code)
+        *exit_code = host->exit_code;
+    return true;
+}
+
 void budo_native_host_reset(BudoHost *host)
 {
     if (!host)

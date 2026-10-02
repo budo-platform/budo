@@ -52,17 +52,16 @@ bool js_resolve_project_path(JSContext *ctx, const char *path, char *out, size_t
     return written > 0 && (size_t)written < out_size;
 }
 
-void js_dump_error(JSContext *ctx)
+static void js_dump_value(JSContext *ctx, JSValueConst value, const char *label)
 {
-    JSValue exception = JS_GetException(ctx);
-    const char *str = JS_ToCString(ctx, exception);
+    const char *str = JS_ToCString(ctx, value);
     if (str)
     {
-        fprintf(stderr, "Exception: %s\n", str);
+        fprintf(stderr, "%s: %s\n", label, str);
         JS_FreeCString(ctx, str);
     }
 
-    JSValue stack = JS_GetPropertyStr(ctx, exception, "stack");
+    JSValue stack = JS_GetPropertyStr(ctx, value, "stack");
     if (!JS_IsUndefined(stack))
     {
         const char *stack_str = JS_ToCString(ctx, stack);
@@ -73,7 +72,114 @@ void js_dump_error(JSContext *ctx)
         }
     }
     JS_FreeValue(ctx, stack);
+}
+
+static bool js_context_exit_requested(JSContext *ctx)
+{
+    const JSRuntimeContext *runtime_ctx = js_runtime_context_from_js_context(ctx);
+    return runtime_ctx && runtime_ctx->exit_requested;
+}
+
+void js_dump_error(JSContext *ctx)
+{
+    JSValue exception = JS_GetException(ctx);
+    
+    if (!js_context_exit_requested(ctx))
+        js_dump_value(ctx, exception, "Exception");
     JS_FreeValue(ctx, exception);
+}
+
+#ifdef QUICKJS_NG
+typedef bool BudoJSBool;
+#else
+typedef JS_BOOL BudoJSBool;
+#endif
+
+static void js_report_rejection(JSContext *context, JSValueConst reason)
+{
+    if (!js_context_exit_requested(context))
+        js_dump_value(context, reason, "Unhandled promise rejection");
+}
+
+static bool js_same_value(JSValueConst a, JSValueConst b)
+{
+    return memcmp(&a, &b, sizeof(JSValue)) == 0;
+}
+
+static void js_forget_pending_rejection(JSRuntimeContext *ctx, int index)
+{
+    JS_FreeValue(ctx->context, ctx->pending_rejections[index].promise);
+    JS_FreeValue(ctx->context, ctx->pending_rejections[index].reason);
+    ctx->pending_rejections[index] =
+        ctx->pending_rejections[--ctx->pending_rejection_count];
+}
+
+static void js_forget_rejection(JSRuntimeContext *ctx, JSValueConst promise)
+{
+    for (int i = 0; i < ctx->pending_rejection_count; i++)
+    {
+        if (js_same_value(ctx->pending_rejections[i].promise, promise))
+        {
+            js_forget_pending_rejection(ctx, i);
+            return;
+        }
+    }
+}
+
+static void js_forget_rejections_with_reason(JSRuntimeContext *ctx, JSValueConst reason)
+{
+    for (int i = ctx->pending_rejection_count - 1; i >= 0; i--)
+    {
+        if (js_same_value(ctx->pending_rejections[i].reason, reason))
+            js_forget_pending_rejection(ctx, i);
+    }
+}
+
+static void js_promise_rejection_tracker(JSContext *context, JSValueConst promise,
+                                         JSValueConst reason, BudoJSBool is_handled,
+                                         void *opaque)
+{
+    JSRuntimeContext *ctx = opaque;
+
+    if (!ctx)
+        return;
+    if (is_handled)
+    {
+        js_forget_rejection(ctx, promise);
+        return;
+    }
+    if (ctx->pending_rejection_count >= JS_RUNTIME_PENDING_REJECTION_CAPACITY)
+    {
+        js_report_rejection(context, reason);
+        return;
+    }
+    ctx->pending_rejections[ctx->pending_rejection_count++] = (JSPendingRejection){
+        JS_DupValue(context, promise), JS_DupValue(context, reason)};
+}
+
+static void js_release_pending_rejections(JSRuntimeContext *ctx, bool report)
+{
+    for (int i = 0; i < ctx->pending_rejection_count; i++)
+    {
+        if (report)
+            js_report_rejection(ctx->context, ctx->pending_rejections[i].reason);
+        JS_FreeValue(ctx->context, ctx->pending_rejections[i].promise);
+        JS_FreeValue(ctx->context, ctx->pending_rejections[i].reason);
+    }
+    ctx->pending_rejection_count = 0;
+}
+
+static void js_runtime_drain_jobs(JSRuntimeContext *ctx)
+{
+    JSContext *job_context;
+    int status;
+
+    while (!ctx->exit_requested &&
+           (status = JS_ExecutePendingJob(ctx->runtime, &job_context)) != 0)
+    {
+        if (status < 0)
+            js_dump_error(job_context);
+    }
 }
 
 char *js_strdup_local(const char *src)
@@ -425,6 +531,28 @@ static const JSCFunctionListEntry js_console_funcs[] = {
     JS_CFUNC_DEF("log", 0, js_console_log),
 };
 
+static JSValue js_sys_exit(JSContext *ctx, JSValue this_val, int argc, JSValue *argv)
+{
+    JSRuntimeContext *runtime_ctx = js_runtime_context_from_js_context(ctx);
+    int32_t code = 0;
+    JSValue error;
+    (void)this_val;
+
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && JS_ToInt32(ctx, &code, argv[0]) < 0)
+        return JS_EXCEPTION;
+    if (runtime_ctx)
+    {
+        runtime_ctx->exit_requested = true;
+        runtime_ctx->exit_code = code;
+    }
+    error = JS_NewError(ctx);
+    JS_SetPropertyStr(ctx, error, "message", JS_NewString(ctx, "sys.exit"));
+#ifdef QUICKJS_NG
+    JS_SetUncatchableError(ctx, error);
+#endif
+    return JS_Throw(ctx, error);
+}
+
 static const JSCFunctionListEntry js_sys_timer_funcs[] = {
     JS_CFUNC_DEF("once", 2, js_timer_once),
     JS_CFUNC_DEF("every", 2, js_timer_every),
@@ -454,6 +582,7 @@ JSRuntimeContext *js_runtime_create(const char *project_dir)
 
     JS_SetRuntimeOpaque(ctx->runtime, ctx);
     JS_SetContextOpaque(ctx->context, ctx);
+    JS_SetHostPromiseRejectionTracker(ctx->runtime, js_promise_rejection_tracker, ctx);
 
     if (project_dir)
     {
@@ -485,6 +614,8 @@ JSRuntimeContext *js_runtime_create(const char *project_dir)
         return NULL;
     }
     JS_SetPropertyStr(ctx->context, sys_obj, "log", log_func);
+    JS_SetPropertyStr(ctx->context, sys_obj, "exit",
+                      JS_NewCFunction(ctx->context, js_sys_exit, "exit", 1));
 
     JS_SetPropertyStr(ctx->context, global, "sys", sys_obj);
 
@@ -505,6 +636,8 @@ void js_runtime_destroy(JSRuntimeContext *ctx)
 
     JS_SetContextOpaque(ctx->context, NULL);
     JS_SetRuntimeOpaque(ctx->runtime, NULL);
+    JS_SetHostPromiseRejectionTracker(ctx->runtime, NULL, NULL);
+    js_release_pending_rejections(ctx, false);
 
     for (int i = 0; i < ctx->timer_count; i++)
     {
@@ -584,11 +717,23 @@ bool js_runtime_load_file(JSRuntimeContext *ctx, const char *filename)
         {
             js_dump_error(ctx->context);
             JS_FreeValue(ctx->context, result);
-            return false;
+            return ctx->exit_requested;
         }
 
+        js_runtime_drain_jobs(ctx);
+        bool rejected = !ctx->exit_requested &&
+                        JS_PromiseState(ctx->context, result) == JS_PROMISE_REJECTED;
+        if (rejected)
+        {
+
+            JSValue reason = JS_PromiseResult(ctx->context, result);
+            js_forget_rejections_with_reason(ctx, reason);
+            JS_Throw(ctx->context, reason);
+            js_dump_error(ctx->context);
+        }
+        js_release_pending_rejections(ctx, true);
         JS_FreeValue(ctx->context, result);
-        return true;
+        return !rejected;
     }
 
     bool result = js_runtime_eval(ctx, code, filename);
@@ -608,7 +753,7 @@ bool js_runtime_eval(JSRuntimeContext *ctx, const char *code, const char *filena
     {
         js_dump_error(ctx->context);
         JS_FreeValue(ctx->context, result);
-        return false;
+        return ctx->exit_requested;
     }
 
     JS_FreeValue(ctx->context, result);
@@ -620,11 +765,29 @@ void js_runtime_execute_pending_jobs(JSRuntimeContext *ctx)
     if (!ctx)
         return;
 
-    JSContext *pctx;
-    while (JS_ExecutePendingJob(ctx->runtime, &pctx) > 0)
+    js_runtime_drain_jobs(ctx);
+    js_release_pending_rejections(ctx, true);
+}
+
+bool js_runtime_exit_requested(const JSRuntimeContext *ctx, int *code)
+{
+    if (!ctx || !ctx->exit_requested)
+        return false;
+    if (code)
+        *code = ctx->exit_code;
+    return true;
+}
+
+bool js_runtime_has_pending_work(JSRuntimeContext *ctx)
+{
+    if (!ctx)
+        return false;
+    for (int i = 0; i < ctx->timer_count; i++)
     {
-        
+        if (ctx->timers[i].active)
+            return true;
     }
+    return JS_IsJobPending(ctx->runtime);
 }
 
 void js_runtime_process_timers(JSRuntimeContext *ctx, double timestamp_ms)
@@ -636,7 +799,7 @@ void js_runtime_process_timers(JSRuntimeContext *ctx, double timestamp_ms)
     if (ctx->timer_count == 0)
         return;
 
-    for (int i = 0; i < ctx->timer_count; i++)
+    for (int i = 0; i < ctx->timer_count && !ctx->exit_requested; i++)
     {
         JSTimerEntry *entry = &ctx->timers[i];
         if (!entry->active)

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 struct JsLlamaRequest
 {
@@ -403,11 +404,12 @@ static JSValue js_error(JSContext *ctx, JSValueConst, int, JSValueConst *, int, 
     auto *state = state_from(ctx, data[0]);
     return JS_NewString(ctx, state ? llamacpp_service_get_error(state->service) : "");
 }
-static JSValue js_devices(JSContext *ctx, JSValueConst, int, JSValueConst *, int, JSValue *)
+static JSValue js_devices(JSContext *ctx, JSValueConst, int, JSValueConst *, int, JSValue *data)
 {
+    auto *state = state_from(ctx, data[0]);
     JSValue array = JS_NewArray(ctx);
     BudoLlamaDeviceInfo devices[16];
-    size_t count = std::min(budo_llama_get_devices(devices, 16), (size_t)16);
+    size_t count = std::min(llamacpp_service_get_devices(state->service, devices, 16), (size_t)16);
     for (uint32_t index = 0; index < count; ++index)
     {
         JSValue item = JS_NewObject(ctx);
@@ -422,7 +424,7 @@ static JSValue js_devices(JSContext *ctx, JSValueConst, int, JSValueConst *, int
     return array;
 }
 
-static bool parse_load_options(JSContext *ctx, JSValueConst object,
+static bool parse_load_options(JSContext *ctx, JsLlamaCppContext *state, JSValueConst object,
                                BudoLlamaLoadOptions *options)
 {
     JSValue property = JS_GetPropertyStr(ctx, object, "device");
@@ -434,7 +436,7 @@ static bool parse_load_options(JSContext *ctx, JSValueConst object,
         if (device && !supported)
         {
             BudoLlamaDeviceInfo devices[16];
-            size_t count = std::min(budo_llama_get_devices(devices, 16), (size_t)16);
+            size_t count = std::min(llamacpp_service_get_devices(state->service, devices, 16), (size_t)16);
             for (size_t index = 0; index < count; ++index)
                 supported = supported || std::strcmp(device, devices[index].id) == 0;
         }
@@ -560,7 +562,7 @@ static JSValue js_load(JSContext *ctx, JSValueConst, int argc, JSValueConst *arg
         return JS_EXCEPTION;
     BudoLlamaLoadOptions options = budo_llama_default_load_options();
     if (callback_index == 2 && (!JS_IsObject(argv[1]) ||
-                                !parse_load_options(ctx, argv[1], &options)))
+                                !parse_load_options(ctx, state, argv[1], &options)))
     {
         JS_FreeCString(ctx, path);
         return JS_ThrowRangeError(ctx, "Invalid llama.cpp load options");
@@ -615,6 +617,11 @@ JsLlamaCppContext *js_llamacpp_init(JSContext *ctx, FileContext *files)
     JS_FreeValue(ctx, global);
     return state;
 }
+bool js_llamacpp_has_pending_work(JsLlamaCppContext *state)
+{
+    return state && !state->requests.empty();
+}
+
 void js_llamacpp_poll(JsLlamaCppContext *state)
 {
     if (state)

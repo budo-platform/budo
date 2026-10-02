@@ -20,6 +20,8 @@ extern "C"
                              MidiContext *midi_ctx, JSContext *js_ctx);
 
     void js_midi_poll(JsMidiContext *state);
+    
+    bool js_midi_has_pending_work(JsMidiContext *state);
 
     void js_midi_set_rtpmidi(JsMidiContext *state,
                              RtpMidiContext *rtp_ctx);

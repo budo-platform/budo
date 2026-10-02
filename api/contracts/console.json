@@ -44,7 +44,10 @@
                 "android",
                 "web"
             ],
-            "export_extractor": "lua_function_field"
+            "export_extractor": "lua_function_field",
+            "export_prefixes": [
+                "log"
+            ]
         },
         "wasmtime": {
             "source": "src/graphics/wasm_canvas_bindings.c",

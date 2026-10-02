@@ -89,6 +89,23 @@ BUDO_DEFINE_POLL_ADAPTER(managed_js_network_poll,
 BUDO_DEFINE_POLL_ADAPTER(managed_lua_network_poll,
                          LuaNetworkContext, lua_network_poll)
 
+#define BUDO_DEFINE_PENDING_ADAPTER(name, type, pending) \
+    static inline bool name(void *opaque)                \
+    {                                                    \
+        return pending((type *)opaque);                  \
+    }
+
+BUDO_DEFINE_PENDING_ADAPTER(managed_js_network_pending, JsNetworkContext, js_network_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_lua_network_pending, LuaNetworkContext, lua_network_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_js_midi_pending, JsMidiContext, js_midi_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_lua_midi_pending, LuaMidiContext, lua_midi_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_js_file_pending, JsFileContext, js_file_has_pending_work)
+#ifdef BUDO_LLAMACPP
+BUDO_DEFINE_PENDING_ADAPTER(managed_js_llamacpp_pending, JsLlamaCppContext, js_llamacpp_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_lua_llamacpp_pending, LuaLlamaCppContext, lua_llamacpp_has_pending_work)
+#endif
+
+#undef BUDO_DEFINE_PENDING_ADAPTER
 #undef BUDO_DEFINE_POLL_ADAPTER
 #undef BUDO_DEFINE_CLEANUP_ADAPTER
 

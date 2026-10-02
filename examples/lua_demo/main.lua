@@ -174,23 +174,23 @@ sys.animation.start(function(timestamp)
     update_balls(width, height, input.deltaTime)
 
     -- Section 2: Rotating star cluster
-    sys.transform.save()
-    sys.transform.translate(width * 0.75, height * 0.3)
+    sys.canvas.save()
+    sys.canvas.translate(width * 0.75, height * 0.3)
     for i = 1, 5 do
         local angle = time * (0.3 + i * 0.15)
         local dist = 40 + i * 15
         local sx = math.cos(angle) * dist
         local sy = math.sin(angle) * dist
-        sys.transform.save()
-        sys.transform.translate(sx, sy)
+        sys.canvas.save()
+        sys.canvas.translate(sx, sy)
 
         local hue = ((i - 1) / 5 + time * 0.1) % 1.0
         sys.canvas.setFillColor(hsl_to_hex(hue, 0.8, 0.6))
         draw_star(0, 0, 20 + math.sin(time * 2 + i) * 5, 8, 5, time * (1 + i * 0.5))
 
-        sys.transform.restore()
+        sys.canvas.restore()
     end
-    sys.transform.restore()
+    sys.canvas.restore()
 
     -- Section 3: Bezier waves
     sys.canvas.setStrokeWidth(2.5)
@@ -267,11 +267,11 @@ sys.animation.start(function(timestamp)
     end
 
     -- Section 6: Transform demo — rotating rectangles
-    sys.transform.save()
-    sys.transform.translate(width * 0.25, height * 0.35)
+    sys.canvas.save()
+    sys.canvas.translate(width * 0.25, height * 0.35)
     for i = 0, 11 do
-        sys.transform.save()
-        sys.transform.rotate(i * 30 + time * 30)
+        sys.canvas.save()
+        sys.canvas.rotate(i * 30 + time * 30)
         local alpha_val = math.floor(lerp(80, 220, (math.sin(time * 2 + i * 0.5) + 1) / 2))
         local hue = (i / 12 + time * 0.05) % 1.0
         local hex = hsl_to_hex(hue, 0.7, 0.55)
@@ -279,9 +279,9 @@ sys.animation.start(function(timestamp)
         sys.canvas.setFillColor(hex)
         sys.canvas.setAlpha(alpha_val)
         sys.canvas.drawRect(-4, 30, 8, 40)
-        sys.transform.restore()
+        sys.canvas.restore()
     end
-    sys.transform.restore()
+    sys.canvas.restore()
     sys.canvas.setAlpha(255)
 
     -- Instructions

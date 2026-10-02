@@ -14,6 +14,7 @@ extern "C"
     typedef void (*SubsystemPollCallback)(void *context);
     typedef void (*SubsystemLifecycleCallback)(void *context);
     typedef void (*SubsystemCleanupCallback)(void *context);
+    typedef bool (*SubsystemPendingWorkCallback)(void *context);
 
     typedef struct SubsystemOps
     {
@@ -22,6 +23,8 @@ extern "C"
         SubsystemLifecycleCallback resume;
         SubsystemLifecycleCallback context_lost;
         SubsystemCleanupCallback cleanup;
+
+        SubsystemPendingWorkCallback has_pending_work;
     } SubsystemOps;
 
     typedef struct SubsystemRegistryEntry
@@ -55,6 +58,7 @@ extern "C"
     void subsystem_registry_context_lost(SubsystemRegistry *registry);
     void subsystem_registry_shutdown(SubsystemRegistry *registry);
     size_t subsystem_registry_count(const SubsystemRegistry *registry);
+    bool subsystem_registry_has_pending_work(const SubsystemRegistry *registry);
 
 #ifdef __cplusplus
 }

@@ -54,7 +54,7 @@ int main(int argc, char **argv)
                 "assert(sys.window.getHeight() == 211)\n"
                 "assert(sys.window.getDisplayDensity() == 1.25)\n"
                 "assert(sys.font.load('isolation.ttf', 'isolation'))\n"
-                "assert(sys.canvas.setBlendMode('src-over') == false)\n"
+                "assert(sys.canvas.setBlendMode('src-over') == true)\n"
                 "sys.animation.start(function(timestamp)\n"
                 "  animation_timestamp = timestamp + 1\n"
                 "end)\n");
@@ -64,20 +64,11 @@ int main(int argc, char **argv)
                 "assert(sys.window.getHeight() == 222)\n"
                 "assert(sys.window.getDisplayDensity() == 2.5)\n"
                 "assert(not sys.font.load('isolation.ttf', 'isolation'))\n"
-                "assert(sys.canvas.getError() == '')\n"
-                "assert(sys.canvas.setImageFilter('blur', 1) == false)\n"
+                "assert(sys.canvas.setImageFilter('blur', 1) == true)\n"
                 "sys.animation.start(function(timestamp)\n"
                 "  animation_timestamp = timestamp + 2\n"
                 "end)\n");
 
-    run_script(first,
-               "local message = sys.canvas.getError()\n"
-               "assert(message:find('blend mode', 1, true))\n"
-               "assert(sys.canvas.getError() == '')\n");
-    run_script(second,
-               "local message = sys.canvas.getError()\n"
-               "assert(message:find('image filter', 1, true))\n"
-               "assert(sys.canvas.getError() == '')\n");
     run_script(first, "console.log('canvas conformance')");
 
     assert(lua_canvas_has_animation(first));

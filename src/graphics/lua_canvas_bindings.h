@@ -1,6 +1,7 @@
 #ifndef LUA_CANVAS_BINDINGS_H
 #define LUA_CANVAS_BINDINGS_H
 
+#include "core/graphics_activation.h"
 #include <stdbool.h>
 #include "graphics/skia_wrapper.h"
 #include "core/input.h"
@@ -46,9 +47,16 @@ extern "C"
         SkiaSVG **svgs;
         int svg_count;
         int svg_capacity;
+
+        BudoGraphicsActivation activation;
+
+        bool exit_requested;
+        int exit_code;
     } LuaCanvasContext;
 
     LuaCanvasContext *lua_canvas_context(void *state);
+
+    LuaCanvasContext *lua_canvas_graphics_context(void *state);
 
     LuaCanvasContext *lua_canvas_create(const char *project_dir);
 
@@ -63,6 +71,8 @@ extern "C"
     bool lua_canvas_call_animation(LuaCanvasContext *ctx, double timestamp);
 
     bool lua_canvas_has_animation(LuaCanvasContext *ctx);
+
+    bool lua_canvas_exit_requested(const LuaCanvasContext *ctx, int *code);
 
 #ifdef __cplusplus
 }

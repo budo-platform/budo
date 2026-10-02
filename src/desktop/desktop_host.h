@@ -18,6 +18,8 @@ extern "C"
         ApplicationDriver *(*get_driver)(void *context);
         void (*before_frame)(void *context, Window *window, InputState *input,
                              double now_seconds);
+        
+        bool (*keep_running)(void *context);
     } DesktopHostApplication;
 
     int desktop_host_run(Window *window, InputState *input,

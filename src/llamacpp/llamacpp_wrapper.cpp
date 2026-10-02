@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -357,7 +358,7 @@ bool budo_llama_chat_generate(BudoLlamaChat *chat, const char *text,
         for (llama_token token = 0; token < vocabulary_size; ++token)
         {
             if (llama_vocab_is_eog(vocab, token))
-                eog_biases.push_back({token, -INFINITY});
+                eog_biases.push_back({token, -std::numeric_limits<float>::infinity()});
         }
         if (!eog_biases.empty())
         {

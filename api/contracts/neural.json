@@ -116,7 +116,7 @@
             "platforms": [
                 "desktop"
             ],
-            "source": "src/core/main.c",
+            "source": "src/core/managed_subsystems.c",
             "source_symbols": [
                 "neural_enabled",
                 "js_neural_init",
@@ -133,7 +133,7 @@
             "platforms": [
                 "desktop"
             ],
-            "source": "src/core/main.c",
+            "source": "src/desktop/managed_desktop.c",
             "source_symbols": [
                 "neural_enabled",
                 "wasm_canvas_enable_neural"
@@ -150,7 +150,7 @@
             "platforms": [
                 "android"
             ],
-            "source": "private/android/android/app/src/main/cpp/android_main.cpp",
+            "source": "src/core/managed_subsystems.c",
             "source_symbols": [
                 "neural_enabled",
                 "js_neural_init",

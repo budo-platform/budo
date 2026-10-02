@@ -1148,6 +1148,8 @@ interface SysNetwork {
 interface Sys {
   /** Outputs a message on stadard output*/
   log(message: string): void;
+  /** End the application with an exit status (default 0). Stops the script at once; an application that never draws also ends on its own once no timers, promises or pending requests remain. */
+  exit(code?: number): never;
   /** 2D drawing primitives and paint style settings. */
   readonly canvas: SysCanvas;
   /** Path creation and manipulation. */

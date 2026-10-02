@@ -65,7 +65,8 @@ static void native_frame(void *opaque, double timestamp_ms,
     frame.surface = adapter->surface;
     frame.input = budo_host_input(adapter->host);
     budo_native_host_enter_callback(adapter->host, true);
-    adapter->application->frame(adapter->host, adapter->app_state, &frame);
+    if (adapter->application->frame)
+        adapter->application->frame(adapter->host, adapter->app_state, &frame);
     budo_native_host_leave_callback(adapter->host);
 }
 
@@ -162,9 +163,9 @@ BudoStatus native_application_driver_init(ApplicationDriver *driver,
         strcmp(application->sdk_build_id, identity->sdk_build_id) != 0)
         return validation_error(host, BUDO_STATUS_INCOMPATIBLE_API,
                                 "Native application SDK identity does not match the host");
-    if (!application->initialize || !application->frame)
+    if (!application->initialize)
         return validation_error(host, BUDO_STATUS_INVALID_ARGUMENT,
-                                "Native application requires initialize and frame callbacks");
+                                "Native application requires an initialize callback");
 
     memset(adapter, 0, sizeof(*adapter));
     adapter->application = application;

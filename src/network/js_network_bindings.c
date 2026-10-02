@@ -790,7 +790,7 @@ JsNetworkContext *js_network_init(JSContext *ctx, const char *project_dir)
     }
     JS_SetPropertyStr(ctx, net_obj, "fetch", fetch_func);
 
-    JS_SetPropertyStr(ctx, sys_obj, "network", net_obj);
+    JS_SetPropertyStr(ctx, sys_obj, "net", net_obj);
 
     JS_FreeValue(ctx, sys_obj);
     JS_FreeValue(ctx, global);
@@ -809,6 +809,18 @@ JsNetworkContext *js_network_init(JSContext *ctx, const char *project_dir)
 NetworkContext *js_network_context(JsNetworkContext *state)
 {
     return state ? state->network_ctx : NULL;
+}
+
+bool js_network_has_pending_work(JsNetworkContext *state)
+{
+    if (!state || state->shutting_down || !state->pending)
+        return false;
+    for (int i = 0; i < MAX_PENDING_FETCHES; i++)
+    {
+        if (state->pending[i].active)
+            return true;
+    }
+    return false;
 }
 
 void js_network_poll(JsNetworkContext *state)

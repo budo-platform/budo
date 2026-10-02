@@ -309,6 +309,7 @@ endforeach()
 set(WEB_SOURCES
     ${BUDO_ROOT}/src/web/web_main.c
     ${BUDO_ROOT}/src/web/web_window.c
+    ${BUDO_ROOT}/src/core/window_canvas_texture.c
     ${BUDO_ROOT}/src/web/web_input.c
     ${BUDO_ROOT}/src/web/web_audio.c
     ${BUDO_ROOT}/src/web/web_midi.c
@@ -331,6 +332,7 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/core/lua_capabilities_bindings.c
     ${BUDO_ROOT}/src/core/managed_basics.c
     ${BUDO_ROOT}/src/core/managed_runtime.c
+    ${BUDO_ROOT}/src/core/managed_subsystems.c
     ${BUDO_ROOT}/src/core/subsystem_queue.c
     ${BUDO_ROOT}/src/core/subsystem_registry.c
     ${BUDO_ROOT}/src/core/subsystem_composition.c
@@ -451,13 +453,22 @@ set(EM_LINK_FLAGS
     "-sEXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\",\"stringToNewUTF8\"]"
     "-sFORCE_FILESYSTEM=1"
     "-lidbfs.js"
-    "-sEXPORTED_FUNCTIONS=[\"_main\",\"_malloc\",\"_free\",\"_js_file_picker_complete\",\"_js_file_save_complete\",\"_web_midi_on_message\",\"_web_midi_on_sysex\",\"_web_network_on_success\",\"_web_network_on_error\",\"_web_sqlite_on_ready\",\"_budo_web_wasm_mark_ready\",\"_budo_web_wasm_canvas_clear\",\"_budo_web_wasm_canvas_draw_rect\",\"_budo_web_wasm_canvas_draw_round_rect\",\"_budo_web_wasm_canvas_draw_circle\",\"_budo_web_wasm_canvas_draw_line\",\"_budo_web_wasm_canvas_draw_text\",\"_budo_web_wasm_canvas_set_fill_color\",\"_budo_web_wasm_canvas_set_stroke_color\",\"_budo_web_wasm_canvas_set_stroke_width\",\"_budo_web_wasm_canvas_set_anti_alias\",\"_budo_web_wasm_canvas_set_alpha\",\"_budo_web_wasm_transform_save\",\"_budo_web_wasm_transform_restore\",\"_budo_web_wasm_transform_translate\",\"_budo_web_wasm_transform_rotate\",\"_budo_web_wasm_transform_scale\",\"_budo_web_wasm_path_create\",\"_budo_web_wasm_path_move_to\",\"_budo_web_wasm_path_line_to\",\"_budo_web_wasm_path_close\",\"_budo_web_wasm_canvas_draw_path\",\"_budo_web_wasm_window_get_width\",\"_budo_web_wasm_window_get_height\",\"_budo_web_wasm_input_get_mouse_x\",\"_budo_web_wasm_input_get_mouse_y\",\"_budo_web_wasm_input_get_mouse_button\",\"_budo_web_wasm_gl_create_program\",\"_budo_web_wasm_gl_draw_fullscreen\",\"_budo_web_wasm_gl_set_uniform_1f\",\"_budo_web_wasm_gl_set_uniform_2f\",\"_budo_web_wasm_gl_set_uniform_matrix4fv\",\"_budo_web_wasm_gl_create_buffer\",\"_budo_web_wasm_gl_buffer_data\",\"_budo_web_wasm_gl_create_vertex_layout\",\"_budo_web_wasm_gl_set_attribute\",\"_budo_web_wasm_gl_set_index_buffer\",\"_budo_web_wasm_gl_draw_mesh\",\"_budo_web_wasm_network_fetch\",\"_budo_web_wasm_network_fetch_status\",\"_budo_web_wasm_network_fetch_status_code\",\"_budo_web_wasm_network_fetch_response_body_len\",\"_budo_web_wasm_network_fetch_response_body\",\"_budo_web_wasm_network_fetch_release\",\"_budo_web_wasm_network_shutdown\"]"
+    "-sEXPORTED_FUNCTIONS=[\"_main\",\"_malloc\",\"_free\",\"_js_file_picker_complete\",\"_js_file_save_complete\",\"_web_midi_on_message\",\"_web_midi_on_sysex\",\"_web_network_on_success\",\"_web_network_on_error\",\"_web_sqlite_on_ready\",\"_budo_web_wasm_mark_ready\",\"_budo_web_wasm_app_exit\",\"_budo_web_wasm_request_graphics\",\"_budo_web_wasm_canvas_clear\",\"_budo_web_wasm_canvas_draw_rect\",\"_budo_web_wasm_canvas_draw_round_rect\",\"_budo_web_wasm_canvas_draw_circle\",\"_budo_web_wasm_canvas_draw_line\",\"_budo_web_wasm_canvas_draw_text\",\"_budo_web_wasm_canvas_set_fill_color\",\"_budo_web_wasm_canvas_set_stroke_color\",\"_budo_web_wasm_canvas_set_stroke_width\",\"_budo_web_wasm_canvas_set_anti_alias\",\"_budo_web_wasm_canvas_set_alpha\",\"_budo_web_wasm_transform_save\",\"_budo_web_wasm_transform_restore\",\"_budo_web_wasm_transform_translate\",\"_budo_web_wasm_transform_rotate\",\"_budo_web_wasm_transform_scale\",\"_budo_web_wasm_path_create\",\"_budo_web_wasm_path_move_to\",\"_budo_web_wasm_path_line_to\",\"_budo_web_wasm_path_close\",\"_budo_web_wasm_canvas_draw_path\",\"_budo_web_wasm_window_get_width\",\"_budo_web_wasm_window_get_height\",\"_budo_web_wasm_input_get_mouse_x\",\"_budo_web_wasm_input_get_mouse_y\",\"_budo_web_wasm_input_get_mouse_button\",\"_budo_web_wasm_gl_create_program\",\"_budo_web_wasm_gl_draw_fullscreen\",\"_budo_web_wasm_gl_set_uniform_1f\",\"_budo_web_wasm_gl_set_uniform_2f\",\"_budo_web_wasm_gl_set_uniform_matrix4fv\",\"_budo_web_wasm_gl_create_buffer\",\"_budo_web_wasm_gl_buffer_data\",\"_budo_web_wasm_gl_create_vertex_layout\",\"_budo_web_wasm_gl_set_attribute\",\"_budo_web_wasm_gl_set_index_buffer\",\"_budo_web_wasm_gl_draw_mesh\",\"_budo_web_wasm_network_fetch\",\"_budo_web_wasm_network_fetch_status\",\"_budo_web_wasm_network_fetch_status_code\",\"_budo_web_wasm_network_fetch_response_body_len\",\"_budo_web_wasm_network_fetch_response_body\",\"_budo_web_wasm_network_fetch_release\",\"_budo_web_wasm_network_shutdown\"]"
     "-sUSE_WEBGL2=1"
     "-sFULL_ES3=1"
     "-sMIN_WEBGL_VERSION=2"
     "-sMAX_WEBGL_VERSION=2"
+    # Emscripten's default 64 KB stack is too small for runtime start-up
+    # (e.g. the 16 KB NetworkPolicy parsed while composing subsystems), and an
+    # overflow silently corrupts the static data below the stack.
+    "-sSTACK_SIZE=1048576"
     "--shell-file" "${BUDO_ROOT}/web/shell.html"
 )
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # Abort with a clear error instead of corrupting memory on overflow.
+    list(APPEND EM_LINK_FLAGS "-sSTACK_OVERFLOW_CHECK=2")
+endif()
 
 if(PRELOAD_PROJECT_ASSET_DIR)
     # Preload the project directory at / in the virtual FS

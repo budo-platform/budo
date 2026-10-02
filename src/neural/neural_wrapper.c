@@ -238,20 +238,39 @@ struct NeuralContext
     OrtSessionOptions *default_opts;
 
     ModelSlot slots[NEURAL_MAX_MODELS];
+
+    NeuralContext *next_live;
 };
 
 static const OrtApi *g_ort_api = NULL;
 
-static NeuralContext *g_neural_atexit_ctx = NULL;
+static NeuralContext *g_neural_live_contexts = NULL;
 static bool g_neural_atexit_registered = false;
+
+static void neural_track_live(NeuralContext *ctx)
+{
+    ctx->next_live = g_neural_live_contexts;
+    g_neural_live_contexts = ctx;
+}
+
+static void neural_untrack_live(NeuralContext *ctx)
+{
+    for (NeuralContext **link = &g_neural_live_contexts; *link; link = &(*link)->next_live)
+    {
+        if (*link == ctx)
+        {
+            *link = ctx->next_live;
+            ctx->next_live = NULL;
+            return;
+        }
+    }
+}
 
 static void neural_atexit_release(void)
 {
-    NeuralContext *ctx = g_neural_atexit_ctx;
-    if (!ctx)
-        return;
-    g_neural_atexit_ctx = NULL;
-    neural_destroy(ctx);
+    
+    while (g_neural_live_contexts)
+        neural_destroy(g_neural_live_contexts);
 }
 
 static void ort_log_callback(void *param, OrtLoggingLevel severity,
@@ -633,7 +652,7 @@ NeuralContext *neural_create(const char *project_dir)
         g_neural_atexit_registered = true;
         atexit(neural_atexit_release);
     }
-    g_neural_atexit_ctx = ctx;
+    neural_track_live(ctx);
 
 #if defined(NEURAL_HAVE_COREML)
     
@@ -668,8 +687,7 @@ void neural_destroy(NeuralContext *ctx)
     if (!ctx)
         return;
 
-    if (g_neural_atexit_ctx == ctx)
-        g_neural_atexit_ctx = NULL;
+    neural_untrack_live(ctx);
 
     const OrtApi *api = ctx->api;
 

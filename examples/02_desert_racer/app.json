@@ -1,0 +1,5 @@
+{
+    "name": "Desert Racer",
+    "description": "Interactive car terrain physics example combining simulation and rendering.",
+    "icon": "icon.svg"
+}

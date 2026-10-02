@@ -4,6 +4,11 @@ A JavaScript llama.cpp example that downloads an 88.2 MB public
 SmolLM2-135M-Instruct Q2_K GGUF on first launch, stores it under `files/models/`,
 and streams local chat through `sys.llamacpp`.
 
+The chat screen uses a local copy of `ui-library.js` for its prompt field,
+buttons, layout, and scrollable transcript. The copied library adds disabled
+buttons, programmatic prompt focus, and follow-to-bottom scrolling so streamed
+replies remain visible without preventing manual scrollback.
+
 The app downloads the model in 4 MiB HTTP Range chunks, appending each chunk
 directly to the sandboxed file instead of holding the complete GGUF in guest
 memory. SmolLM2 has an embedded ChatML template and is instruction tuned, though

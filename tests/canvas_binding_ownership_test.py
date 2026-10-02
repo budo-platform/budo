@@ -8,6 +8,7 @@ from pathlib import Path
 
 FILES = {
     "javascript": Path("src/graphics/js_canvas_bindings.c"),
+    "javascript_core": Path("src/graphics/js_core_bindings.c"),
     "lua": Path("src/graphics/lua_canvas_bindings.c"),
     "wasmtime": Path("src/graphics/wasm_canvas_bindings.c"),
 }
@@ -115,7 +116,8 @@ def main():
                 continue
             errors.append(f"{relative}: mutable file-scope state: {normalized[:160]}")
 
-    js = sources["javascript"]
+    # The QuickJS runtime/context opaque slots are owned by the core runtime.
+    js = sources["javascript_core"]
     require(js, r"JS_SetContextOpaque\(ctx->context,\s*ctx\)",
             "QuickJS context opaque ownership", errors)
     require(js, r"JS_SetRuntimeOpaque\(ctx->runtime,\s*ctx\)",
@@ -140,8 +142,12 @@ def main():
     wasm = sources["wasmtime"]
     require(wasm, r"wasmtime_linker_define_func\([^;]+callback,\s*ctx,\s*NULL\)",
             "Wasmtime callback environment ownership", errors)
-    require(wasm, r"#define CANVAS_CALLBACK_CONTEXT\s+\(\(WasmCanvasContext \*\)env\)",
+    # Host callbacks resolve their context from the callback env, directly or
+    # through the graphics accessor that also requests lazy window creation.
+    require(wasm, r"#define CANVAS_CALLBACK_CONTEXT\s+(?:\(\(WasmCanvasContext \*\)env\)|wasm_canvas_graphics_context\(env\))",
             "Wasmtime callback environment lookup", errors)
+    require(wasm, r"WasmCanvasContext \*ctx = \(WasmCanvasContext \*\)env;",
+            "Wasmtime callback environment cast", errors)
 
     if errors:
         for error in errors:

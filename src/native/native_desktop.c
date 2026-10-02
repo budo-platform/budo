@@ -28,6 +28,34 @@ static void native_before_frame(void *context, Window *window,
     budo_native_host_set_canvas(&application->host, window_get_canvas(window));
 }
 
+static bool native_keep_running(void *context)
+{
+    NativeDesktopApplication *application = context;
+    return !budo_native_host_exit_requested(&application->host, NULL);
+}
+
+static int native_run_without_window(NativeDesktopApplication *application)
+{
+    int exit_code = 0;
+    int result;
+
+    if (!application_driver_initialize(&application->driver))
+    {
+        const BudoError *error = budo_host_last_error(&application->host);
+        fprintf(stderr, "Budo native application error: %s\n",
+                error && error->message ? error->message : "initialization failed");
+        result = 1;
+    }
+    else
+    {
+        budo_native_host_exit_requested(&application->host, &exit_code);
+        result = exit_code;
+    }
+    application_driver_destroy(&application->driver);
+    budo_native_host_reset(&application->host);
+    return result;
+}
+
 int budo_native_desktop_main(int argc, char **argv)
 {
     const BudoApplication *descriptor;
@@ -58,6 +86,8 @@ int budo_native_desktop_main(int argc, char **argv)
         budo_native_host_reset(&application.host);
         return 1;
     }
+    if (!descriptor->frame)
+        return native_run_without_window(&application);
 
     window_config.title = descriptor->name ? descriptor->name : "Budo Native";
     window_config.project_dir = ".";
@@ -96,7 +126,9 @@ int budo_native_desktop_main(int argc, char **argv)
     desktop_application.context = &application;
     desktop_application.get_driver = native_get_driver;
     desktop_application.before_frame = native_before_frame;
+    desktop_application.keep_running = native_keep_running;
     result = desktop_host_run(window, &input, &desktop_application);
+    budo_native_host_exit_requested(&application.host, &result);
 
     application_driver_context_lost(&application.driver);
     application_driver_destroy(&application.driver);

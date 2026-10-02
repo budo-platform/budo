@@ -1,6 +1,7 @@
 #include "native_sdk.h"
 
 #include "budo/version.h"
+#include "core/fs_util.h"
 #include "native/native_build_config.h"
 
 #include <ctype.h>
@@ -150,32 +151,6 @@ static bool copy_file(const char *source, const char *destination)
         return false;
     }
     return true;
-}
-
-static bool remove_tree(const char *path)
-{
-    DIR *directory = opendir(path);
-    struct dirent *entry;
-    bool ok = true;
-    if (!directory)
-        return errno == ENOENT;
-    while ((entry = readdir(directory)) != NULL)
-    {
-        char child[BUDO_NATIVE_CACHE_PATH_SIZE];
-        struct stat info;
-        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
-            continue;
-        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >=
-                (int)sizeof(child) ||
-            lstat(child, &info) != 0)
-            ok = false;
-        else if (S_ISDIR(info.st_mode))
-            ok = remove_tree(child) && ok;
-        else if (unlink(child) != 0)
-            ok = false;
-    }
-    closedir(directory);
-    return rmdir(path) == 0 && ok;
 }
 
 static bool list_add(SdkFileList *list, const char *path, uint64_t size,
@@ -593,7 +568,7 @@ bool native_sdk_extract_tar_gz(const char *archive, const char *destination,
     bool ok = false;
     int zero_blocks = 0;
     if (directory_exists(destination))
-        remove_tree(destination);
+        fs_remove_tree(destination);
     if (!native_cache_make_directories(destination) || !(stream = gzopen(archive, "rb")))
     {
         set_error(error, error_size, "cannot open SDK archive");
@@ -731,7 +706,7 @@ done:
     gzclose(stream);
     list_free(&names);
     if (!ok)
-        remove_tree(destination);
+        fs_remove_tree(destination);
     return ok;
 }
 
@@ -1042,7 +1017,7 @@ bool native_sdk_resolve(bool offline, NativeSdkSelection *selection,
     if (error && error_size)
         error[0] = '\0';
     if (directory_exists(sdk))
-        remove_tree(sdk);
+        fs_remove_tree(sdk);
     if (regular_file(archive) &&
         (stat(archive, &archive_info) != 0 || (uint64_t)archive_info.st_size != artifact.size ||
          !native_cache_file_digest(archive, actual) || strcmp(actual, artifact.archive_digest)))
@@ -1076,7 +1051,7 @@ bool native_sdk_resolve(bool offline, NativeSdkSelection *selection,
         }
     }
     snprintf(temporary, sizeof(temporary), "%s/sdk.tmp.%ld", entry, (long)getpid());
-    remove_tree(temporary);
+    fs_remove_tree(temporary);
     if (!native_sdk_extract_tar_gz(archive, temporary, error, error_size))
         goto done;
     snprintf(selection->source, sizeof(selection->source), "downloaded");
@@ -1089,14 +1064,14 @@ bool native_sdk_resolve(bool offline, NativeSdkSelection *selection,
         strcmp(selection->manifest_sha256, artifact.manifest_digest) ||
         strcmp(selection->sdk_input_digest, artifact.input_digest))
     {
-        remove_tree(temporary);
+        fs_remove_tree(temporary);
         if (!error || !error_size || !error[0])
             set_error(error, error_size, "SDK inner manifest does not match release metadata");
         goto done;
     }
     if (rename(temporary, sdk) != 0)
     {
-        remove_tree(temporary);
+        fs_remove_tree(temporary);
         set_error(error, error_size, "cannot atomically install native SDK");
         goto done;
     }
@@ -1108,7 +1083,7 @@ bool native_sdk_resolve(bool offline, NativeSdkSelection *selection,
             marker_ok = false;
         if (!marker_ok)
         {
-            remove_tree(sdk);
+            fs_remove_tree(sdk);
             goto done;
         }
     }
@@ -1213,7 +1188,7 @@ int native_sdk_cache_clean_all(void)
                      entry->d_name) >= (int)sizeof(lock_path) ||
             !native_cache_lock_acquire(lock_path, &lock))
             continue;
-        if (remove_tree(path))
+        if (fs_remove_tree(path))
             removed++;
         native_cache_lock_release(&lock);
     }

@@ -50,6 +50,8 @@ extern "C"
     LlamaCppService *llamacpp_service_create(FileContext *files);
     void llamacpp_service_destroy(LlamaCppService *service);
     bool llamacpp_service_is_available(const LlamaCppService *service);
+    size_t llamacpp_service_get_devices(LlamaCppService *service,
+                                        BudoLlamaDeviceInfo *devices, size_t capacity);
     const char *llamacpp_service_get_error(const LlamaCppService *service);
     void llamacpp_service_set_event_callback(LlamaCppService *service,
                                              LlamaCppEventCallback callback, void *opaque);

@@ -733,6 +733,8 @@ NEURAL_TYPES
     echo "interface Sys {"
     echo "  /** Outputs a message on stadard output*/"
     echo "  log(message: string): void;"
+    echo "  /** End the application with an exit status (default 0). Stops the script at once; an application that never draws also ends on its own once no timers, promises or pending requests remain. */"
+    echo "  exit(code?: number): never;"
     echo "  /** 2D drawing primitives and paint style settings. */"
     echo "  readonly canvas: SysCanvas;"
     echo "  /** Path creation and manipulation. */"

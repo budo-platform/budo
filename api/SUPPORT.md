@@ -19,7 +19,7 @@ Do not edit manually.
 | `magneto` | 8 | desktop, android, web (8) | desktop, android, web (8) | desktop (13) | unsupported |
 | `math` | 26 | desktop, android, web (26) | desktop, android, web (26) | desktop (24) | web (6) |
 | `midi` | 32 | desktop, android, web (48) | desktop, android, web (48) | desktop (16) | unsupported |
-| `module_lifecycle` | 4 | desktop, android, web (2) | desktop, android, web (2) | desktop (3) | web (3) |
+| `module_lifecycle` | 5 | desktop, android, web (3) | desktop, android, web (3) | desktop (4) | web (4) |
 | `network` | 22 | desktop, android, web (10) | desktop, android, web (3) | desktop (12) | web (6) |
 | `neural` | 14 | desktop, android (9) | desktop, android (9) | desktop (14) | unsupported |
 | `scheduling` | 7 | desktop, android, web (5) | desktop, android, web (3) | desktop (1) | web (1) |

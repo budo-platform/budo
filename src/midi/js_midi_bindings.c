@@ -80,16 +80,6 @@ static MidiContext *js_midi_context(JsMidiContext *state)
 }
 
 #define ensure_midi_ctx() ((void)js_midi_context(state))
-#define g_midi_ctx (state->midi_ctx)
-#define g_midi_js_jsctx (state->js_ctx)
-#define g_rtpmidi_js_ctx (state->rtpmidi_ctx)
-#define g_midi_callbacks (state->midi_callbacks)
-#define g_midi_callbacks_active (state->midi_callbacks_active)
-#define g_rtpmidi_callbacks (state->rtpmidi_callbacks)
-#define g_rtpmidi_callbacks_active (state->rtpmidi_callbacks_active)
-#define g_midi_devices_changed_callback (state->devices_changed_callback)
-#define g_midi_topology_observer (state->topology_observer)
-#define g_midi_device_check_frames (state->device_check_frames)
 
 #define JS_MIDI_CALLBACK(name)                                           \
     static JSValue name(JSContext *ctx, JSValueConst this_val, int argc, \
@@ -164,9 +154,9 @@ JS_MIDI_CALLBACK(js_midi_get_input_count)
     (void)argc;
     (void)argv;
     ensure_midi_ctx();
-    if (!g_midi_ctx)
+    if (!state->midi_ctx)
         return JS_NewInt32(ctx, 0);
-    return JS_NewInt32(ctx, midi_get_input_count(g_midi_ctx));
+    return JS_NewInt32(ctx, midi_get_input_count(state->midi_ctx));
 }
 
 JS_MIDI_CALLBACK(js_midi_get_output_count)
@@ -176,9 +166,9 @@ JS_MIDI_CALLBACK(js_midi_get_output_count)
     (void)argc;
     (void)argv;
     ensure_midi_ctx();
-    if (!g_midi_ctx)
+    if (!state->midi_ctx)
         return JS_NewInt32(ctx, 0);
-    return JS_NewInt32(ctx, midi_get_output_count(g_midi_ctx));
+    return JS_NewInt32(ctx, midi_get_output_count(state->midi_ctx));
 }
 
 JS_MIDI_CALLBACK(js_midi_get_input_devices)
@@ -188,10 +178,10 @@ JS_MIDI_CALLBACK(js_midi_get_input_devices)
     (void)argc;
     (void)argv;
     ensure_midi_ctx();
-    if (!g_midi_ctx)
+    if (!state->midi_ctx)
         return JS_NewArray(ctx);
 
-    return js_midi_device_array(ctx, g_midi_ctx, true);
+    return js_midi_device_array(ctx, state->midi_ctx, true);
 }
 
 JS_MIDI_CALLBACK(js_midi_get_output_devices)
@@ -201,10 +191,10 @@ JS_MIDI_CALLBACK(js_midi_get_output_devices)
     (void)argc;
     (void)argv;
     ensure_midi_ctx();
-    if (!g_midi_ctx)
+    if (!state->midi_ctx)
         return JS_NewArray(ctx);
 
-    return js_midi_device_array(ctx, g_midi_ctx, false);
+    return js_midi_device_array(ctx, state->midi_ctx, false);
 }
 
 JS_MIDI_CALLBACK(js_midi_refresh_devices)
@@ -214,9 +204,9 @@ JS_MIDI_CALLBACK(js_midi_refresh_devices)
     (void)argc;
     (void)argv;
     ensure_midi_ctx();
-    if (g_midi_ctx)
+    if (state->midi_ctx)
     {
-        midi_refresh_devices(g_midi_ctx);
+        midi_refresh_devices(state->midi_ctx);
     }
     return JS_UNDEFINED;
 }
@@ -228,22 +218,22 @@ JS_MIDI_CALLBACK(js_midi_on_devices_changed)
     if (argc != 1 || (!JS_IsFunction(ctx, argv[0]) && !JS_IsNull(argv[0])))
         return JS_ThrowTypeError(ctx, "midi.onDevicesChanged expects a callback or null");
 
-    if (!JS_IsUndefined(g_midi_devices_changed_callback))
-        JS_FreeValue(ctx, g_midi_devices_changed_callback);
-    g_midi_devices_changed_callback = JS_UNDEFINED;
-    g_midi_device_check_frames = 0;
+    if (!JS_IsUndefined(state->devices_changed_callback))
+        JS_FreeValue(ctx, state->devices_changed_callback);
+    state->devices_changed_callback = JS_UNDEFINED;
+    state->device_check_frames = 0;
 
     if (JS_IsNull(argv[0]))
         return JS_UNDEFINED;
 
     ensure_midi_ctx();
-    if (!g_midi_ctx)
+    if (!state->midi_ctx)
         return JS_UNDEFINED;
-    midi_refresh_devices(g_midi_ctx);
-    midi_topology_observer_reset(&g_midi_topology_observer,
-                                 midi_get_device_topology_fingerprint(g_midi_ctx),
-                                 midi_get_device_generation(g_midi_ctx));
-    g_midi_devices_changed_callback = JS_DupValue(ctx, argv[0]);
+    midi_refresh_devices(state->midi_ctx);
+    midi_topology_observer_reset(&state->topology_observer,
+                                 midi_get_device_topology_fingerprint(state->midi_ctx),
+                                 midi_get_device_generation(state->midi_ctx));
+    state->devices_changed_callback = JS_DupValue(ctx, argv[0]);
     return JS_UNDEFINED;
 }
 
@@ -252,26 +242,26 @@ JS_MIDI_CALLBACK(js_midi_open_input)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 2)
+    if (!state->midi_ctx || argc < 2)
         return JS_NewInt32(ctx, -1);
 
     int device_index;
     JS_ToInt32(ctx, &device_index, argv[0]);
 
-    int handle = midi_open_input(g_midi_ctx, device_index, midi_input_callback, state);
+    int handle = midi_open_input(state->midi_ctx, device_index, midi_input_callback, state);
     if (handle < 0)
         return JS_NewInt32(ctx, -1);
 
-    midi_set_sysex_callback(g_midi_ctx, handle, midi_sysex_callback, state);
+    midi_set_sysex_callback(state->midi_ctx, handle, midi_sysex_callback, state);
 
     if (handle >= 0 && handle < MAX_MIDI_CALLBACKS)
     {
-        if (g_midi_callbacks_active[handle])
+        if (state->midi_callbacks_active[handle])
         {
-            JS_FreeValue(ctx, g_midi_callbacks[handle]);
+            JS_FreeValue(ctx, state->midi_callbacks[handle]);
         }
-        g_midi_callbacks[handle] = JS_DupValue(ctx, argv[1]);
-        g_midi_callbacks_active[handle] = true;
+        state->midi_callbacks[handle] = JS_DupValue(ctx, argv[1]);
+        state->midi_callbacks_active[handle] = true;
     }
 
     return JS_NewInt32(ctx, handle);
@@ -282,19 +272,19 @@ JS_MIDI_CALLBACK(js_midi_close_input)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 1)
+    if (!state->midi_ctx || argc < 1)
         return JS_UNDEFINED;
 
     int handle;
     JS_ToInt32(ctx, &handle, argv[0]);
 
-    if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && g_midi_callbacks_active[handle])
+    if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
     {
-        JS_FreeValue(ctx, g_midi_callbacks[handle]);
-        g_midi_callbacks_active[handle] = false;
+        JS_FreeValue(ctx, state->midi_callbacks[handle]);
+        state->midi_callbacks_active[handle] = false;
     }
 
-    midi_close_input(g_midi_ctx, handle);
+    midi_close_input(state->midi_ctx, handle);
     return JS_UNDEFINED;
 }
 
@@ -303,14 +293,14 @@ JS_MIDI_CALLBACK(js_midi_open_output)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 1)
+    if (!state->midi_ctx || argc < 1)
         return JS_NewInt32(ctx, -1);
 
     int device_index;
     JS_ToInt32(ctx, &device_index, argv[0]);
 
     ApiError error;
-    return JS_NewInt32(ctx, midi_service_open_output(g_midi_ctx, device_index,
+    return JS_NewInt32(ctx, midi_service_open_output(state->midi_ctx, device_index,
                                                      &error));
 }
 
@@ -319,12 +309,12 @@ JS_MIDI_CALLBACK(js_midi_close_output)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 1)
+    if (!state->midi_ctx || argc < 1)
         return JS_UNDEFINED;
 
     int handle;
     JS_ToInt32(ctx, &handle, argv[0]);
-    midi_close_output(g_midi_ctx, handle);
+    midi_close_output(state->midi_ctx, handle);
     return JS_UNDEFINED;
 }
 
@@ -333,7 +323,7 @@ JS_MIDI_CALLBACK(js_midi_send_message)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 4)
+    if (!state->midi_ctx || argc < 4)
         return JS_FALSE;
 
     int handle, status, data1, data2;
@@ -342,7 +332,7 @@ JS_MIDI_CALLBACK(js_midi_send_message)
     JS_ToInt32(ctx, &data1, argv[2]);
     JS_ToInt32(ctx, &data2, argv[3]);
 
-    bool result = midi_send_message(g_midi_ctx, handle, (uint8_t)status,
+    bool result = midi_send_message(state->midi_ctx, handle, (uint8_t)status,
                                     (uint8_t)data1, (uint8_t)data2);
     return JS_NewBool(ctx, result);
 }
@@ -352,7 +342,7 @@ JS_MIDI_CALLBACK(js_midi_send_raw)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 2)
+    if (!state->midi_ctx || argc < 2)
         return JS_FALSE;
 
     int handle;
@@ -380,7 +370,7 @@ JS_MIDI_CALLBACK(js_midi_send_raw)
         buf[i] = (uint8_t)val;
     }
 
-    bool result = midi_send_raw(g_midi_ctx, handle, buf, len);
+    bool result = midi_send_raw(state->midi_ctx, handle, buf, len);
     free(buf);
 
     return JS_NewBool(ctx, result);
@@ -391,7 +381,7 @@ JS_MIDI_CALLBACK(js_midi_note_on)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 4)
+    if (!state->midi_ctx || argc < 4)
         return JS_FALSE;
 
     int handle, channel, note, velocity;
@@ -400,7 +390,7 @@ JS_MIDI_CALLBACK(js_midi_note_on)
     JS_ToInt32(ctx, &note, argv[2]);
     JS_ToInt32(ctx, &velocity, argv[3]);
 
-    return JS_NewBool(ctx, midi_note_on(g_midi_ctx, handle, channel, note, velocity));
+    return JS_NewBool(ctx, midi_note_on(state->midi_ctx, handle, channel, note, velocity));
 }
 
 JS_MIDI_CALLBACK(js_midi_note_off)
@@ -408,7 +398,7 @@ JS_MIDI_CALLBACK(js_midi_note_off)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 4)
+    if (!state->midi_ctx || argc < 4)
         return JS_FALSE;
 
     int handle, channel, note, velocity;
@@ -417,7 +407,7 @@ JS_MIDI_CALLBACK(js_midi_note_off)
     JS_ToInt32(ctx, &note, argv[2]);
     JS_ToInt32(ctx, &velocity, argv[3]);
 
-    return JS_NewBool(ctx, midi_note_off(g_midi_ctx, handle, channel, note, velocity));
+    return JS_NewBool(ctx, midi_note_off(state->midi_ctx, handle, channel, note, velocity));
 }
 
 JS_MIDI_CALLBACK(js_midi_control_change)
@@ -425,7 +415,7 @@ JS_MIDI_CALLBACK(js_midi_control_change)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 4)
+    if (!state->midi_ctx || argc < 4)
         return JS_FALSE;
 
     int handle, channel, control, value;
@@ -434,7 +424,7 @@ JS_MIDI_CALLBACK(js_midi_control_change)
     JS_ToInt32(ctx, &control, argv[2]);
     JS_ToInt32(ctx, &value, argv[3]);
 
-    return JS_NewBool(ctx, midi_control_change(g_midi_ctx, handle, channel, control, value));
+    return JS_NewBool(ctx, midi_control_change(state->midi_ctx, handle, channel, control, value));
 }
 
 JS_MIDI_CALLBACK(js_midi_program_change)
@@ -442,7 +432,7 @@ JS_MIDI_CALLBACK(js_midi_program_change)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 3)
+    if (!state->midi_ctx || argc < 3)
         return JS_FALSE;
 
     int handle, channel, program;
@@ -450,7 +440,7 @@ JS_MIDI_CALLBACK(js_midi_program_change)
     JS_ToInt32(ctx, &channel, argv[1]);
     JS_ToInt32(ctx, &program, argv[2]);
 
-    return JS_NewBool(ctx, midi_program_change(g_midi_ctx, handle, channel, program));
+    return JS_NewBool(ctx, midi_program_change(state->midi_ctx, handle, channel, program));
 }
 
 JS_MIDI_CALLBACK(js_midi_pitch_bend)
@@ -458,7 +448,7 @@ JS_MIDI_CALLBACK(js_midi_pitch_bend)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 3)
+    if (!state->midi_ctx || argc < 3)
         return JS_FALSE;
 
     int handle, channel, value;
@@ -466,7 +456,7 @@ JS_MIDI_CALLBACK(js_midi_pitch_bend)
     JS_ToInt32(ctx, &channel, argv[1]);
     JS_ToInt32(ctx, &value, argv[2]);
 
-    return JS_NewBool(ctx, midi_pitch_bend(g_midi_ctx, handle, channel, value));
+    return JS_NewBool(ctx, midi_pitch_bend(state->midi_ctx, handle, channel, value));
 }
 
 JS_MIDI_CALLBACK(js_midi_channel_pressure)
@@ -474,7 +464,7 @@ JS_MIDI_CALLBACK(js_midi_channel_pressure)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 3)
+    if (!state->midi_ctx || argc < 3)
         return JS_FALSE;
 
     int handle, channel, pressure;
@@ -482,7 +472,7 @@ JS_MIDI_CALLBACK(js_midi_channel_pressure)
     JS_ToInt32(ctx, &channel, argv[1]);
     JS_ToInt32(ctx, &pressure, argv[2]);
 
-    return JS_NewBool(ctx, midi_channel_pressure(g_midi_ctx, handle, channel, pressure));
+    return JS_NewBool(ctx, midi_channel_pressure(state->midi_ctx, handle, channel, pressure));
 }
 
 JS_MIDI_CALLBACK(js_midi_poly_pressure)
@@ -490,7 +480,7 @@ JS_MIDI_CALLBACK(js_midi_poly_pressure)
     JS_MIDI_STATE();
     (void)this_val;
     ensure_midi_ctx();
-    if (!g_midi_ctx || argc < 4)
+    if (!state->midi_ctx || argc < 4)
         return JS_FALSE;
 
     int handle, channel, note, pressure;
@@ -499,7 +489,7 @@ JS_MIDI_CALLBACK(js_midi_poly_pressure)
     JS_ToInt32(ctx, &note, argv[2]);
     JS_ToInt32(ctx, &pressure, argv[3]);
 
-    return JS_NewBool(ctx, midi_poly_pressure(g_midi_ctx, handle, channel, note, pressure));
+    return JS_NewBool(ctx, midi_poly_pressure(state->midi_ctx, handle, channel, note, pressure));
 }
 
 static void rtpmidi_input_callback(int session_handle, const MidiMessage *message, void *user_data)
@@ -542,7 +532,7 @@ JS_MIDI_CALLBACK(js_midi_create_session)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 1)
+    if (!state->rtpmidi_ctx || argc < 1)
         return JS_NewInt32(ctx, -1);
 
     const char *name = JS_ToCString(ctx, argv[0]);
@@ -553,7 +543,7 @@ JS_MIDI_CALLBACK(js_midi_create_session)
     if (argc >= 2)
         JS_ToInt32(ctx, &port, argv[1]);
 
-    int handle = rtpmidi_create_session(g_rtpmidi_js_ctx, name, port);
+    int handle = rtpmidi_create_session(state->rtpmidi_ctx, name, port);
     JS_FreeCString(ctx, name);
 
     return JS_NewInt32(ctx, handle);
@@ -563,7 +553,7 @@ JS_MIDI_CALLBACK(js_midi_connect_session)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 3)
+    if (!state->rtpmidi_ctx || argc < 3)
         return JS_FALSE;
 
     int session;
@@ -576,7 +566,7 @@ JS_MIDI_CALLBACK(js_midi_connect_session)
     int port;
     JS_ToInt32(ctx, &port, argv[2]);
 
-    bool result = rtpmidi_connect(g_rtpmidi_js_ctx, session, host, port);
+    bool result = rtpmidi_connect(state->rtpmidi_ctx, session, host, port);
     JS_FreeCString(ctx, host);
 
     return JS_NewBool(ctx, result);
@@ -586,19 +576,19 @@ JS_MIDI_CALLBACK(js_midi_destroy_session)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 1)
+    if (!state->rtpmidi_ctx || argc < 1)
         return JS_UNDEFINED;
 
     int session;
     JS_ToInt32(ctx, &session, argv[0]);
 
-    if (session >= 0 && session < MAX_RTPMIDI_CALLBACKS && g_rtpmidi_callbacks_active[session])
+    if (session >= 0 && session < MAX_RTPMIDI_CALLBACKS && state->rtpmidi_callbacks_active[session])
     {
-        JS_FreeValue(ctx, g_rtpmidi_callbacks[session]);
-        g_rtpmidi_callbacks_active[session] = false;
+        JS_FreeValue(ctx, state->rtpmidi_callbacks[session]);
+        state->rtpmidi_callbacks_active[session] = false;
     }
 
-    rtpmidi_destroy_session(g_rtpmidi_js_ctx, session);
+    rtpmidi_destroy_session(state->rtpmidi_ctx, session);
     return JS_UNDEFINED;
 }
 
@@ -606,7 +596,7 @@ JS_MIDI_CALLBACK(js_midi_on_session_message)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 2)
+    if (!state->rtpmidi_ctx || argc < 2)
         return JS_UNDEFINED;
 
     int session;
@@ -615,18 +605,18 @@ JS_MIDI_CALLBACK(js_midi_on_session_message)
     if (session < 0 || session >= MAX_RTPMIDI_CALLBACKS)
         return JS_UNDEFINED;
 
-    if (g_rtpmidi_callbacks_active[session])
+    if (state->rtpmidi_callbacks_active[session])
     {
-        JS_FreeValue(ctx, g_rtpmidi_callbacks[session]);
-        g_rtpmidi_callbacks_active[session] = false;
+        JS_FreeValue(ctx, state->rtpmidi_callbacks[session]);
+        state->rtpmidi_callbacks_active[session] = false;
     }
 
     if (JS_IsFunction(ctx, argv[1]))
     {
-        g_rtpmidi_callbacks[session] = JS_DupValue(ctx, argv[1]);
-        g_rtpmidi_callbacks_active[session] = true;
+        state->rtpmidi_callbacks[session] = JS_DupValue(ctx, argv[1]);
+        state->rtpmidi_callbacks_active[session] = true;
 
-        rtpmidi_set_callback(g_rtpmidi_js_ctx, session, rtpmidi_input_callback, state);
+        rtpmidi_set_callback(state->rtpmidi_ctx, session, rtpmidi_input_callback, state);
     }
 
     return JS_UNDEFINED;
@@ -636,7 +626,7 @@ JS_MIDI_CALLBACK(js_midi_session_send)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 4)
+    if (!state->rtpmidi_ctx || argc < 4)
         return JS_FALSE;
 
     int session, status, data1, data2;
@@ -645,7 +635,7 @@ JS_MIDI_CALLBACK(js_midi_session_send)
     JS_ToInt32(ctx, &data1, argv[2]);
     JS_ToInt32(ctx, &data2, argv[3]);
 
-    bool result = rtpmidi_send_message(g_rtpmidi_js_ctx, session,
+    bool result = rtpmidi_send_message(state->rtpmidi_ctx, session,
                                        (uint8_t)status, (uint8_t)data1, (uint8_t)data2);
     return JS_NewBool(ctx, result);
 }
@@ -654,7 +644,7 @@ JS_MIDI_CALLBACK(js_midi_session_note_on)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 4)
+    if (!state->rtpmidi_ctx || argc < 4)
         return JS_FALSE;
 
     int session, channel, note, velocity;
@@ -664,7 +654,7 @@ JS_MIDI_CALLBACK(js_midi_session_note_on)
     JS_ToInt32(ctx, &velocity, argv[3]);
 
     uint8_t status = MIDI_NOTE_ON | (channel & 0x0F);
-    bool result = rtpmidi_send_message(g_rtpmidi_js_ctx, session,
+    bool result = rtpmidi_send_message(state->rtpmidi_ctx, session,
                                        status, (uint8_t)(note & 0x7F),
                                        (uint8_t)(velocity & 0x7F));
     return JS_NewBool(ctx, result);
@@ -674,7 +664,7 @@ JS_MIDI_CALLBACK(js_midi_session_note_off)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 4)
+    if (!state->rtpmidi_ctx || argc < 4)
         return JS_FALSE;
 
     int session, channel, note, velocity;
@@ -684,7 +674,7 @@ JS_MIDI_CALLBACK(js_midi_session_note_off)
     JS_ToInt32(ctx, &velocity, argv[3]);
 
     uint8_t status = MIDI_NOTE_OFF | (channel & 0x0F);
-    bool result = rtpmidi_send_message(g_rtpmidi_js_ctx, session,
+    bool result = rtpmidi_send_message(state->rtpmidi_ctx, session,
                                        status, (uint8_t)(note & 0x7F),
                                        (uint8_t)(velocity & 0x7F));
     return JS_NewBool(ctx, result);
@@ -694,7 +684,7 @@ JS_MIDI_CALLBACK(js_midi_session_cc)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 4)
+    if (!state->rtpmidi_ctx || argc < 4)
         return JS_FALSE;
 
     int session, channel, control, value;
@@ -704,7 +694,7 @@ JS_MIDI_CALLBACK(js_midi_session_cc)
     JS_ToInt32(ctx, &value, argv[3]);
 
     uint8_t status = MIDI_CONTROL_CHANGE | (channel & 0x0F);
-    bool result = rtpmidi_send_message(g_rtpmidi_js_ctx, session,
+    bool result = rtpmidi_send_message(state->rtpmidi_ctx, session,
                                        status, (uint8_t)(control & 0x7F),
                                        (uint8_t)(value & 0x7F));
     return JS_NewBool(ctx, result);
@@ -714,7 +704,7 @@ JS_MIDI_CALLBACK(js_midi_session_send_raw)
 {
     JS_MIDI_STATE();
     (void)this_val;
-    if (!g_rtpmidi_js_ctx || argc < 2)
+    if (!state->rtpmidi_ctx || argc < 2)
         return JS_FALSE;
 
     int session;
@@ -742,7 +732,7 @@ JS_MIDI_CALLBACK(js_midi_session_send_raw)
         buf[i] = (uint8_t)val;
     }
 
-    bool result = rtpmidi_send_raw(g_rtpmidi_js_ctx, session, buf, len);
+    bool result = rtpmidi_send_raw(state->rtpmidi_ctx, session, buf, len);
     free(buf);
 
     return JS_NewBool(ctx, result);
@@ -756,14 +746,14 @@ JS_MIDI_CALLBACK(js_midi_get_sessions)
     (void)argv;
 
     JSValue arr = JS_NewArray(ctx);
-    if (!g_rtpmidi_js_ctx)
+    if (!state->rtpmidi_ctx)
         return arr;
 
-    int count = rtpmidi_get_session_count(g_rtpmidi_js_ctx);
+    int count = rtpmidi_get_session_count(state->rtpmidi_ctx);
     for (int i = 0; i < count; i++)
     {
         RtpMidiSessionInfo info;
-        if (rtpmidi_get_session_info(g_rtpmidi_js_ctx, i, &info))
+        if (rtpmidi_get_session_info(state->rtpmidi_ctx, i, &info))
         {
             JSValue obj = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, obj, "handle", JS_NewInt32(ctx, info.handle));
@@ -907,13 +897,13 @@ JsMidiContext *js_midi_init(JSContext *ctx)
 
     for (int i = 0; i < MAX_MIDI_CALLBACKS; i++)
     {
-        g_midi_callbacks[i] = JS_UNDEFINED;
-        g_midi_callbacks_active[i] = false;
+        state->midi_callbacks[i] = JS_UNDEFINED;
+        state->midi_callbacks_active[i] = false;
     }
     for (int i = 0; i < MAX_RTPMIDI_CALLBACKS; i++)
     {
-        g_rtpmidi_callbacks[i] = JS_UNDEFINED;
-        g_rtpmidi_callbacks_active[i] = false;
+        state->rtpmidi_callbacks[i] = JS_UNDEFINED;
+        state->rtpmidi_callbacks_active[i] = false;
     }
 
     JSValue global = JS_GetGlobalObject(ctx);
@@ -962,29 +952,29 @@ void js_midi_cleanup(JsMidiContext *state)
         state->midi_ctx = NULL;
     }
 
-    if (g_midi_js_jsctx)
+    if (state->js_ctx)
     {
         
         for (int i = 0; i < MAX_MIDI_CALLBACKS; i++)
         {
-            if (g_midi_callbacks_active[i])
+            if (state->midi_callbacks_active[i])
             {
-                JS_FreeValue(g_midi_js_jsctx, g_midi_callbacks[i]);
-                g_midi_callbacks_active[i] = false;
+                JS_FreeValue(state->js_ctx, state->midi_callbacks[i]);
+                state->midi_callbacks_active[i] = false;
             }
         }
         for (int i = 0; i < MAX_RTPMIDI_CALLBACKS; i++)
         {
-            if (g_rtpmidi_callbacks_active[i])
+            if (state->rtpmidi_callbacks_active[i])
             {
-                JS_FreeValue(g_midi_js_jsctx, g_rtpmidi_callbacks[i]);
-                g_rtpmidi_callbacks_active[i] = false;
+                JS_FreeValue(state->js_ctx, state->rtpmidi_callbacks[i]);
+                state->rtpmidi_callbacks_active[i] = false;
             }
         }
-        if (!JS_IsUndefined(g_midi_devices_changed_callback))
+        if (!JS_IsUndefined(state->devices_changed_callback))
         {
-            JS_FreeValue(g_midi_js_jsctx, g_midi_devices_changed_callback);
-            g_midi_devices_changed_callback = JS_UNDEFINED;
+            JS_FreeValue(state->js_ctx, state->devices_changed_callback);
+            state->devices_changed_callback = JS_UNDEFINED;
         }
     }
 
@@ -1001,8 +991,8 @@ void js_midi_set_context(JsMidiContext *state,
 {
     if (!state)
         return;
-    g_midi_ctx = midi_ctx;
-    g_midi_js_jsctx = js_ctx;
+    state->midi_ctx = midi_ctx;
+    state->js_ctx = js_ctx;
     state->midi_lazy_initialized = midi_ctx != NULL;
 }
 
@@ -1010,60 +1000,77 @@ void js_midi_set_rtpmidi(JsMidiContext *state, RtpMidiContext *rtp_ctx)
 {
     if (!state)
         return;
-    if (g_rtpmidi_js_ctx && g_rtpmidi_js_ctx != rtp_ctx)
+    if (state->rtpmidi_ctx && state->rtpmidi_ctx != rtp_ctx)
     {
         for (int i = 0; i < MAX_RTPMIDI_CALLBACKS; i++)
-            rtpmidi_set_callback(g_rtpmidi_js_ctx, i, NULL, NULL);
+            rtpmidi_set_callback(state->rtpmidi_ctx, i, NULL, NULL);
     }
-    g_rtpmidi_js_ctx = rtp_ctx;
-    if (g_rtpmidi_js_ctx)
+    state->rtpmidi_ctx = rtp_ctx;
+    if (state->rtpmidi_ctx)
     {
         for (int i = 0; i < MAX_RTPMIDI_CALLBACKS; i++)
         {
-            if (g_rtpmidi_callbacks_active[i])
-                rtpmidi_set_callback(g_rtpmidi_js_ctx, i,
+            if (state->rtpmidi_callbacks_active[i])
+                rtpmidi_set_callback(state->rtpmidi_ctx, i,
                                      rtpmidi_input_callback, state);
         }
     }
 }
 
+bool js_midi_has_pending_work(JsMidiContext *state)
+{
+    if (!state)
+        return false;
+    for (int i = 0; i < MAX_MIDI_CALLBACKS; i++)
+    {
+        if (state->midi_callbacks_active[i])
+            return true;
+    }
+    for (int i = 0; i < MAX_RTPMIDI_CALLBACKS; i++)
+    {
+        if (state->rtpmidi_callbacks_active[i])
+            return true;
+    }
+    return !JS_IsUndefined(state->devices_changed_callback);
+}
+
 void js_midi_poll(JsMidiContext *state)
 {
-    if (!state || !g_midi_js_jsctx)
+    if (!state || !state->js_ctx)
         return;
 
-    if (!JS_IsUndefined(g_midi_devices_changed_callback) && g_midi_ctx)
+    if (!JS_IsUndefined(state->devices_changed_callback) && state->midi_ctx)
     {
-        g_midi_device_check_frames++;
-        uint64_t backend_generation = midi_get_device_generation(g_midi_ctx);
-        bool backend_changed = backend_generation != g_midi_topology_observer.backend_generation;
-        if (backend_changed || g_midi_device_check_frames >= MIDI_DEVICE_CHECK_FRAMES)
+        state->device_check_frames++;
+        uint64_t backend_generation = midi_get_device_generation(state->midi_ctx);
+        bool backend_changed = backend_generation != state->topology_observer.backend_generation;
+        if (backend_changed || state->device_check_frames >= MIDI_DEVICE_CHECK_FRAMES)
         {
-            g_midi_device_check_frames = 0;
-            midi_refresh_devices(g_midi_ctx);
-            uint64_t fingerprint = midi_get_device_topology_fingerprint(g_midi_ctx);
-            if (midi_topology_observer_update(&g_midi_topology_observer,
+            state->device_check_frames = 0;
+            midi_refresh_devices(state->midi_ctx);
+            uint64_t fingerprint = midi_get_device_topology_fingerprint(state->midi_ctx);
+            if (midi_topology_observer_update(&state->topology_observer,
                                               fingerprint, backend_generation))
             {
-                JSValue event = JS_NewObject(g_midi_js_jsctx);
-                JS_SetPropertyStr(g_midi_js_jsctx, event, "inputs",
-                                  js_midi_device_array(g_midi_js_jsctx, g_midi_ctx, true));
-                JS_SetPropertyStr(g_midi_js_jsctx, event, "outputs",
-                                  js_midi_device_array(g_midi_js_jsctx, g_midi_ctx, false));
-                JS_SetPropertyStr(g_midi_js_jsctx, event, "generation",
-                                  JS_NewUint32(g_midi_js_jsctx, g_midi_topology_observer.generation));
+                JSValue event = JS_NewObject(state->js_ctx);
+                JS_SetPropertyStr(state->js_ctx, event, "inputs",
+                                  js_midi_device_array(state->js_ctx, state->midi_ctx, true));
+                JS_SetPropertyStr(state->js_ctx, event, "outputs",
+                                  js_midi_device_array(state->js_ctx, state->midi_ctx, false));
+                JS_SetPropertyStr(state->js_ctx, event, "generation",
+                                  JS_NewUint32(state->js_ctx, state->topology_observer.generation));
                 JSValue args[1] = {event};
-                JSValue result = JS_Call(g_midi_js_jsctx, g_midi_devices_changed_callback,
+                JSValue result = JS_Call(state->js_ctx, state->devices_changed_callback,
                                          JS_UNDEFINED, 1, args);
-                JS_FreeValue(g_midi_js_jsctx, result);
-                JS_FreeValue(g_midi_js_jsctx, event);
+                JS_FreeValue(state->js_ctx, result);
+                JS_FreeValue(state->js_ctx, event);
             }
         }
     }
 
-    if (g_rtpmidi_js_ctx)
+    if (state->rtpmidi_ctx)
     {
-        rtpmidi_poll(g_rtpmidi_js_ctx);
+        rtpmidi_poll(state->rtpmidi_ctx);
     }
 
     MidiQueuedMessage queued_message;
@@ -1072,22 +1079,22 @@ void js_midi_poll(JsMidiContext *state)
         MidiQueuedMessage *qm = &queued_message;
 
         int handle = qm->device_handle;
-        if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && g_midi_callbacks_active[handle])
+        if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
         {
-            JSValue callback = g_midi_callbacks[handle];
+            JSValue callback = state->midi_callbacks[handle];
 
-            JSValue msg_obj = JS_NewObject(g_midi_js_jsctx);
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "status", JS_NewInt32(g_midi_js_jsctx, qm->message.status));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data1", JS_NewInt32(g_midi_js_jsctx, qm->message.data1));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data2", JS_NewInt32(g_midi_js_jsctx, qm->message.data2));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "timestamp", JS_NewFloat64(g_midi_js_jsctx, (double)qm->message.timestamp));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "type", JS_NewInt32(g_midi_js_jsctx, midi_get_type(qm->message.status)));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "channel", JS_NewInt32(g_midi_js_jsctx, midi_get_channel(qm->message.status)));
+            JSValue msg_obj = JS_NewObject(state->js_ctx);
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "status", JS_NewInt32(state->js_ctx, qm->message.status));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data1", JS_NewInt32(state->js_ctx, qm->message.data1));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data2", JS_NewInt32(state->js_ctx, qm->message.data2));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, (double)qm->message.timestamp));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "type", JS_NewInt32(state->js_ctx, midi_get_type(qm->message.status)));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "channel", JS_NewInt32(state->js_ctx, midi_get_channel(qm->message.status)));
 
             JSValue args[1] = {msg_obj};
-            JSValue ret = JS_Call(g_midi_js_jsctx, callback, JS_UNDEFINED, 1, args);
-            JS_FreeValue(g_midi_js_jsctx, ret);
-            JS_FreeValue(g_midi_js_jsctx, msg_obj);
+            JSValue ret = JS_Call(state->js_ctx, callback, JS_UNDEFINED, 1, args);
+            JS_FreeValue(state->js_ctx, ret);
+            JS_FreeValue(state->js_ctx, msg_obj);
         }
     }
 
@@ -1097,29 +1104,29 @@ void js_midi_poll(JsMidiContext *state)
         MidiQueuedSysEx *sq = &queued_sysex;
 
         int handle = sq->device_handle;
-        if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && g_midi_callbacks_active[handle])
+        if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
         {
-            JSValue callback = g_midi_callbacks[handle];
+            JSValue callback = state->midi_callbacks[handle];
 
-            JSValue msg_obj = JS_NewObject(g_midi_js_jsctx);
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "status", JS_NewInt32(g_midi_js_jsctx, 0xF0));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data1", JS_NewInt32(g_midi_js_jsctx, 0));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data2", JS_NewInt32(g_midi_js_jsctx, 0));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "timestamp", JS_NewFloat64(g_midi_js_jsctx, 0));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "type", JS_NewInt32(g_midi_js_jsctx, 0xF0));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "channel", JS_NewInt32(g_midi_js_jsctx, -1));
+            JSValue msg_obj = JS_NewObject(state->js_ctx);
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "status", JS_NewInt32(state->js_ctx, 0xF0));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data1", JS_NewInt32(state->js_ctx, 0));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data2", JS_NewInt32(state->js_ctx, 0));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, 0));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "type", JS_NewInt32(state->js_ctx, 0xF0));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "channel", JS_NewInt32(state->js_ctx, -1));
 
-            JSValue data_arr = JS_NewArray(g_midi_js_jsctx);
+            JSValue data_arr = JS_NewArray(state->js_ctx);
             for (size_t i = 0; i < sq->length; i++)
             {
-                JS_SetPropertyUint32(g_midi_js_jsctx, data_arr, i, JS_NewInt32(g_midi_js_jsctx, sq->data[i]));
+                JS_SetPropertyUint32(state->js_ctx, data_arr, i, JS_NewInt32(state->js_ctx, sq->data[i]));
             }
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data", data_arr);
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data", data_arr);
 
             JSValue args[1] = {msg_obj};
-            JSValue ret = JS_Call(g_midi_js_jsctx, callback, JS_UNDEFINED, 1, args);
-            JS_FreeValue(g_midi_js_jsctx, ret);
-            JS_FreeValue(g_midi_js_jsctx, msg_obj);
+            JSValue ret = JS_Call(state->js_ctx, callback, JS_UNDEFINED, 1, args);
+            JS_FreeValue(state->js_ctx, ret);
+            JS_FreeValue(state->js_ctx, msg_obj);
         }
     }
 
@@ -1129,23 +1136,23 @@ void js_midi_poll(JsMidiContext *state)
         RtpMidiQueuedMessage *rm = &queued_rtpmidi;
         int session = rm->session_handle;
 
-        if (session >= 0 && session < MAX_RTPMIDI_CALLBACKS && g_rtpmidi_callbacks_active[session])
+        if (session >= 0 && session < MAX_RTPMIDI_CALLBACKS && state->rtpmidi_callbacks_active[session])
         {
-            JSValue callback = g_rtpmidi_callbacks[session];
+            JSValue callback = state->rtpmidi_callbacks[session];
 
-            JSValue msg_obj = JS_NewObject(g_midi_js_jsctx);
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "status", JS_NewInt32(g_midi_js_jsctx, rm->message.status));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data1", JS_NewInt32(g_midi_js_jsctx, rm->message.data1));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "data2", JS_NewInt32(g_midi_js_jsctx, rm->message.data2));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "timestamp", JS_NewFloat64(g_midi_js_jsctx, (double)rm->message.timestamp));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "type", JS_NewInt32(g_midi_js_jsctx, midi_get_type(rm->message.status)));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "channel", JS_NewInt32(g_midi_js_jsctx, midi_get_channel(rm->message.status)));
-            JS_SetPropertyStr(g_midi_js_jsctx, msg_obj, "network", JS_TRUE);
+            JSValue msg_obj = JS_NewObject(state->js_ctx);
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "status", JS_NewInt32(state->js_ctx, rm->message.status));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data1", JS_NewInt32(state->js_ctx, rm->message.data1));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data2", JS_NewInt32(state->js_ctx, rm->message.data2));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, (double)rm->message.timestamp));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "type", JS_NewInt32(state->js_ctx, midi_get_type(rm->message.status)));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "channel", JS_NewInt32(state->js_ctx, midi_get_channel(rm->message.status)));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "network", JS_TRUE);
 
             JSValue args[1] = {msg_obj};
-            JSValue ret = JS_Call(g_midi_js_jsctx, callback, JS_UNDEFINED, 1, args);
-            JS_FreeValue(g_midi_js_jsctx, ret);
-            JS_FreeValue(g_midi_js_jsctx, msg_obj);
+            JSValue ret = JS_Call(state->js_ctx, callback, JS_UNDEFINED, 1, args);
+            JS_FreeValue(state->js_ctx, ret);
+            JS_FreeValue(state->js_ctx, msg_obj);
         }
     }
 }

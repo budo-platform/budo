@@ -3897,6 +3897,28 @@
     {
       "exports": {
         "javascript": [
+          "exit"
+        ],
+        "lua": [
+          "exit"
+        ],
+        "wasmtime": [
+          "app_exit"
+        ]
+      },
+      "operation": "exit",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "end the application with an exit status",
+      "subsystem": "module_lifecycle",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
           "fetch"
         ],
         "lua": [

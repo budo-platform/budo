@@ -18,6 +18,8 @@ extern "C"
     void js_udp_cleanup(JsUdpContext *state);
 
     void js_udp_poll(JsUdpContext *state);
+    
+    bool js_udp_has_pending_work(JsUdpContext *state);
 
 #ifdef __cplusplus
 }

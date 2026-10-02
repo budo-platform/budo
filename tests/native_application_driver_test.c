@@ -227,11 +227,19 @@ static void test_descriptor_validation(void)
     assert(native_application_driver_init(&driver, &adapter, &application,
                                           &host) ==
            BUDO_STATUS_INVALID_ARGUMENT);
+    
     application = valid_application;
     application.frame = NULL;
     assert(native_application_driver_init(&driver, &adapter, &application,
-                                          &host) ==
-           BUDO_STATUS_INVALID_ARGUMENT);
+                                          &host) == BUDO_STATUS_OK);
+    application_driver_destroy(&driver);
+
+    {
+        int exit_code = -1;
+        assert(!budo_native_host_exit_requested(&host, &exit_code));
+        budo_host_request_exit(&host, 7);
+        assert(budo_native_host_exit_requested(&host, &exit_code) && exit_code == 7);
+    }
 }
 
 static void test_input_transitions(void)

@@ -7,6 +7,7 @@ import sys
 
 root = Path(sys.argv[1])
 main = (root / "src/web/web_main.c").read_text()
+shared = (root / "src/core/managed_subsystems.c").read_text()
 bridge = (root / "src/web/web_network.c").read_text()
 header = (root / "src/network/network_wrapper.h").read_text()
 web_cmake = (root / "web/CMakeLists.txt").read_text()
@@ -18,13 +19,14 @@ assert "fetch(" not in guest_fetch, "browser-native WASM must not call fetch dir
 assert "budo_web_wasm_network_fetch" in guest_fetch
 assert "network_request_async(" in main
 assert "network_policy_load_app_json(&policy, \"/\")" in main
-assert "network_async_poll(state->net_ctx)" in main
+assert "network_async_poll(state->common_contexts.net_ctx)" in main
 assert "budo_web_wasm_network_shutdown" in main
-assert "managed_js_network_poll" in main
-assert "managed_lua_network_poll" in main
-assert "subsystem_registry_poll(&state->subsystems)" in main
-assert "js_network_context(state->js_network_ctx)" in main
-assert "lua_network_context(state->lua_network_ctx)" in main
+assert "managed_js_network_poll" in shared
+assert "managed_lua_network_poll" in shared
+assert "managed_runtime_frame(" in main and "&state->subsystems" in main
+assert "js_network_context(c->js_network_ctx)" in shared
+assert "lua_network_context(c->lua_network_ctx)" in shared
+assert ".network_created = web_network_set_context" in main
 
 for shared_limit in (
     "NETWORK_MAX_RESPONSE_HEADERS_SIZE",

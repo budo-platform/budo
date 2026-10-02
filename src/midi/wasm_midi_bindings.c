@@ -39,11 +39,11 @@ static bool wasm_midi_memory_range(int32_t pointer, int32_t length,
 
 #define WASM_MIDI_ENV ((WasmMidiBindingState *)env)
 #define ensure_wasm_midi_ctx() ((void)wasm_midi_context(WASM_MIDI_ENV))
-#define g_wasm_midi_ctx (WASM_MIDI_ENV->midi_ctx)
-#define g_rtpmidi_wasm_ctx (WASM_MIDI_ENV->rtpmidi_ctx)
-#define g_midi_wasm_store_ctx (WASM_MIDI_ENV->store_ctx)
-#define g_wasm_midi_memory \
-    (WASM_MIDI_ENV->has_memory ? &WASM_MIDI_ENV->memory : NULL)
+
+static inline wasmtime_memory_t *wasm_midi_memory(WasmMidiBindingState *state)
+{
+    return state->has_memory ? &state->memory : NULL;
+}
 
 static wasmtime_error_t *define_midi_func(
     wasmtime_linker_t *linker,
@@ -81,7 +81,7 @@ static wasm_trap_t *host_midi_get_input_count(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        results[0].of.i32 = g_wasm_midi_ctx ? midi_get_input_count(g_wasm_midi_ctx) : 0;
+        results[0].of.i32 = WASM_MIDI_ENV->midi_ctx ? midi_get_input_count(WASM_MIDI_ENV->midi_ctx) : 0;
     }
     return NULL;
 }
@@ -99,7 +99,7 @@ static wasm_trap_t *host_midi_get_output_count(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        results[0].of.i32 = g_wasm_midi_ctx ? midi_get_output_count(g_wasm_midi_ctx) : 0;
+        results[0].of.i32 = WASM_MIDI_ENV->midi_ctx ? midi_get_output_count(WASM_MIDI_ENV->midi_ctx) : 0;
     }
     return NULL;
 }
@@ -115,11 +115,11 @@ static wasm_trap_t *host_midi_open_output(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 1)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 1)
         {
             ApiError error;
             results[0].of.i32 = midi_service_open_output(
-                g_wasm_midi_ctx, args[0].of.i32, &error);
+                WASM_MIDI_ENV->midi_ctx, args[0].of.i32, &error);
         }
         else
         {
@@ -139,9 +139,9 @@ static wasm_trap_t *host_midi_close_output(
     (void)results;
     (void)nresults;
     ensure_wasm_midi_ctx();
-    if (g_wasm_midi_ctx && nargs >= 1)
+    if (WASM_MIDI_ENV->midi_ctx && nargs >= 1)
     {
-        midi_close_output(g_wasm_midi_ctx, args[0].of.i32);
+        midi_close_output(WASM_MIDI_ENV->midi_ctx, args[0].of.i32);
     }
     return NULL;
 }
@@ -157,9 +157,9 @@ static wasm_trap_t *host_midi_send_message(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 4)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 4)
         {
-            bool success = midi_send_message(g_wasm_midi_ctx,
+            bool success = midi_send_message(WASM_MIDI_ENV->midi_ctx,
                                              args[0].of.i32,
                                              (uint8_t)args[1].of.i32,
                                              (uint8_t)args[2].of.i32,
@@ -185,9 +185,9 @@ static wasm_trap_t *host_midi_note_on(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 4)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 4)
         {
-            bool success = midi_note_on(g_wasm_midi_ctx,
+            bool success = midi_note_on(WASM_MIDI_ENV->midi_ctx,
                                         args[0].of.i32,
                                         args[1].of.i32,
                                         args[2].of.i32,
@@ -213,9 +213,9 @@ static wasm_trap_t *host_midi_note_off(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 4)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 4)
         {
-            bool success = midi_note_off(g_wasm_midi_ctx,
+            bool success = midi_note_off(WASM_MIDI_ENV->midi_ctx,
                                          args[0].of.i32,
                                          args[1].of.i32,
                                          args[2].of.i32,
@@ -241,9 +241,9 @@ static wasm_trap_t *host_midi_control_change(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 4)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 4)
         {
-            bool success = midi_control_change(g_wasm_midi_ctx,
+            bool success = midi_control_change(WASM_MIDI_ENV->midi_ctx,
                                                args[0].of.i32,
                                                args[1].of.i32,
                                                args[2].of.i32,
@@ -269,9 +269,9 @@ static wasm_trap_t *host_midi_program_change(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 3)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 3)
         {
-            bool success = midi_program_change(g_wasm_midi_ctx,
+            bool success = midi_program_change(WASM_MIDI_ENV->midi_ctx,
                                                args[0].of.i32,
                                                args[1].of.i32,
                                                args[2].of.i32);
@@ -296,9 +296,9 @@ static wasm_trap_t *host_midi_pitch_bend(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        if (g_wasm_midi_ctx && nargs >= 3)
+        if (WASM_MIDI_ENV->midi_ctx && nargs >= 3)
         {
-            bool success = midi_pitch_bend(g_wasm_midi_ctx,
+            bool success = midi_pitch_bend(WASM_MIDI_ENV->midi_ctx,
                                            args[0].of.i32,
                                            args[1].of.i32,
                                            args[2].of.i32);
@@ -325,18 +325,18 @@ static wasm_trap_t *host_midi_send_raw(
         results[0].kind = WASMTIME_I32;
         results[0].of.i32 = 0;
 
-        if (g_wasm_midi_ctx && g_midi_wasm_store_ctx && g_wasm_midi_memory && nargs >= 3)
+        if (WASM_MIDI_ENV->midi_ctx && WASM_MIDI_ENV->store_ctx && wasm_midi_memory(WASM_MIDI_ENV) && nargs >= 3)
         {
             int32_t handle = args[0].of.i32;
             int32_t data_ptr = args[1].of.i32;
             int32_t data_len = args[2].of.i32;
 
-            uint8_t *mem = wasmtime_memory_data(g_midi_wasm_store_ctx, g_wasm_midi_memory);
-            size_t mem_size = wasmtime_memory_data_size(g_midi_wasm_store_ctx, g_wasm_midi_memory);
+            uint8_t *mem = wasmtime_memory_data(WASM_MIDI_ENV->store_ctx, wasm_midi_memory(WASM_MIDI_ENV));
+            size_t mem_size = wasmtime_memory_data_size(WASM_MIDI_ENV->store_ctx, wasm_midi_memory(WASM_MIDI_ENV));
 
             if (wasm_midi_memory_range(data_ptr, data_len, mem_size))
             {
-                bool success = midi_send_raw(g_wasm_midi_ctx, handle, mem + data_ptr, (size_t)data_len);
+                bool success = midi_send_raw(WASM_MIDI_ENV->midi_ctx, handle, mem + data_ptr, (size_t)data_len);
                 results[0].of.i32 = success ? 1 : 0;
             }
         }
@@ -356,14 +356,14 @@ static wasm_trap_t *host_rtpmidi_create_session(
         results[0].kind = WASMTIME_I32;
         results[0].of.i32 = -1;
 
-        if (g_rtpmidi_wasm_ctx && g_midi_wasm_store_ctx && g_wasm_midi_memory && nargs >= 3)
+        if (WASM_MIDI_ENV->rtpmidi_ctx && WASM_MIDI_ENV->store_ctx && wasm_midi_memory(WASM_MIDI_ENV) && nargs >= 3)
         {
             int32_t name_ptr = args[0].of.i32;
             int32_t name_len = args[1].of.i32;
             int32_t port = args[2].of.i32;
 
-            uint8_t *mem = wasmtime_memory_data(g_midi_wasm_store_ctx, g_wasm_midi_memory);
-            size_t mem_size = wasmtime_memory_data_size(g_midi_wasm_store_ctx, g_wasm_midi_memory);
+            uint8_t *mem = wasmtime_memory_data(WASM_MIDI_ENV->store_ctx, wasm_midi_memory(WASM_MIDI_ENV));
+            size_t mem_size = wasmtime_memory_data_size(WASM_MIDI_ENV->store_ctx, wasm_midi_memory(WASM_MIDI_ENV));
 
             if (wasm_midi_memory_range(name_ptr, name_len, mem_size) &&
                 name_len < RTPMIDI_MAX_NAME)
@@ -371,7 +371,7 @@ static wasm_trap_t *host_rtpmidi_create_session(
                 char name[RTPMIDI_MAX_NAME];
                 memcpy(name, mem + name_ptr, name_len);
                 name[name_len] = '\0';
-                results[0].of.i32 = rtpmidi_create_session(g_rtpmidi_wasm_ctx, name, port);
+                results[0].of.i32 = rtpmidi_create_session(WASM_MIDI_ENV->rtpmidi_ctx, name, port);
             }
         }
     }
@@ -390,15 +390,15 @@ static wasm_trap_t *host_rtpmidi_connect(
         results[0].kind = WASMTIME_I32;
         results[0].of.i32 = 0;
 
-        if (g_rtpmidi_wasm_ctx && g_midi_wasm_store_ctx && g_wasm_midi_memory && nargs >= 4)
+        if (WASM_MIDI_ENV->rtpmidi_ctx && WASM_MIDI_ENV->store_ctx && wasm_midi_memory(WASM_MIDI_ENV) && nargs >= 4)
         {
             int32_t session = args[0].of.i32;
             int32_t host_ptr = args[1].of.i32;
             int32_t host_len = args[2].of.i32;
             int32_t port = args[3].of.i32;
 
-            uint8_t *mem = wasmtime_memory_data(g_midi_wasm_store_ctx, g_wasm_midi_memory);
-            size_t mem_size = wasmtime_memory_data_size(g_midi_wasm_store_ctx, g_wasm_midi_memory);
+            uint8_t *mem = wasmtime_memory_data(WASM_MIDI_ENV->store_ctx, wasm_midi_memory(WASM_MIDI_ENV));
+            size_t mem_size = wasmtime_memory_data_size(WASM_MIDI_ENV->store_ctx, wasm_midi_memory(WASM_MIDI_ENV));
 
             if (wasm_midi_memory_range(host_ptr, host_len, mem_size) &&
                 host_len < 256)
@@ -406,7 +406,7 @@ static wasm_trap_t *host_rtpmidi_connect(
                 char host[256];
                 memcpy(host, mem + host_ptr, host_len);
                 host[host_len] = '\0';
-                results[0].of.i32 = rtpmidi_connect(g_rtpmidi_wasm_ctx, session, host, port) ? 1 : 0;
+                results[0].of.i32 = rtpmidi_connect(WASM_MIDI_ENV->rtpmidi_ctx, session, host, port) ? 1 : 0;
             }
         }
     }
@@ -422,9 +422,9 @@ static wasm_trap_t *host_rtpmidi_destroy_session(
     (void)caller;
     (void)results;
     (void)nresults;
-    if (g_rtpmidi_wasm_ctx && nargs >= 1)
+    if (WASM_MIDI_ENV->rtpmidi_ctx && nargs >= 1)
     {
-        rtpmidi_destroy_session(g_rtpmidi_wasm_ctx, args[0].of.i32);
+        rtpmidi_destroy_session(WASM_MIDI_ENV->rtpmidi_ctx, args[0].of.i32);
     }
     return NULL;
 }
@@ -440,9 +440,9 @@ static wasm_trap_t *host_rtpmidi_send_message(
     {
         results[0].kind = WASMTIME_I32;
         results[0].of.i32 = 0;
-        if (g_rtpmidi_wasm_ctx && nargs >= 4)
+        if (WASM_MIDI_ENV->rtpmidi_ctx && nargs >= 4)
         {
-            bool ok = rtpmidi_send_message(g_rtpmidi_wasm_ctx,
+            bool ok = rtpmidi_send_message(WASM_MIDI_ENV->rtpmidi_ctx,
                                            args[0].of.i32,
                                            (uint8_t)args[1].of.i32,
                                            (uint8_t)args[2].of.i32,
@@ -465,7 +465,7 @@ static wasm_trap_t *host_rtpmidi_get_session_count(
     if (nresults >= 1)
     {
         results[0].kind = WASMTIME_I32;
-        results[0].of.i32 = g_rtpmidi_wasm_ctx ? rtpmidi_get_session_count(g_rtpmidi_wasm_ctx) : 0;
+        results[0].of.i32 = WASM_MIDI_ENV->rtpmidi_ctx ? rtpmidi_get_session_count(WASM_MIDI_ENV->rtpmidi_ctx) : 0;
     }
     return NULL;
 }
@@ -662,9 +662,5 @@ void wasm_midi_poll(WasmMidiBindingState *state)
         rtpmidi_poll(state->rtpmidi_ctx);
 }
 
-#undef g_wasm_midi_memory
-#undef g_midi_wasm_store_ctx
-#undef g_rtpmidi_wasm_ctx
-#undef g_wasm_midi_ctx
 #undef ensure_wasm_midi_ctx
 #undef WASM_MIDI_ENV

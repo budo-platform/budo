@@ -56,7 +56,9 @@ static void test_timer_isolation(JSRuntimeContext *canvas_a,
 }
 
 static void test_resource_isolation(JSRuntimeContext *canvas_a,
-                                    JSRuntimeContext *canvas_b)
+                                    JSRuntimeContext *canvas_b,
+                                    JSGraphicContext *graphic_a,
+                                    JSGraphicContext *graphic_b)
 {
     assert(js_runtime_eval(canvas_b,
                            "let missingFontThrew = false;"
@@ -71,11 +73,11 @@ static void test_resource_isolation(JSRuntimeContext *canvas_a,
                 "throw Error('context A did not resolve its font');"
                 "globalThis.pathId = sys.path.create();");
 
-    assert(canvas_a->font_count == 1);
-    assert(canvas_b->font_count == 0);
-    assert(canvas_a->path_count == 1);
-    assert(canvas_b->path_count == 1);
-    assert(canvas_a->paths[0] != canvas_b->paths[0]);
+    assert(graphic_a->font_count == 1);
+    assert(graphic_b->font_count == 0);
+    assert(graphic_a->path_count == 1);
+    assert(graphic_b->path_count == 1);
+    assert(graphic_a->paths[0] != graphic_b->paths[0]);
     eval_direct(canvas_a,
                 "if (pathId !== 0) throw Error('wrong path for context A');");
     eval_direct(canvas_b,
@@ -89,15 +91,23 @@ int main(int argc, char **argv)
     JSRuntimeContext *canvas_b = js_runtime_create(argv[2]);
 
     assert(canvas_a && canvas_b);
+    JSGraphicContext *graphic_a = js_graphic_init(canvas_a);
+    JSGraphicContext *graphic_b = js_graphic_init(canvas_b);
+    assert(graphic_a && graphic_b);
     assert(JS_GetContextOpaque(canvas_a->context) == canvas_a);
     assert(JS_GetContextOpaque(canvas_b->context) == canvas_b);
     assert(JS_GetRuntimeOpaque(canvas_a->runtime) == canvas_a);
     assert(JS_GetRuntimeOpaque(canvas_b->runtime) == canvas_b);
 
+    eval_direct(canvas_a,
+                "if (sys.canvas.measureText('Canvas workspace', 20) <= 0 || "
+                "sys.canvas.measureTextRect('Canvas workspace', 20).width <= 0) "
+                "throw Error('default font text measurement is zero');");
     test_timer_isolation(canvas_a, canvas_b);
-    test_resource_isolation(canvas_a, canvas_b);
+    test_resource_isolation(canvas_a, canvas_b, graphic_a, graphic_b);
     eval_direct(canvas_a, "console.log('canvas conformance');");
 
+    js_graphic_destroy(graphic_b);
     js_runtime_destroy(canvas_b);
     eval_direct(canvas_a,
                 "if (!sys.canvas.setFont('isolation')) "
@@ -105,7 +115,8 @@ int main(int argc, char **argv)
                 "sys.path.reset(pathId);"
                 "if (sys.path.create() !== 1) "
                 "throw Error('resource owner did not survive peer cleanup');");
-    assert(canvas_a->path_count == 2);
+    assert(graphic_a->path_count == 2);
+    js_graphic_destroy(graphic_a);
     js_runtime_destroy(canvas_a);
     puts("{\"runtime\":\"javascript\",\"operation\":\"canvas.resourceIsolation\",\"result\":true,\"errorKind\":\"none\",\"errorCode\":\"\"}");
     puts("{\"runtime\":\"javascript\",\"operation\":\"window.instanceState\",\"result\":true,\"errorKind\":\"none\",\"errorCode\":\"\"}");

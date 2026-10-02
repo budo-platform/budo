@@ -17,6 +17,8 @@ extern "C"
     void lua_midi_cleanup(LuaMidiContext *state);
 
     void lua_midi_poll(LuaMidiContext *state);
+    
+    bool lua_midi_has_pending_work(LuaMidiContext *state);
 
     void lua_midi_set_rtpmidi(LuaMidiContext *state,
                               RtpMidiContext *rtp_ctx);

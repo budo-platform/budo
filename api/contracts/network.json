@@ -92,7 +92,7 @@
     },
     "platform_differences": {
         "desktop": {
-            "source": "src/core/main.c",
+            "source": "src/desktop/managed_desktop.c",
             "details": [
                 "JavaScript, Lua, and Wasmtime frame loops poll their own explicit network binding state.",
                 "Wasmtime network state is shut down before reverse subsystem teardown, while its callback environment allocation remains alive until the owning linker and store have been destroyed.",

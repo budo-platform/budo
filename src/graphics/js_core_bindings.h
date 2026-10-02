@@ -20,10 +20,24 @@ extern "C"
         bool active;        
     } JSTimerEntry;
 
+#define JS_RUNTIME_PENDING_REJECTION_CAPACITY 32
+
+    typedef struct
+    {
+        JSValue promise;
+        JSValue reason;
+    } JSPendingRejection;
+
     typedef struct
     {
         JSRuntime *runtime;
         JSContext *context;
+
+        JSPendingRejection pending_rejections[JS_RUNTIME_PENDING_REJECTION_CAPACITY];
+        int pending_rejection_count;
+
+        bool exit_requested;
+        int exit_code;
 
         char project_dir[1024];
 
@@ -43,6 +57,10 @@ extern "C"
     bool js_runtime_eval(JSRuntimeContext *ctx, const char *code, const char *filename);
 
     void js_runtime_execute_pending_jobs(JSRuntimeContext *ctx);
+
+    bool js_runtime_exit_requested(const JSRuntimeContext *ctx, int *code);
+
+    bool js_runtime_has_pending_work(JSRuntimeContext *ctx);
 
     void js_runtime_process_timers(JSRuntimeContext *ctx, double timestamp_ms);
 

@@ -27,8 +27,8 @@ static_assert(std::is_same<decltype(&budo_canvas_draw_region_pass),
                                           BudoRenderTarget *, int32_t, int32_t,
                                           uint32_t, uint32_t)>::value,
               "Region pass must retain a C-compatible signature");
-static_assert(BUDO_NATIVE_API_VERSION_MINOR == 4u,
-              "Public native API version should cover region passes");
+static_assert(BUDO_NATIVE_API_VERSION_MINOR == 5u,
+              "Public native API version should cover window-less applications");
 
 int main()
 {

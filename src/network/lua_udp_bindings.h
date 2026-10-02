@@ -18,6 +18,8 @@ extern "C"
     void lua_udp_cleanup(LuaUdpContext *state);
 
     void lua_udp_poll(LuaUdpContext *state);
+    
+    bool lua_udp_has_pending_work(LuaUdpContext *state);
 
 #ifdef __cplusplus
 }
