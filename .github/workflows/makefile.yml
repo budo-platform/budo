@@ -52,20 +52,4 @@ jobs:
         run: make build
 
   build-windows:
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install SDL2
-        shell: pwsh
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          C:\vcpkg\vcpkg.exe install sdl2:x64-windows
-
-      - name: Download Skia
-        run: ./scripts/setup-skia.bat
-
-      - name: Build
-        run: make build
+    uses: ./.github/workflows/windows-build.yml

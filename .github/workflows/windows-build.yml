@@ -2,7 +2,7 @@ name: Windows build
 
 # Reusable Windows x64 build (MSVC + Ninja), mirroring scripts/windows-build.ps1.
 # Produces budo-windows-x86_64.zip: budo.exe plus the DLLs it needs at runtime
-# (SDL2, OpenSSL, Wasmtime, ...). Called by makefile.yml (CI) and release.yml.
+# (SDL2, OpenSSL, Wasmtime, the MSVC runtime, ...). Called by makefile.yml (CI) and release.yml.
 
 on:
   workflow_call:
@@ -48,8 +48,11 @@ jobs:
             -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (-not $vs) { throw "Visual Studio with the x64 C++ tools was not found" }
           $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvarsall.bat"
-          # Export the developer environment to every following step.
-          cmd /c "`"$vcvars`" x64 >nul && set" | ForEach-Object {
+          # Export the developer environment to every following step. A batch
+          # file avoids cmd.exe quote stripping on the path with spaces.
+          $bat = "$env:RUNNER_TEMP\vcvars-env.bat"
+          Set-Content -Path $bat -Value "@call `"$vcvars`" x64 >nul`r`n@set" -Encoding ASCII
+          cmd /c $bat | ForEach-Object {
             if ($_ -match '^([^=]+)=(.*)$') {
               "$($Matches[1])=$($Matches[2])" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
             }
@@ -82,9 +85,10 @@ jobs:
       # Building Skia takes most of the job, so the built tree is cached per
       # locked commit. Its checkout history, third-party sources, and object
       # files are not needed to build Budo and are left out of the cache.
+      # (Saved right after building, so a later Budo build failure keeps it.)
       - name: Restore Skia
         id: skia-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             third_party/skia
@@ -97,6 +101,17 @@ jobs:
         if: steps.skia-cache.outputs.cache-hit != 'true'
         shell: cmd
         run: scripts\setup-skia.bat
+
+      - name: Save Skia
+        if: steps.skia-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            third_party/skia
+            !third_party/skia/.git
+            !third_party/skia/third_party/externals
+            !third_party/skia/out/Release/obj
+          key: skia-windows-x64-${{ steps.lock.outputs.skia }}
 
       - name: Configure
         env:
@@ -132,13 +147,26 @@ jobs:
           if (-not $ssl) { throw "OpenSSL runtime DLLs not found under $env:OPENSSL_ROOT_DIR\bin" }
           $ssl | Copy-Item -Destination $out
           Copy-Item LICENSE, THIRD_PARTY_NOTICES.md $out
+          # Budo uses the DLL C runtime (/MD): ship the redistributable MSVC
+          # runtime app-locally so users need no VC++ Redistributable install.
+          $redist = Get-ChildItem "$env:VCToolsRedistDir\x64" -Directory |
+            Where-Object { $_.Name -match '^Microsoft\.VC\d+\.(CRT|OpenMP)$' }
+          if (-not ($redist | Where-Object Name -like '*.CRT')) {
+            throw "MSVC redistributable runtime not found under $env:VCToolsRedistDir"
+          }
+          $redist | ForEach-Object { Get-ChildItem $_.FullName -Filter *.dll | Copy-Item -Destination $out }
 
-          # Every DLL the exe imports must be shipped or come with Windows.
-          $deps = dumpbin /nologo /dependents "$out\budo.exe" |
-            ForEach-Object { $_.Trim() } | Where-Object { $_ -match '\.dll$' }
+          # Every DLL that budo.exe or a shipped DLL imports must be shipped or
+          # come with Windows.
+          $deps = Get-ChildItem $out -Include *.exe, *.dll -Recurse | ForEach-Object {
+            dumpbin /nologo /dependents $_.FullName
+          } | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[\w.+-]+\.dll$' } | Sort-Object -Unique
+          # The MSVC runtime is in System32 on the runner but not on every user
+          # machine, so it must be shipped.
           $missing = $deps | Where-Object {
-            -not (Test-Path "$out\$_") -and -not (Test-Path "$env:SystemRoot\System32\$_") -and
-            $_ -notmatch '^(api|ext)-ms-'
+            -not (Test-Path "$out\$_") -and (
+              $_ -match '^(vcruntime|msvcp|concrt|vcomp)' -or
+              (-not (Test-Path "$env:SystemRoot\System32\$_") -and $_ -notmatch '^(api|ext)-ms-'))
           }
           Write-Host "Imports: $($deps -join ', ')"
           if ($missing) { throw "Not shipped with budo.exe: $($missing -join ', ')" }

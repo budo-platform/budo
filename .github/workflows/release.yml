@@ -1,7 +1,7 @@
 name: Release
 
-# Builds standalone `budo` binaries for Linux and macOS and publishes them on a
-# GitHub release. Push a tag (git tag v0.4.3 && git push origin v0.4.3) or run
+# Builds standalone `budo` binaries for Linux and macOS, and a Windows zip
+# (budo.exe with its DLLs), and publishes them on a GitHub release. Push a tag (git tag v0.4.3 && git push origin v0.4.3) or run
 # the workflow by hand with an existing or new tag name.
 
 on:
@@ -101,9 +101,12 @@ jobs:
           path: dist/${{ matrix.asset }}
           if-no-files-found: error
 
+  build-windows:
+    uses: ./.github/workflows/windows-build.yml
+
   publish:
     name: Publish release
-    needs: build
+    needs: [build, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -116,7 +119,7 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: |
-          chmod 0755 budo-*
+          chmod 0755 budo-linux-* budo-macos-*
           sha256sum budo-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
@@ -149,9 +152,10 @@ jobs:
             echo "|---|---|"
             echo "| Linux x86_64 | $base/budo-linux-x86_64 |"
             echo "| macOS Apple Silicon | $base/budo-macos-aarch64 |"
+            echo "| Windows x64 (zip: budo.exe + DLLs) | $base/budo-windows-x86_64.zip |"
             echo "| Checksums | $base/SHA256SUMS.txt |"
             echo ""
-            echo "Always-latest links: \`$latest/budo-linux-x86_64\`, \`$latest/budo-macos-aarch64\`"
+            echo "Always-latest links: \`$latest/budo-linux-x86_64\`, \`$latest/budo-macos-aarch64\`, \`$latest/budo-windows-x86_64.zip\`"
             echo ""
             echo "Install:"
             echo ""
@@ -159,9 +163,13 @@ jobs:
             echo "curl -fL -o budo $latest/budo-macos-aarch64   # or budo-linux-x86_64"
             echo "chmod +x budo && ./budo help"
             echo '```'
+            echo ""
+            echo "On Windows, unzip budo-windows-x86_64.zip and keep the DLLs next to budo.exe."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=Budo $RELEASE_TAG for Linux x86_64::$base/budo-linux-x86_64"
           echo "::notice title=Budo $RELEASE_TAG for macOS Apple Silicon::$base/budo-macos-aarch64"
+          echo "::notice title=Budo $RELEASE_TAG for Windows x64::$base/budo-windows-x86_64.zip"
           echo "Linux x86_64:        $base/budo-linux-x86_64"
           echo "macOS Apple Silicon: $base/budo-macos-aarch64"
+          echo "Windows x64:         $base/budo-windows-x86_64.zip"
           echo "Checksums:           $base/SHA256SUMS.txt"
