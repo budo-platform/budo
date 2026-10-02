@@ -2494,7 +2494,7 @@ endif()
 
 # Find Skia module libraries
 find_file(SKIA_SKRESOURCES_LIBRARY
-    NAMES libskresources.a
+    NAMES libskresources.a skresources.lib
     PATHS
         ${SKIA_DIR}/lib
         ${SKIA_DIR}/out/Release
@@ -2502,7 +2502,7 @@ find_file(SKIA_SKRESOURCES_LIBRARY
     NO_DEFAULT_PATH
 )
 find_file(SKIA_EXPAT_LIBRARY
-    NAMES libexpat.a
+    NAMES libexpat.a expat.lib
     PATHS
         ${SKIA_DIR}/lib
         ${SKIA_DIR}/out/Release

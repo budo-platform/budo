@@ -55,29 +55,25 @@ if exist "%SKIA_DIR%\.git" (
 ) else (
     echo Cloning Skia...
     if not exist "%SKIA_DIR%\.." mkdir "%SKIA_DIR%\.."
-    git clone --no-checkout https://skia.googlesource.com/skia.git "%SKIA_DIR%"
-    if errorlevel 1 exit /b 1
+    git clone --no-checkout https://skia.googlesource.com/skia.git "%SKIA_DIR%" || exit /b 1
     cd /d "%SKIA_DIR%"
 )
-git fetch origin %SKIA_COMMIT%
-if errorlevel 1 exit /b 1
-git checkout --detach %SKIA_COMMIT%
-if errorlevel 1 exit /b 1
+git fetch origin %SKIA_COMMIT% || exit /b 1
+git checkout --detach %SKIA_COMMIT% || exit /b 1
 
 REM Sync dependencies
 echo Syncing Skia dependencies...
-python tools\git-sync-deps
-if errorlevel 1 exit /b 1
+python tools\git-sync-deps || exit /b 1
 
 REM Generate build files
 echo Generating build files...
-bin\gn gen "%BUILD_DIR%" --args="is_official_build=true is_component_build=false skia_use_system_expat=false skia_use_system_libjpeg_turbo=false skia_use_system_libpng=false skia_use_system_libwebp=false skia_use_system_zlib=false skia_use_system_harfbuzz=false skia_use_system_icu=false skia_enable_pdf=false skia_enable_skottie=false skia_enable_skshaper=false"
-if errorlevel 1 exit /b 1
+bin\gn gen "%BUILD_DIR%" --args="is_official_build=true is_component_build=false skia_use_system_expat=false skia_use_system_libjpeg_turbo=false skia_use_system_libpng=false skia_use_system_libwebp=false skia_use_system_zlib=false skia_use_system_harfbuzz=false skia_use_system_icu=false skia_enable_pdf=false skia_enable_skottie=false skia_enable_skshaper=false" || exit /b 1
 
 REM Build
 echo Building Skia...
-ninja -C "%BUILD_DIR%"
-if errorlevel 1 exit /b 1
+REM Only the libraries Budo links: the default target also generates gen\skia.h,
+REM which fails whenever gn prints a warning.
+ninja -C "%BUILD_DIR%" skia expat || exit /b 1
 
 echo.
 echo ===================================
