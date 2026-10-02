@@ -67,7 +67,26 @@ python tools\git-sync-deps || exit /b 1
 
 REM Generate build files
 echo Generating build files...
-bin\gn gen "%BUILD_DIR%" --args="is_official_build=true is_component_build=false skia_use_system_expat=false skia_use_system_libjpeg_turbo=false skia_use_system_libpng=false skia_use_system_libwebp=false skia_use_system_zlib=false skia_use_system_harfbuzz=false skia_use_system_icu=false skia_enable_pdf=false skia_enable_skottie=false skia_enable_skshaper=false" || exit /b 1
+REM Arguments go in args.gn, which avoids nesting GN string quotes in --args.
+REM /MD: Budo and its other dependencies use the DLL C runtime; cl.exe
+REM defaults to the static one (/MT), and the two cannot be linked together.
+if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
+(
+    echo is_official_build=true
+    echo is_component_build=false
+    echo skia_use_system_expat=false
+    echo skia_use_system_libjpeg_turbo=false
+    echo skia_use_system_libpng=false
+    echo skia_use_system_libwebp=false
+    echo skia_use_system_zlib=false
+    echo skia_use_system_harfbuzz=false
+    echo skia_use_system_icu=false
+    echo skia_enable_pdf=false
+    echo skia_enable_skottie=false
+    echo skia_enable_skshaper=false
+    echo extra_cflags = [ "/MD" ]
+) > "%BUILD_DIR%\args.gn"
+bin\gn gen "%BUILD_DIR%" || exit /b 1
 
 REM Build
 echo Building Skia...

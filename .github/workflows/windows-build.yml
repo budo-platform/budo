@@ -117,9 +117,10 @@ jobs:
           "ZLIB_ROOT=$prefix" >> $env:GITHUB_ENV
 
       # Building Skia takes most of the job, so the built tree is cached per
-      # locked commit. Its checkout history, third-party sources, and object
-      # files are not needed to build Budo and are left out of the cache.
-      # (Saved right after building, so a later Budo build failure keeps it.)
+      # locked commit and per version of scripts/setup-skia.bat (its GN args).
+      # Its checkout history, third-party sources, and object files are not
+      # needed to build Budo and are left out of the cache. (Saved right after
+      # building, so a later Budo build failure keeps it.)
       - name: Restore Skia
         id: skia-cache
         uses: actions/cache/restore@v4
@@ -129,7 +130,7 @@ jobs:
             !third_party/skia/.git
             !third_party/skia/third_party/externals
             !third_party/skia/out/Release/obj
-          key: skia-windows-x64-${{ steps.lock.outputs.skia }}
+          key: skia-windows-x64-${{ steps.lock.outputs.skia }}-${{ hashFiles('scripts/setup-skia.bat') }}
 
       - name: Build Skia
         if: steps.skia-cache.outputs.cache-hit != 'true'
@@ -148,7 +149,7 @@ jobs:
             !third_party/skia/.git
             !third_party/skia/third_party/externals
             !third_party/skia/out/Release/obj
-          key: skia-windows-x64-${{ steps.lock.outputs.skia }}
+          key: skia-windows-x64-${{ steps.lock.outputs.skia }}-${{ hashFiles('scripts/setup-skia.bat') }}
 
       - name: Configure
         env:
@@ -242,8 +243,8 @@ jobs:
           Write-Host "Imports: $($deps -join ', ')"
           if ($missing) { throw "Not shipped with budo.exe: $($missing -join ', ')" }
 
-          & "$out\budo.exe" help > $null
-          if ($LASTEXITCODE -ne 0) { throw "budo.exe help failed with exit code $LASTEXITCODE" }
+          & "$out\budo.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "budo.exe --version failed with exit code $LASTEXITCODE" }
 
           Compress-Archive -Path "$out\*" -DestinationPath "dist\budo-windows-x86_64.zip" -Force
           Get-ChildItem $out | Format-Table Name, Length

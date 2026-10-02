@@ -67,7 +67,9 @@ if (-not (Test-Path "$SKIA_DIR\out\Release\skia.lib")) {
               'skia_use_system_libpng=false skia_use_system_libwebp=false ' +
               'skia_use_system_zlib=false skia_use_system_harfbuzz=false ' +
               'skia_use_system_icu=false skia_enable_pdf=false ' +
-              'skia_enable_skottie=false skia_enable_skshaper=false'
+              'skia_enable_skottie=false skia_enable_skshaper=false ' +
+              # DLL C runtime like Budo (cl.exe defaults to the static /MT).
+              'extra_cflags=[\"/MD\"]'
 
     # gn and ninja need the MSVC environment
     $batContent = @"

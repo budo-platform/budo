@@ -1145,6 +1145,34 @@ configure_file(
     @ONLY
 )
 
+# Build identity for `budo version`. Release builds come from a clean CI
+# checkout, so the configure-time commit is the one released.
+set(BUDO_BUILD_COMMIT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE BUDO_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE BUDO_GIT_RESULT)
+    if(BUDO_GIT_RESULT EQUAL 0 AND BUDO_GIT_COMMIT)
+        set(BUDO_BUILD_COMMIT "${BUDO_GIT_COMMIT}")
+    endif()
+endif()
+if(BUDO_QUICKJS_IMPL STREQUAL "ng")
+    string(SUBSTRING "${BUDO_QUICKJS_NG_GIT_TAG}" 0 12 BUDO_QUICKJS_SHORT_REVISION)
+    set(BUDO_BUILD_QUICKJS "QuickJS-NG ${BUDO_QUICKJS_SHORT_REVISION}")
+else()
+    set(BUDO_BUILD_QUICKJS "QuickJS (Bellard)")
+endif()
+configure_file(
+    src/core/build_info.h.in
+    "${GENERATED_DIR}/build_info.h"
+    @ONLY
+)
+
 add_library(budo_native_compile STATIC
     src/native/native_compile.c
     src/native/native_cache.c
@@ -1350,6 +1378,15 @@ if(BUILD_TESTING)
     if(BUDO_QUICKJS_IMPL STREQUAL "ng")
         set(HEADLESS_RUN_TEST_ARGS "--quickjs-ng")
     endif()
+    # `budo version` / --version / -v: first line is "budo <version>".
+    string(REPLACE "." "\\." BUDO_VERSION_STRING_FOR_TESTS "${BUDO_VERSION_STRING}")
+    foreach(version_flag IN ITEMS version --version -v)
+        add_test(NAME cli_version_${version_flag}
+            COMMAND $<TARGET_FILE:${PROJECT_NAME}> ${version_flag})
+        set_tests_properties(cli_version_${version_flag} PROPERTIES
+            PASS_REGULAR_EXPRESSION "^budo ${BUDO_VERSION_STRING_FOR_TESTS}\ncommit: ")
+    endforeach()
+
     add_test(NAME headless_run
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tests/headless_run_test.py

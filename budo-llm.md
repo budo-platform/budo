@@ -90,6 +90,7 @@ budo android-apk <project_dir> [--release|--debug -o DIR --install --no-build --
 budo android-aab <project_dir> [--release|--debug -o DIR --no-build --clean]
 budo budo.d.ts
 budo budo-llm.md
+budo version                            # also --version, -v; include the output in bug reports
 budo help
 ```
 

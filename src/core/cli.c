@@ -6,10 +6,21 @@
 #include <string.h>
 
 #include "core/version.h"
+#include "build_info.h"
 
 #define DEFAULT_WIDTH 800
 #define DEFAULT_HEIGHT 600
 #define DEFAULT_TITLE "Budo"
+
+void budo_cli_print_version(void)
+{
+    printf("budo " BUDO_VERSION_STRING "\n"
+           "commit:     " BUDO_BUILD_COMMIT "\n"
+           "platform:   " BUDO_BUILD_TARGET "\n"
+           "javascript: " BUDO_BUILD_QUICKJS "\n"
+           "native api: %u.%u\n",
+           (unsigned)BUDO_NATIVE_API_VERSION_MAJOR, (unsigned)BUDO_NATIVE_API_VERSION_MINOR);
+}
 
 void budo_cli_print_usage(const char *program_name)
 {
@@ -58,6 +69,8 @@ void budo_cli_print_usage(const char *program_name)
             "                                  to stdout.\n"
             "  budo-llm.md                      Print the bundled developer API reference\n"
             "                                  to stdout.\n"
+            "  version                         Print the version and build details\n"
+            "                                  (also --version, -v).\n"
             "  help                            Show this help page.\n"
             "\n"
             "Options for `run` (and the implicit shorthand):\n"
@@ -246,6 +259,14 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
         strcmp(first, "-h") == 0)
     {
         config->command = BUDO_CMD_HELP;
+        return true;
+    }
+
+    if (strcmp(first, "version") == 0 ||
+        strcmp(first, "--version") == 0 ||
+        strcmp(first, "-v") == 0)
+    {
+        config->command = BUDO_CMD_VERSION;
         return true;
     }
 

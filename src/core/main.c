@@ -32,6 +32,10 @@ int budo_cli_main(int argc, char **argv)
         budo_cli_print_usage(argv[0]);
         return 0;
 
+    case BUDO_CMD_VERSION:
+        budo_cli_print_version();
+        return 0;
+
     case BUDO_CMD_PRINT_DTS:
         return embedded_resource_write_stdout(embedded_types_data, embedded_types_len,
                                               embedded_types_uncompressed_len,

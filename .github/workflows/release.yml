@@ -73,7 +73,7 @@ jobs:
 
       - name: Check the binary is standalone
         run: |
-          ./build/budo help > /dev/null
+          ./build/budo --version
           if [ "$RUNNER_OS" = "macOS" ]; then
             otool -L build/budo
             # Only system libraries and frameworks may remain.

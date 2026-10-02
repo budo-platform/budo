@@ -27,7 +27,8 @@ extern "C"
         BUDO_CMD_ANDROID_AAB,
         BUDO_CMD_PRINT_DTS,
         BUDO_CMD_PRINT_DEVAPI,
-        BUDO_CMD_HELP
+        BUDO_CMD_HELP,
+        BUDO_CMD_VERSION
     } BudoCommand;
 
     typedef struct BudoRunOptions
@@ -60,6 +61,7 @@ extern "C"
 
     bool budo_cli_parse(int argc, char **argv, BudoCliOptions *options);
     void budo_cli_print_usage(const char *program_name);
+    void budo_cli_print_version(void);
 
 #ifdef __cplusplus
 }
