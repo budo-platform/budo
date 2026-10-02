@@ -82,7 +82,9 @@ const char *neural_get_error(NeuralContext *ctx)
 #if !defined(_WIN32)
 #include <dlfcn.h>
 #else
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #endif
 

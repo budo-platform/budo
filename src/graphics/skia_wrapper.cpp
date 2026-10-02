@@ -1465,12 +1465,16 @@ extern "C"
         return (GrGLFuncPtr)SDL_GL_GetProcAddress(name);
     }
 
-    static sk_sp<const GrGLInterface> skia_desktop_make_gl_interface()
+    /* C++ linkage: MSVC rejects C++ return types inside extern "C". */
+    extern "C++"
     {
-        sk_sp<const GrGLInterface> interface = GrGLMakeAssembledInterface(nullptr, skia_desktop_get_gl_proc);
-        if (interface)
-            return interface;
-        return GrGLMakeNativeInterface();
+        static sk_sp<const GrGLInterface> skia_desktop_make_gl_interface()
+        {
+            sk_sp<const GrGLInterface> interface = GrGLMakeAssembledInterface(nullptr, skia_desktop_get_gl_proc);
+            if (interface)
+                return interface;
+            return GrGLMakeNativeInterface();
+        }
     }
 
     SkiaCanvas *skia_canvas_create_gl(int width, int height)
@@ -1897,60 +1901,63 @@ extern "C"
 
 extern "C"
 {
-    static inline SkBlendMode toSkBlendMode(SkiaBlendMode mode)
+    extern "C++"
     {
-        switch (mode)
+        static inline SkBlendMode toSkBlendMode(SkiaBlendMode mode)
         {
-        case SKIA_BLEND_MODE_SRC_OVER:
-            return SkBlendMode::kSrcOver;
-        case SKIA_BLEND_MODE_SRC:
-            return SkBlendMode::kSrc;
-        case SKIA_BLEND_MODE_DST_OVER:
-            return SkBlendMode::kDstOver;
-        case SKIA_BLEND_MODE_DST_IN:
-            return SkBlendMode::kDstIn;
-        case SKIA_BLEND_MODE_DST_OUT:
-            return SkBlendMode::kDstOut;
-        case SKIA_BLEND_MODE_SRC_IN:
-            return SkBlendMode::kSrcIn;
-        case SKIA_BLEND_MODE_SRC_OUT:
-            return SkBlendMode::kSrcOut;
-        case SKIA_BLEND_MODE_CLEAR:
-            return SkBlendMode::kClear;
-        case SKIA_BLEND_MODE_PLUS:
-            return SkBlendMode::kPlus;
-        case SKIA_BLEND_MODE_MULTIPLY:
-            return SkBlendMode::kMultiply;
-        case SKIA_BLEND_MODE_SCREEN:
-            return SkBlendMode::kScreen;
-        case SKIA_BLEND_MODE_OVERLAY:
-            return SkBlendMode::kOverlay;
-        case SKIA_BLEND_MODE_DARKEN:
-            return SkBlendMode::kDarken;
-        case SKIA_BLEND_MODE_LIGHTEN:
-            return SkBlendMode::kLighten;
-        case SKIA_BLEND_MODE_COLOR_DODGE:
-            return SkBlendMode::kColorDodge;
-        case SKIA_BLEND_MODE_COLOR_BURN:
-            return SkBlendMode::kColorBurn;
-        case SKIA_BLEND_MODE_HARD_LIGHT:
-            return SkBlendMode::kHardLight;
-        case SKIA_BLEND_MODE_SOFT_LIGHT:
-            return SkBlendMode::kSoftLight;
-        case SKIA_BLEND_MODE_DIFFERENCE:
-            return SkBlendMode::kDifference;
-        case SKIA_BLEND_MODE_EXCLUSION:
-            return SkBlendMode::kExclusion;
-        case SKIA_BLEND_MODE_HUE:
-            return SkBlendMode::kHue;
-        case SKIA_BLEND_MODE_SATURATION:
-            return SkBlendMode::kSaturation;
-        case SKIA_BLEND_MODE_COLOR:
-            return SkBlendMode::kColor;
-        case SKIA_BLEND_MODE_LUMINOSITY:
-            return SkBlendMode::kLuminosity;
-        default:
-            return SkBlendMode::kSrcOver;
+            switch (mode)
+            {
+            case SKIA_BLEND_MODE_SRC_OVER:
+                return SkBlendMode::kSrcOver;
+            case SKIA_BLEND_MODE_SRC:
+                return SkBlendMode::kSrc;
+            case SKIA_BLEND_MODE_DST_OVER:
+                return SkBlendMode::kDstOver;
+            case SKIA_BLEND_MODE_DST_IN:
+                return SkBlendMode::kDstIn;
+            case SKIA_BLEND_MODE_DST_OUT:
+                return SkBlendMode::kDstOut;
+            case SKIA_BLEND_MODE_SRC_IN:
+                return SkBlendMode::kSrcIn;
+            case SKIA_BLEND_MODE_SRC_OUT:
+                return SkBlendMode::kSrcOut;
+            case SKIA_BLEND_MODE_CLEAR:
+                return SkBlendMode::kClear;
+            case SKIA_BLEND_MODE_PLUS:
+                return SkBlendMode::kPlus;
+            case SKIA_BLEND_MODE_MULTIPLY:
+                return SkBlendMode::kMultiply;
+            case SKIA_BLEND_MODE_SCREEN:
+                return SkBlendMode::kScreen;
+            case SKIA_BLEND_MODE_OVERLAY:
+                return SkBlendMode::kOverlay;
+            case SKIA_BLEND_MODE_DARKEN:
+                return SkBlendMode::kDarken;
+            case SKIA_BLEND_MODE_LIGHTEN:
+                return SkBlendMode::kLighten;
+            case SKIA_BLEND_MODE_COLOR_DODGE:
+                return SkBlendMode::kColorDodge;
+            case SKIA_BLEND_MODE_COLOR_BURN:
+                return SkBlendMode::kColorBurn;
+            case SKIA_BLEND_MODE_HARD_LIGHT:
+                return SkBlendMode::kHardLight;
+            case SKIA_BLEND_MODE_SOFT_LIGHT:
+                return SkBlendMode::kSoftLight;
+            case SKIA_BLEND_MODE_DIFFERENCE:
+                return SkBlendMode::kDifference;
+            case SKIA_BLEND_MODE_EXCLUSION:
+                return SkBlendMode::kExclusion;
+            case SKIA_BLEND_MODE_HUE:
+                return SkBlendMode::kHue;
+            case SKIA_BLEND_MODE_SATURATION:
+                return SkBlendMode::kSaturation;
+            case SKIA_BLEND_MODE_COLOR:
+                return SkBlendMode::kColor;
+            case SKIA_BLEND_MODE_LUMINOSITY:
+                return SkBlendMode::kLuminosity;
+            default:
+                return SkBlendMode::kSrcOver;
+            }
         }
     }
 

@@ -18,6 +18,9 @@
 #define S_ISREG(mode) (((mode) & _S_IFMT) == _S_IFREG)
 #endif
 
+#include <direct.h>
+#define mkdir(path, mode) _mkdir(path)
+
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 
