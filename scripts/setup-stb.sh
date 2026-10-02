@@ -50,6 +50,10 @@ trap cleanup EXIT
 
 echo_info "Cloning $STB_REPO_URL (commit ${STB_COMMIT:0:10})..."
 git -C "$TMP_DIR" init -q
+# Check files out byte-for-byte (Git for Windows defaults to CRLF conversion),
+# so the checksum below matches on every platform.
+git -C "$TMP_DIR" config core.autocrlf false
+git -C "$TMP_DIR" config core.eol lf
 git -C "$TMP_DIR" remote add origin "$STB_REPO_URL"
 git -C "$TMP_DIR" fetch --depth 1 -q origin "$STB_COMMIT"
 git -C "$TMP_DIR" checkout -q FETCH_HEAD
