@@ -188,8 +188,21 @@ jobs:
       - name: Build
         run: |
           # -k 0: keep compiling after a failure so one run reports every error.
-          cmake --build build --config Release --target budo -j $env:NUMBER_OF_PROCESSORS -- -k 0
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --config Release --target budo -j $env:NUMBER_OF_PROCESSORS -- -k 0 2>&1 |
+            ForEach-Object { "$_" } | Tee-Object -FilePath build-compile.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # Repeat every failure at the end (and as annotations): with -k 0
+            # the first errors are otherwise hundreds of lines up.
+            $errors = Select-String -Path build-compile.log -Pattern '^FAILED: ', ': (fatal )?error [A-Z]+\d+', 'error LNK\d+', 'LINK : fatal error'
+            Write-Host ""
+            Write-Host "===== $($errors.Count) error line(s) ====="
+            foreach ($e in $errors) {
+              Write-Host $e.Line
+              if ($e.Line -notmatch '^FAILED: ') { Write-Host "::error title=Windows build::$($e.Line)" }
+            }
+            exit $code
+          }
 
       - name: Package
         run: |
