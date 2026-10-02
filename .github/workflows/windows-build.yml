@@ -85,6 +85,10 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
           "SDL2_ROOT=$env:RUNNER_TEMP\SDL2-$env:SDL_VERSION" >> $env:GITHUB_ENV
 
+      - name: Download STB
+        shell: bash
+        run: ./scripts/setup-stb.sh
+
       # Windows has no system zlib: build the pinned source as a static library
       # (linked into budo.exe, so there is no zlib DLL to ship).
       - name: Build pinned zlib ${{ steps.lock.outputs.zlib_version }}

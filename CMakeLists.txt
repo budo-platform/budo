@@ -456,10 +456,13 @@ if(NOT EXISTS "${WASMTIME_DIR}/include/wasmtime.h")
         )
     endif()
     
-    # Move extracted contents to WASMTIME_DIR
+    # Copy the extracted contents into WASMTIME_DIR. A rename fails on Windows
+    # because WASMTIME_DIR already exists, and freshly extracted files can be
+    # held open briefly there (antivirus, indexer).
     file(GLOB WASMTIME_EXTRACTED "${CMAKE_BINARY_DIR}/wasmtime-v${WASMTIME_VERSION}-*-c-api")
     if(WASMTIME_EXTRACTED)
-        file(RENAME "${WASMTIME_EXTRACTED}" "${WASMTIME_DIR}")
+        file(COPY "${WASMTIME_EXTRACTED}/" DESTINATION "${WASMTIME_DIR}")
+        file(REMOVE_RECURSE "${WASMTIME_EXTRACTED}")
     endif()
 endif()
 
