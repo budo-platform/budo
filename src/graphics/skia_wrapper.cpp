@@ -81,13 +81,10 @@ static sk_sp<SkTypeface> g_default_typeface;
 #include "gpu/ganesh/gl/GrGLDirectContext.h"
 #include "gpu/ganesh/gl/GrGLBackendSurface.h"
 #include "gpu/ganesh/GrBackendSurface.h"
-/* GL_GLEXT_PROTOTYPES makes SDL2's GL headers expose framebuffer/texture
- * entry points as plain `glGenFramebuffers` etc., matching the symbols
- * resolved at link time via the system OpenGL loader. */
-#define GL_GLEXT_PROTOTYPES 1
+/* Plain glGenFramebuffers etc.: linked from the system GL library, or loaded
+ * at runtime on Windows (see core/gl_desktop.h). */
 #include <SDL2/SDL_video.h>
-#include <SDL2/SDL_opengl.h>
-#include <SDL2/SDL_opengl_glext.h>
+#include "core/gl_desktop.h"
 #include <stdio.h>
 #endif
 

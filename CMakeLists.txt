@@ -1048,6 +1048,7 @@ add_library(budo_desktop_host STATIC
     src/desktop/desktop_host.c
     src/core/window.c
     src/core/window_canvas_texture.c
+    src/core/gl_desktop.c
     src/core/path_util.c
     src/core/gl_shader_dialect.c
     src/graphics/gl_shader_pipeline.c

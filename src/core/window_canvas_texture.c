@@ -3,10 +3,7 @@
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <GLES3/gl3.h>
 #else
-#define GL_GLEXT_PROTOTYPES 1
-
-#include <SDL2/SDL_opengl.h>
-#include <SDL2/SDL_opengl_glext.h>
+#include "core/gl_desktop.h"
 #endif
 
 #include "graphics/gl_state_guard_gl.inc"

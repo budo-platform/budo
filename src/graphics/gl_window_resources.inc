@@ -1356,23 +1356,29 @@ bool window_gl_bind_texture_cube_immediate(Window *window, int program_id,
 
 /* ── Render targets ──────────────────────────────────────────────────── */
 
-static const GlRenderTargetApi render_target_api = {
-    (void (*)(int, uint32_t *))glGenTextures,
-    (void (*)(uint32_t, uint32_t))glBindTexture,
-    (void (*)(uint32_t, uint32_t, int))glTexParameteri,
-    (void (*)(uint32_t, int, int, int, int, int, uint32_t, uint32_t,
-              const void *))glTexImage2D,
-    (void (*)(int, const uint32_t *))glDeleteTextures,
-    (void (*)(int, uint32_t *))glGenFramebuffers,
-    (void (*)(uint32_t, uint32_t))glBindFramebuffer,
-    (void (*)(uint32_t, uint32_t, uint32_t, uint32_t, int))glFramebufferTexture2D,
-    (uint32_t (*)(uint32_t))glCheckFramebufferStatus,
-    (void (*)(int, const uint32_t *))glDeleteFramebuffers,
-    (void (*)(int, uint32_t *))glGenRenderbuffers,
-    (void (*)(uint32_t, uint32_t))glBindRenderbuffer,
-    (void (*)(uint32_t, uint32_t, int, int))glRenderbufferStorage,
-    (void (*)(uint32_t, uint32_t, uint32_t, uint32_t))glFramebufferRenderbuffer,
-    (void (*)(int, const uint32_t *))glDeleteRenderbuffers};
+/* Built at call time: on Windows the GL entry points are runtime-loaded
+ * pointers (core/gl_desktop.h), not constants a static table could hold. */
+static GlRenderTargetApi render_target_api(void)
+{
+    const GlRenderTargetApi api = {
+        (void (*)(int, uint32_t *))glGenTextures,
+        (void (*)(uint32_t, uint32_t))glBindTexture,
+        (void (*)(uint32_t, uint32_t, int))glTexParameteri,
+        (void (*)(uint32_t, int, int, int, int, int, uint32_t, uint32_t,
+                  const void *))glTexImage2D,
+        (void (*)(int, const uint32_t *))glDeleteTextures,
+        (void (*)(int, uint32_t *))glGenFramebuffers,
+        (void (*)(uint32_t, uint32_t))glBindFramebuffer,
+        (void (*)(uint32_t, uint32_t, uint32_t, uint32_t, int))glFramebufferTexture2D,
+        (uint32_t (*)(uint32_t))glCheckFramebufferStatus,
+        (void (*)(int, const uint32_t *))glDeleteFramebuffers,
+        (void (*)(int, uint32_t *))glGenRenderbuffers,
+        (void (*)(uint32_t, uint32_t))glBindRenderbuffer,
+        (void (*)(uint32_t, uint32_t, int, int))glRenderbufferStorage,
+        (void (*)(uint32_t, uint32_t, uint32_t, uint32_t))glFramebufferRenderbuffer,
+        (void (*)(int, const uint32_t *))glDeleteRenderbuffers};
+    return api;
+}
 
 static const GlRenderTargetConstants render_target_constants = {
     GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
@@ -1400,7 +1406,8 @@ int window_gl_create_render_target(Window *window, int width, int height, bool d
     }
 
     BUDO_GL_WINDOW_MAKE_CURRENT(window);
-    if (!gl_render_target_create(&render_target_api, &render_target_constants,
+    const GlRenderTargetApi api = render_target_api();
+    if (!gl_render_target_create(&api, &render_target_constants,
                                  &window->render_targets[i], width, height, depth))
     {
         set_error(window, "Render target framebuffer incomplete");
@@ -1424,7 +1431,8 @@ bool window_gl_resize_render_target(Window *window, int target_id, int width, in
     }
 
     BUDO_GL_WINDOW_MAKE_CURRENT(window);
-    if (!gl_render_target_resize(&render_target_api, &render_target_constants,
+    const GlRenderTargetApi api = render_target_api();
+    if (!gl_render_target_resize(&api, &render_target_constants,
                                  rt, width, height))
     {
         set_error(window, "Render target framebuffer incomplete after resize");
@@ -1448,7 +1456,8 @@ bool window_gl_destroy_render_target(Window *window, int target_id)
     }
 
     BUDO_GL_WINDOW_MAKE_CURRENT(window);
-    gl_render_target_destroy(&render_target_api, rt);
+    const GlRenderTargetApi api = render_target_api();
+    gl_render_target_destroy(&api, rt);
     return true;
 }
 

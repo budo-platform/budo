@@ -6,11 +6,8 @@
 #include "graphics/image_loader.h"
 #include "graphics/gpu_resource_state.h"
 
-#define GL_GLEXT_PROTOTYPES 1
-
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
-#include <SDL2/SDL_opengl_glext.h>
+#include "core/gl_desktop.h"
 
 #include "core/gl_present_state.inc"
 #include "graphics/gl_state_guard_gl.inc"
@@ -339,6 +336,15 @@ Window *window_create(const WindowConfig *config)
 
     SDL_GL_MakeCurrent(window->sdl_window, window->gl_context);
     SDL_GL_SetSwapInterval(config->vsync ? 1 : 0);
+
+    if (!budo_gl_desktop_load())
+    {
+        SDL_GL_DeleteContext(window->gl_context);
+        SDL_DestroyWindow(window->sdl_window);
+        free(window);
+        SDL_Quit();
+        return NULL;
+    }
 
     {
         GLint major = 0;
