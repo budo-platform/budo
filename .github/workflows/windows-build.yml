@@ -187,7 +187,8 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build build --config Release --target budo -j $env:NUMBER_OF_PROCESSORS
+          # -k 0: keep compiling after a failure so one run reports every error.
+          cmake --build build --config Release --target budo -j $env:NUMBER_OF_PROCESSORS -- -k 0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package

@@ -279,10 +279,18 @@ if(NOT WIN32)
 endif()
 
 if(WIN32)
+    # Matches QuickJS-NG's own Windows build: its cutils.h includes winsock2.h,
+    # which clashes with a full <windows.h>, and its atomics need MSVC's opt-in
+    # C11 atomics.
     target_compile_definitions(quickjs PRIVATE
         WIN32
         _WIN32
+        WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0601
     )
+    if(MSVC)
+        target_compile_options(quickjs PRIVATE /experimental:c11atomics)
+    endif()
 endif()
 
 file(WRITE "${CMAKE_BINARY_DIR}/.quickjs-impl" "${BUDO_QUICKJS_IMPL}\n")
@@ -2568,6 +2576,13 @@ if(WIN32)
         WIN32_LEAN_AND_MEAN
         NOMINMAX
     )
+    if(MSVC)
+        # 8 MB main-thread stack like Linux/macOS (MSVC defaults to 1 MB, the
+        # same as QuickJS's JS stack limit, so deep recursion would crash the
+        # process instead of raising a JS RangeError). QuickJS-NG's own
+        # executables use the same value.
+        target_link_options(${PROJECT_NAME} PRIVATE /STACK:8388608)
+    endif()
 elseif(APPLE)
     find_library(COCOA_FRAMEWORK Cocoa)
     find_library(IOKIT_FRAMEWORK IOKit)
