@@ -244,10 +244,12 @@ if(NOT EXISTS "${SQLITE_DIR}/sqlite3.c")
         COMMAND ${CMAKE_COMMAND} -E tar xzf "${SQLITE_ARCHIVE}"
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
     )
-    # Move extracted contents to SQLITE_DIR
+    # Copy the extracted contents into SQLITE_DIR. A rename fails on Windows
+    # because SQLITE_DIR already exists (see the Wasmtime download).
     file(GLOB SQLITE_EXTRACTED "${CMAKE_BINARY_DIR}/sqlite-amalgamation-*")
     if(SQLITE_EXTRACTED)
-        file(RENAME "${SQLITE_EXTRACTED}" "${SQLITE_DIR}")
+        file(COPY "${SQLITE_EXTRACTED}/" DESTINATION "${SQLITE_DIR}")
+        file(REMOVE_RECURSE "${SQLITE_EXTRACTED}")
     endif()
 endif()
 

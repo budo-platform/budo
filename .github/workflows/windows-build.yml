@@ -164,8 +164,26 @@ jobs:
             -DZLIB_ROOT="$env:ZLIB_ROOT" `
             -DZLIB_USE_STATIC_LIBS=ON `
             -DENABLE_NEURAL=OFF `
-            -DBUDO_QUICKJS_IMPL="$env:QUICKJS_IMPL"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            -DBUDO_QUICKJS_IMPL="$env:QUICKJS_IMPL" 2>&1 |
+            ForEach-Object { "$_" } | Tee-Object -FilePath build-configure.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # CMake keeps going after most errors and only says "Configuring
+            # incomplete" at the end: repeat each error block here.
+            $lines = Get-Content build-configure.log
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+              if ($lines[$i] -match '^CMake Error') {
+                $block = @($lines[$i])
+                for ($j = $i + 1; $j -lt $lines.Count -and $j -le $i + 25; $j++) {
+                  if ($lines[$j] -match '^(--|CMake (Error|Warning))') { break }
+                  $block += $lines[$j]
+                }
+                $text = ($block -join "%0A")
+                Write-Host "::error title=CMake configure::$text"
+              }
+            }
+            exit $code
+          }
 
       - name: Build
         run: |
