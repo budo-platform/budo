@@ -18,6 +18,7 @@ void budo_cli_print_version(void)
            "commit:     " BUDO_BUILD_COMMIT "\n"
            "platform:   " BUDO_BUILD_TARGET "\n"
            "javascript: " BUDO_BUILD_QUICKJS "\n"
+           "android:    " BUDO_BUILD_ANDROID "\n"
            "native api: %u.%u\n",
            (unsigned)BUDO_NATIVE_API_VERSION_MAJOR, (unsigned)BUDO_NATIVE_API_VERSION_MINOR);
 }

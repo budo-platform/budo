@@ -1,0 +1,175 @@
+name: Android support bundle
+
+# Builds the Android support bundle (prebuilt Skia and ONNX Runtime for
+# Android, runtime sources) and publishes it on its GitHub release, like
+# `make android-support-release` + `make android-support-publish` do locally.
+# Either path works; both run the same private-pack scripts. Afterwards, pin
+# the printed hash and tag in cmake/BudoDependencyLock.cmake (the summary has
+# the diff, and the updated lock is uploaded as an artifact).
+# See export-to-public/android-ci-build.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the support bundle release
+
+jobs:
+  bundle:
+    name: Build and publish the support bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The bundle scripts live in the private pack.
+      - name: Android pack
+        id: pack
+        uses: ./.github/actions/android-pack
+        with:
+          url: ${{ secrets.BUDO_ANDROID_PACK_URL }}
+          required: "true"
+
+      - name: Require the Android pack
+        if: steps.pack.outputs.included != 'true'
+        run: |
+          echo "::error::The support bundle needs the Android pack: set the BUDO_ANDROID_PACK_URL secret and pin the archive in the lock (make android-pack)"
+          exit 1
+
+      # Skia's dependency sync for Android needs several GB on top of the
+      # Android SDK; drop toolchains this job does not use.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost \
+            /usr/share/swift /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential ninja-build python3 \
+            libsdl2-dev libfreetype6-dev libfontconfig1-dev libssl-dev zlib1g-dev \
+            libgl1-mesa-dev
+
+      # Same NDK as the Android app (ndkVersion in its build.gradle), so the
+      # prebuilt Skia libraries match the toolchain that links them.
+      - name: Install the Android NDK
+        id: ndk
+        run: |
+          version="$(sed -nE 's/^ *ndkVersion *= *"([0-9.]+)".*/\1/p' private/android/android/app/build.gradle)"
+          if [ -z "$version" ]; then echo "::error::ndkVersion not found in the Android app"; exit 1; fi
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "ndk;$version" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Android NDK $version"
+
+      # The bundle ships Budo's QuickJS, Lua, and miniaudio sources from a
+      # desktop configure (build/_deps); the desktop configure needs Skia.
+      - name: Skia
+        uses: ./.github/actions/skia
+
+      # Only its headers and libraries are needed from here on (the Skia
+      # action has already cached the tree); free the disk for Skia for Android.
+      - name: Trim desktop Skia
+        run: |
+          rm -rf third_party/skia/.git third_party/skia/third_party/externals third_party/skia/out/Release/obj
+          df -h / | tail -1
+
+      - name: Download STB
+        run: ./scripts/setup-stb.sh
+
+      - name: Configure (fetch runtime sources)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_LLAMACPP=OFF -DENABLE_NEURAL=OFF
+
+      - name: Skia for Android cache key
+        id: skia-android-key
+        run: |
+          commit="$(sed -nE 's/^set\(BUDO_SKIA_ANDROID_GIT_TAG "([0-9a-f]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
+          echo "key=skia-android-${ImageOS}-${commit}-ndk${{ steps.ndk.outputs.version }}-${{ hashFiles('private/android/scripts/setup-skia-android.sh') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Skia for Android
+        id: skia-android
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            third_party/skia-android
+            !third_party/skia-android/.git
+            !third_party/skia-android/third_party/externals
+            !third_party/skia-android/out/*/obj
+          key: ${{ steps.skia-android-key.outputs.key }}
+
+      - name: Build Skia for Android
+        if: steps.skia-android.outputs.cache-hit != 'true'
+        run: |
+          commit="$(sed -nE 's/^set\(BUDO_SKIA_ANDROID_GIT_TAG "([0-9a-f]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
+          repository="$(sed -nE 's/^set\(BUDO_SKIA_GIT_REPOSITORY "([^"]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
+          # Clone and sync here with retries (dozens of parallel fetches from
+          # googlesource.com); the setup script then finds everything in place.
+          git clone --no-checkout "$repository" third_party/skia-android
+          git -C third_party/skia-android fetch origin "$commit"
+          git -C third_party/skia-android checkout --detach "$commit"
+          for attempt in 1 2 3; do
+            (cd third_party/skia-android && python3 tools/git-sync-deps) && break
+            if [ "$attempt" = 3 ]; then echo "::error::Skia dependency sync failed"; exit 1; fi
+            echo "Sync failed (attempt $attempt/3); retrying..."
+            sleep $((attempt * 20))
+          done
+          # One architecture at a time, dropping its object files afterwards
+          # to stay within the runner's disk.
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            ./private/android/scripts/setup-skia-android.sh "$abi"
+            rm -rf third_party/skia-android/out/android-*/obj
+            df -h / | tail -1
+          done
+
+      - name: Save Skia for Android
+        if: steps.skia-android.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            third_party/skia-android
+            !third_party/skia-android/.git
+            !third_party/skia-android/third_party/externals
+            !third_party/skia-android/out/*/obj
+          key: ${{ steps.skia-android-key.outputs.key }}
+
+      - name: ONNX Runtime for Android
+        run: ./private/android/scripts/setup-onnx-android.sh
+
+      # Same as `make android-support-release`: builds the bundle and pins its
+      # hash and release tag in the (runner's copy of the) lock.
+      - name: Build the support bundle
+        run: BUDO_ANDROID_SUPPORT_UPDATE_LOCK=1 ./private/android/scripts/package-android-support.sh
+
+      # Same as `make android-support-publish`.
+      - name: Publish the support bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./private/android/scripts/publish-android-support.sh
+
+      - name: Lock update
+        run: |
+          tag="$(sed -nE 's/^set\(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "([^"]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
+          {
+            echo "## Android support bundle published"
+            echo ""
+            echo "Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag"
+            echo ""
+            echo "Pin it in \`cmake/BudoDependencyLock.cmake\` (also uploaded as the"
+            echo "\`dependency-lock\` artifact), then commit:"
+            echo ""
+            echo '```diff'
+            git diff -- cmake/BudoDependencyLock.cmake
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Android support bundle::Published $tag; pin it in the dependency lock (see the run summary)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-lock
+          path: cmake/BudoDependencyLock.cmake

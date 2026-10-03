@@ -37,6 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Budo Pro Android packaging, free during the preview (see
+      # export-to-public/android-ci-build.md). A set secret makes it required.
+      - name: Android pack
+        uses: ./.github/actions/android-pack
+        with:
+          url: ${{ secrets.BUDO_ANDROID_PACK_URL }}
+          required: "true"
+
       - name: Install packages (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -44,7 +52,7 @@ jobs:
           # SDL2 itself is built statically below; these headers let it load
           # X11/Wayland/ALSA/PulseAudio at runtime without linking them.
           sudo apt-get install -y cmake build-essential python3 \
-            libfreetype6-dev libfontconfig1-dev \
+            libfreetype6-dev libfontconfig1-dev libssl-dev zlib1g-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxinerama-dev libxss-dev libxkbcommon-dev libwayland-dev \
             libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
@@ -69,7 +77,8 @@ jobs:
       - name: Build
         run: |
           prefix="$PWD/third_party/sdl2-static"
-          make build CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2"
+          # The repository hosts the Android support bundle release.
+          make build CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2 -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
       - name: Check the binary is standalone
         run: |
@@ -123,6 +132,26 @@ jobs:
           sha256sum budo-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      # Mention Android packaging when the build included it (`budo version`).
+      - name: Release notes
+        run: |
+          : > "$RUNNER_TEMP/notes.md"
+          if version="$(./dist/budo-linux-x86_64 --version 2>/dev/null)"; then
+            echo "$version"
+            if echo "$version" | grep -q '^android: *included'; then
+              cat > "$RUNNER_TEMP/notes.md" <<'EOF'
+          ## Android packaging (free during the preview)
+
+          The Linux and macOS binaries include `budo android-apk` and `budo android-aab`,
+          which package a Budo app for Android. Packaging needs a JDK (17 to 21) and the
+          Android SDK with the NDK on your machine; the first run downloads Budo's Android
+          support bundle (under 100 MB). Windows binaries do not include it yet.
+          EOF
+            fi
+          else
+            echo "::warning::Could not run the Linux binary to check for Android packaging"
+          fi
+
       - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,6 +163,7 @@ jobs:
             gh release create "$RELEASE_TAG" dist/* \
               --target "$GITHUB_SHA" \
               --title "Budo $RELEASE_TAG" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
               --generate-notes
           fi
 

@@ -1162,6 +1162,32 @@ if(GIT_FOUND)
         set(BUDO_BUILD_COMMIT "${BUDO_GIT_COMMIT}")
     endif()
 endif()
+# Android packaging: the pack's own commit (git checkout) or, for an archive
+# extracted by CI, the commit pinned in the lock.
+if(BUDO_ENABLE_ANDROID_PACKAGING)
+    set(BUDO_ANDROID_PACK_BUILD_COMMIT "${BUDO_ANDROID_PACK_COMMIT}")
+    if(GIT_FOUND AND EXISTS "${BUDO_ANDROID_PACK_ROOT}/.git")
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+            WORKING_DIRECTORY "${BUDO_ANDROID_PACK_ROOT}"
+            OUTPUT_VARIABLE BUDO_ANDROID_PACK_GIT_COMMIT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            RESULT_VARIABLE BUDO_ANDROID_PACK_GIT_RESULT)
+        if(BUDO_ANDROID_PACK_GIT_RESULT EQUAL 0 AND BUDO_ANDROID_PACK_GIT_COMMIT)
+            set(BUDO_ANDROID_PACK_BUILD_COMMIT "${BUDO_ANDROID_PACK_GIT_COMMIT}")
+        endif()
+    endif()
+    if(BUDO_ANDROID_PACK_BUILD_COMMIT)
+        string(SUBSTRING "${BUDO_ANDROID_PACK_BUILD_COMMIT}" 0 12 BUDO_ANDROID_PACK_SHORT_COMMIT)
+    else()
+        set(BUDO_ANDROID_PACK_SHORT_COMMIT "unknown")
+    endif()
+    set(BUDO_BUILD_ANDROID
+        "included (pack ${BUDO_ANDROID_PACK_FEATURE_VERSION}, ${BUDO_ANDROID_PACK_SHORT_COMMIT})")
+else()
+    set(BUDO_BUILD_ANDROID "not included")
+endif()
 if(BUDO_QUICKJS_IMPL STREQUAL "ng")
     string(SUBSTRING "${BUDO_QUICKJS_NG_GIT_TAG}" 0 12 BUDO_QUICKJS_SHORT_REVISION)
     set(BUDO_BUILD_QUICKJS "QuickJS-NG ${BUDO_QUICKJS_SHORT_REVISION}")
@@ -1208,8 +1234,23 @@ endif()
 if(BUDO_ENABLE_ANDROID_PACKAGING)
     string(REGEX REPLACE "^SHA256=" "" BUDO_ANDROID_SUPPORT_BUNDLE_SHA256
         "${BUDO_ANDROID_SUPPORT_BUNDLE_URL_HASH}")
+    # The support bundle is published on a GitHub release (tag pinned in the
+    # lock). CI passes its repository; without one, keep the Budo website.
+    if(BUDO_GITHUB_REPOSITORY_OVERRIDE)
+        set(BUDO_DOWNLOAD_GITHUB_REPOSITORY "${BUDO_GITHUB_REPOSITORY_OVERRIDE}")
+    else()
+        set(BUDO_DOWNLOAD_GITHUB_REPOSITORY "${BUDO_GITHUB_REPOSITORY}")
+    endif()
+    if(BUDO_DOWNLOAD_GITHUB_REPOSITORY AND BUDO_ANDROID_SUPPORT_BUNDLE_TAG)
+        set(BUDO_ANDROID_SUPPORT_BASE_URL
+            "https://github.com/${BUDO_DOWNLOAD_GITHUB_REPOSITORY}/releases/download/${BUDO_ANDROID_SUPPORT_BUNDLE_TAG}")
+    else()
+        set(BUDO_ANDROID_SUPPORT_BASE_URL "https://budo-platform.dev/download")
+    endif()
+    message(STATUS "Android support bundle base URL: ${BUDO_ANDROID_SUPPORT_BASE_URL}")
     target_compile_definitions(budo_managed_drivers PRIVATE
-        BUDO_ANDROID_SUPPORT_BUNDLE_SHA256="${BUDO_ANDROID_SUPPORT_BUNDLE_SHA256}")
+        BUDO_ANDROID_SUPPORT_BUNDLE_SHA256="${BUDO_ANDROID_SUPPORT_BUNDLE_SHA256}"
+        BUDO_ANDROID_SUPPORT_BASE_URL="${BUDO_ANDROID_SUPPORT_BASE_URL}")
     target_link_libraries(budo_managed_drivers PRIVATE budo_native_project_model)
 endif()
 if(WIN32 OR APPLE)

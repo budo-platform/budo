@@ -1,0 +1,82 @@
+name: Android pack
+description: >
+  Downloads the private Android pack archive (Budo Pro Android packaging) from
+  the secret URL, checks it against BUDO_ANDROID_PACK_SHA256 in the dependency
+  lock, and extracts it into private/android. Without a URL or a pinned hash,
+  the build continues without Android packaging.
+  See export-to-public/android-ci-build.md.
+
+inputs:
+  url:
+    description: Archive URL (the BUDO_ANDROID_PACK_URL secret; empty on forks)
+    required: false
+    default: ""
+  required:
+    description: >
+      "true" fails the job when the URL is set but the download fails
+      (releases); otherwise that only warns.
+    required: false
+    default: "false"
+
+outputs:
+  included:
+    description: '"true" when the pack was extracted'
+    value: ${{ steps.fetch.outputs.included }}
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch Android pack
+      id: fetch
+      shell: bash
+      env:
+        PACK_URL: ${{ inputs.url }}
+        PACK_REQUIRED: ${{ inputs.required }}
+      run: |
+        set -euo pipefail
+        echo "included=false" >> "$GITHUB_OUTPUT"
+        skip() {
+          echo "::warning title=Android pack::$1; building without Android packaging"
+          exit 0
+        }
+
+        if [ -z "$PACK_URL" ]; then
+          skip "BUDO_ANDROID_PACK_URL is not available (secret not set, or a fork)"
+        fi
+        lock=cmake/BudoDependencyLock.cmake
+        expected="$(sed -nE 's/^set\(BUDO_ANDROID_PACK_SHA256 "([0-9a-f]{64})"\)$/\1/p' "$lock")"
+        commit="$(sed -nE 's/^set\(BUDO_ANDROID_PACK_COMMIT "([0-9a-f]*)"\)$/\1/p' "$lock")"
+        if [ -z "$expected" ]; then
+          skip "no Android pack archive is pinned in the dependency lock"
+        fi
+
+        archive="$RUNNER_TEMP/budo-android-pack.tar.gz"
+        # Never print the URL: it is what keeps the archive private.
+        if ! curl -fsSL --proto '=https' --retry 3 --retry-delay 5 -o "$archive" "$PACK_URL"; then
+          if [ "$PACK_REQUIRED" = "true" ]; then
+            echo "::error title=Android pack::Download failed; publish the archive on the website or remove the BUDO_ANDROID_PACK_URL secret"
+            exit 1
+          fi
+          skip "download failed (archive not published right now?)"
+        fi
+
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual="$(sha256sum "$archive" | awk '{print $1}')"
+        else
+          actual="$(shasum -a 256 "$archive" | awk '{print $1}')"
+        fi
+        if [ "$actual" != "$expected" ]; then
+          echo "::error title=Android pack::Archive SHA-256 $actual does not match the dependency lock ($expected). The secret URL and the lock point at different archives."
+          exit 1
+        fi
+
+        rm -rf private/android
+        mkdir -p private/android
+        tar -xzf "$archive" -C private/android
+        rm -f "$archive"
+        if [ ! -f private/android/feature-pack.json ]; then
+          echo "::error title=Android pack::The archive has no feature-pack.json"
+          exit 1
+        fi
+        echo "included=true" >> "$GITHUB_OUTPUT"
+        echo "::notice title=Android pack::Android packaging included (pack ${commit:0:12})"

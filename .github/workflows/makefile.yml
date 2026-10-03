@@ -13,10 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Android pack
+        uses: ./.github/actions/android-pack
+        with:
+          url: ${{ secrets.BUDO_ANDROID_PACK_URL }}
+
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
+          sudo apt-get install -y cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev libssl-dev zlib1g-dev libgl1-mesa-dev
 
       - name: Skia
         uses: ./.github/actions/skia
@@ -28,13 +33,18 @@ jobs:
         run: ./scripts/setup-stb.sh
 
       - name: Build
-        run: make build
+        run: make build CMAKE_FLAGS="-DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
   build-macos:
     runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Android pack
+        uses: ./.github/actions/android-pack
+        with:
+          url: ${{ secrets.BUDO_ANDROID_PACK_URL }}
 
       - name: Install packages
         run: brew install cmake sdl2
@@ -49,7 +59,7 @@ jobs:
         run: ./scripts/setup-stb.sh
 
       - name: Build
-        run: make build
+        run: make build CMAKE_FLAGS="-DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
   build-windows:
     uses: ./.github/workflows/windows-build.yml

@@ -52,9 +52,24 @@ set(BUDO_ONNXRUNTIME_WINDOWS_X64_URL_HASH "SHA256=5c07bb2805cd666dda75fa9bfa60e7
 set(BUDO_ONNXRUNTIME_ANDROID_AAR_URL_HASH "SHA256=8b675e9680b8cc02dca706a5e3b4e35cc8506de5bdf206fdae68081cbd804414")
 
 # Trusted release metadata for the support bundle consumed by installed Budo
-# binaries. Update this only when publishing a newly reviewed support bundle.
+# binaries. Update this only when publishing a newly reviewed support bundle
+# (`make android-support-release`, then `make android-support-publish`).
 set(BUDO_ANDROID_SUPPORT_BUNDLE_URL_HASH
-    "SHA256=0cec96f8f157978de415b7f3dc8ebcdda9b679e6a5932dcc38f6b91acc9c0a72")
+    "SHA256=91ec8d2f8b9552214a696015227eb7e60fdb0b206798aa19569e7a4d6358779b")
+# GitHub release that hosts that bundle, in BUDO_GITHUB_REPOSITORY.
+set(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "android-support-0cec96f8f157")
+
+# GitHub repository ("owner/name") whose releases host downloads such as the
+# Android support bundle. CI passes its own repository; empty keeps local
+# builds on the Budo website.
+set(BUDO_GITHUB_REPOSITORY "")
+
+# Archive of the private Android pack (private/android) that CI downloads to
+# build Android packaging into the GitHub binaries. Its URL is the GitHub
+# secret BUDO_ANDROID_PACK_URL; this hash pins its contents. Updated by
+# `make android-pack` (see export-to-public/android-ci-build.md).
+set(BUDO_ANDROID_PACK_COMMIT "789e385c181998c6ec9d8289179786effba1c7fb")
+set(BUDO_ANDROID_PACK_SHA256 "069afd6069f20f2bdc2a7a90e1d6aabe044d162ed99a2ae8af220c14b22d8249")
 
 set(BUDO_STB_GIT_REPOSITORY "https://github.com/nothings/stb.git")
 set(BUDO_STB_GIT_TAG "f0569113c93ad095470c54bf34a17b36646bbbb5")
