@@ -55,9 +55,9 @@ set(BUDO_ONNXRUNTIME_ANDROID_AAR_URL_HASH "SHA256=8b675e9680b8cc02dca706a5e3b4e3
 # binaries. Update this only when publishing a newly reviewed support bundle
 # (`make android-support-release`, then `make android-support-publish`).
 set(BUDO_ANDROID_SUPPORT_BUNDLE_URL_HASH
-    "SHA256=91ec8d2f8b9552214a696015227eb7e60fdb0b206798aa19569e7a4d6358779b")
+    "SHA256=9f33273f4c2a42ceecc733af1aa2e5c51dc3972d55f4269406a874afa1f2add1")
 # GitHub release that hosts that bundle, in BUDO_GITHUB_REPOSITORY.
-set(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "android-support-0cec96f8f157")
+set(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "android-support-9f33273f4c2a")
 
 # GitHub repository ("owner/name") whose releases host downloads such as the
 # Android support bundle. CI passes its own repository; empty keeps local
