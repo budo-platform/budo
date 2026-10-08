@@ -48,7 +48,7 @@ typedef struct
     int thread_running;
     pthread_t thread;
 #elif MIDI_PLATFORM_WINMM
-    HMIDIIN handle;
+    HMIDIIN winmm_handle;
     
     MIDIHDR sysex_headers[4];
     char sysex_buffers[4][4096];
@@ -1082,7 +1082,7 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
     dev->user_data = user_data;
     InterlockedExchange(&dev->closing, 0);
 
-    MMRESULT result = midiInOpen(&dev->handle, index, (DWORD_PTR)winmm_midi_in_callback,
+    MMRESULT result = midiInOpen(&dev->winmm_handle, index, (DWORD_PTR)winmm_midi_in_callback,
                                  (DWORD_PTR)dev, CALLBACK_FUNCTION);
     if (result != MMSYSERR_NOERROR)
     {
@@ -1096,12 +1096,12 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
         memset(header, 0, sizeof(*header));
         header->lpData = dev->sysex_buffers[i];
         header->dwBufferLength = sizeof(dev->sysex_buffers[i]);
-        if (midiInPrepareHeader(dev->handle, header, sizeof(*header)) == MMSYSERR_NOERROR)
-            midiInAddBuffer(dev->handle, header, sizeof(*header));
+        if (midiInPrepareHeader(dev->winmm_handle, header, sizeof(*header)) == MMSYSERR_NOERROR)
+            midiInAddBuffer(dev->winmm_handle, header, sizeof(*header));
     }
 
     dev->active = true;
-    midiInStart(dev->handle);
+    midiInStart(dev->winmm_handle);
     return handle;
 }
 
@@ -1115,11 +1115,11 @@ void midi_close_input(MidiContext *ctx, int handle)
         return;
 
     InterlockedExchange(&dev->closing, 1);
-    midiInStop(dev->handle);
-    midiInReset(dev->handle);
+    midiInStop(dev->winmm_handle);
+    midiInReset(dev->winmm_handle);
     for (int i = 0; i < 4; i++)
-        midiInUnprepareHeader(dev->handle, &dev->sysex_headers[i], sizeof(dev->sysex_headers[i]));
-    midiInClose(dev->handle);
+        midiInUnprepareHeader(dev->winmm_handle, &dev->sysex_headers[i], sizeof(dev->sysex_headers[i]));
+    midiInClose(dev->winmm_handle);
     dev->active = false;
 }
 
