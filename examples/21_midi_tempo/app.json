@@ -1,0 +1,8 @@
+{
+    "name": "MIDI Tempo",
+    "description": "Listens to MIDI notes and estimates the tempo you play (50 to 150 BPM), against a target tempo.",
+    "author": "Budo",
+    "version": "1.0.0",
+    "date": "2026-10-06",
+    "icon": "icon.svg"
+}

@@ -7,8 +7,18 @@
  *   - Car       : `Mesh.cube`, transformed by a model matrix that aligns its
  *                 local Z to the terrain normal and local Y to the heading.
  *   - Force vis : a dynamic line-mode mesh updated each frame.
- *   - HUD/joystick/buttons stay in 2D Skia (drawn before the GL pass; they
- *     are visible wherever the terrain mesh does not cover them, e.g. sky).
+ *   - Sky       : a fullscreen sky dome (sky.js) with sun, moon, stars and
+ *                 clouds; the fog takes the sky's horizon color.
+ *   - Dust      : wheel dust and landing bursts (dust.js), one batched draw.
+ *   - Sound     : engine, sand and rival engine oscillators (engine_audio.js).
+ *   - Tracks    : fading tyre tracks on the sand (tracks.js).
+ *   - Tumbleweeds rolling downwind, knocked away by cars (tumbleweeds.js).
+ *   - Post      : the scene renders offscreen, then bloom, heat shimmer and a
+ *                 time-of-day color grade (post.js, composite.frag); P toggles
+ *                 it, and it turns itself off below 40 fps.
+ *   - Photo mode: C freezes the world for a slow cinematic orbit.
+ *   - HUD/joystick/buttons stay in 2D Skia on a transparent canvas, laid over
+ *     the scene last by hud_overlay.frag with the vignette and speed lines.
  *
  * Controls:
  *   Desktop:
@@ -16,6 +26,9 @@
  *     Camera rotation (around Z): Q / E
  *     Camera angle: R / F
  *     Camera distance: T / G
+ *     Sound on/off: M
+ *     Post-processing on/off: P
+ *     Photo mode: C
  *   Touch (Android):
  *     Left side: Virtual joystick for car movement
  *     Right side: Camera control buttons
@@ -81,6 +94,13 @@ function createShaderProgram(vert, frag) {
 }
 
 import { Mesh } from './mesh.js';
+import { drawSky } from './sky.js';
+import { createDust } from './dust.js';
+import { createEngineAudio } from './engine_audio.js';
+import { createPost } from './post.js';
+import { createTracks } from './tracks.js';
+import { createTumbleweeds, makeTumbleweedMesh } from './tumbleweeds.js';
+import { drawIcon } from './icons.js';
 import {
     CAR_HEIGHT,
     CAR_LENGTH,
@@ -97,15 +117,24 @@ import {
     updatePhysics,
 } from './car_physics.js';
 
-let screenWidth = sys.window.getWidth();
-let screenHeight = sys.window.getHeight();
 const DISPLAY_DENSITY = sys.window.getDisplayDensity();
+// The HUD is laid out in density-independent pixels (dp), like budo-ui: it is
+// drawn under a canvas scale of UI_SCALE, and pointer positions are divided
+// by it. screenWidth and screenHeight are the screen size in dp.
+const UI_SCALE = Math.max(1, DISPLAY_DENSITY);
+let screenWidth = sys.window.getWidth() / UI_SCALE;
+let screenHeight = sys.window.getHeight() / UI_SCALE;
+// Phones (landscape is ~390 dp tall): fewer panels, controls in the corners.
+let compactLayout = false;
 const MOBILE_PROFILE = DISPLAY_DENSITY > 1.25;
-sys.log(`Terrain profile: ${MOBILE_PROFILE ? 'mobile' : 'desktop'} density=${DISPLAY_DENSITY.toFixed(2)} size=${screenWidth}x${screenHeight}`);
+sys.log(`Terrain profile: ${MOBILE_PROFILE ? 'mobile' : 'desktop'} density=${DISPLAY_DENSITY.toFixed(2)} size=${Math.round(screenWidth)}x${Math.round(screenHeight)} dp`);
 
 // ============ Touch / Virtual Joystick State ============
 
 let JOYSTICK_RADIUS = 0;
+let RADAR_X = 92;
+let RADAR_Y = 220;
+let RADAR_RADIUS = 58;
 let JOYSTICK_X = 0;
 let JOYSTICK_Y = 0;
 const JOYSTICK_DEAD_ZONE = 0.15;
@@ -119,26 +148,37 @@ let BUTTON_X = 0;
 let BUTTON_Y_START = 0;
 
 const cameraButtons = [
-    { x: 0, y: 0, label: '◀', action: 'rotLeft' },
-    { x: 0, y: 0, label: '▶', action: 'rotRight' },
-    { x: 0, y: 0, label: '▲', action: 'angleUp' },
-    { x: 0, y: 0, label: '▼', action: 'angleDown' },
-    { x: 0, y: 0, label: '+', action: 'zoomIn' },
-    { x: 0, y: 0, label: '-', action: 'zoomOut' },
+    { x: 0, y: 0, icon: 'rotateLeft', action: 'rotLeft' },
+    { x: 0, y: 0, icon: 'rotateRight', action: 'rotRight' },
+    { x: 0, y: 0, icon: 'chevronUp', action: 'angleUp' },
+    { x: 0, y: 0, icon: 'chevronDown', action: 'angleDown' },
+    { x: 0, y: 0, icon: 'zoomIn', action: 'zoomIn' },
+    { x: 0, y: 0, icon: 'zoomOut', action: 'zoomOut' },
 ];
 
 // View toggle button (third-person <-> first-person). Lives above the camera
 // rotate cluster on the right edge of the screen.
 let VIEW_BTN_X = 0;
 let VIEW_BTN_Y = 0;
-const VIEW_BTN_W = 112;
-const VIEW_BTN_H = 36;
+const VIEW_BTN_W = 36;
+const VIEW_BTN_H = 28;
 let TARGET_BTN_X = 0;
 let TARGET_BTN_Y = 0;
-const TARGET_BTN_W = 112;
-const TARGET_BTN_H = 36;
+let SOUND_BTN_X = 0;
+let SOUND_BTN_Y = 0;
+const SOUND_BTN_W = 36;
+const SOUND_BTN_H = 28;
+let POST_BTN_X = 0;
+let POST_BTN_Y = 0;
+let PHOTO_BTN_X = 0;
+let PHOTO_BTN_Y = 0;
+let PANEL_BTN_X = 0;
+let PANEL_BTN_Y = 0;
+const TARGET_BTN_W = 36;
+const TARGET_BTN_H = 28;
 
 let activeButtons = new Set();
+let touchSeen = false; // a touch screen: no keyboard hints
 
 const VIEW_ORBIT = 0;
 const VIEW_FOLLOW = 1;
@@ -161,36 +201,63 @@ function viewModeLabel() {
 
 const PARAM_PANEL_WIDTH = 230;
 let PARAM_PANEL_X = 0;
-const PARAM_PANEL_Y = 170; // below the force legend
+let PARAM_PANEL_Y = 170; // below the force legend
 const PARAM_ROW_HEIGHT = 22;
 const PARAM_BTN_SIZE = 18;
 // Total panel height including title, rows and reset button.
 const PARAM_PANEL_HEIGHT = 30 + 8 * PARAM_ROW_HEIGHT + 30;
 
 function updateResponsiveLayout() {
-    screenWidth = sys.window.getWidth();
-    screenHeight = sys.window.getHeight();
+    screenWidth = sys.window.getWidth() / UI_SCALE;
+    screenHeight = sys.window.getHeight() / UI_SCALE;
+    compactLayout = screenHeight < 560 || screenWidth < 700;
 
-    JOYSTICK_RADIUS = Math.min(screenWidth, screenHeight) * 0.12;
-    JOYSTICK_X = JOYSTICK_RADIUS + 40;
-    JOYSTICK_Y = screenHeight - JOYSTICK_RADIUS - 80;
+    JOYSTICK_RADIUS = Math.max(50, Math.min(80, Math.min(screenWidth, screenHeight) * 0.16));
+    JOYSTICK_X = JOYSTICK_RADIUS + 32;
+    JOYSTICK_Y = screenHeight - JOYSTICK_RADIUS - 32;
 
-    BUTTON_X = screenWidth - BUTTON_SIZE - 30;
-    BUTTON_Y_START = screenHeight - 280;
-    cameraButtons[0].x = BUTTON_X - 40; cameraButtons[0].y = BUTTON_Y_START;
-    cameraButtons[1].x = BUTTON_X + 40; cameraButtons[1].y = BUTTON_Y_START;
-    cameraButtons[2].x = BUTTON_X; cameraButtons[2].y = BUTTON_Y_START + 70;
-    cameraButtons[3].x = BUTTON_X; cameraButtons[3].y = BUTTON_Y_START + 140;
-    cameraButtons[4].x = BUTTON_X - 40; cameraButtons[4].y = BUTTON_Y_START + 210;
-    cameraButtons[5].x = BUTTON_X + 40; cameraButtons[5].y = BUTTON_Y_START + 210;
+    // Camera buttons: a 2x3 grid in the bottom-right corner, under the thumb.
+    const pitch = BUTTON_SIZE + 10;
+    const right = screenWidth - 24 - BUTTON_SIZE / 2;
+    const left = right - pitch;
+    const bottom = screenHeight - 24 - BUTTON_SIZE / 2;
+    BUTTON_X = (left + right) / 2;
+    BUTTON_Y_START = bottom - 2 * pitch;
+    cameraButtons[0].x = left; cameraButtons[0].y = bottom - 2 * pitch;  // rotate
+    cameraButtons[1].x = right; cameraButtons[1].y = bottom - 2 * pitch;
+    cameraButtons[2].x = left; cameraButtons[2].y = bottom - pitch;      // angle
+    cameraButtons[3].x = right; cameraButtons[3].y = bottom - pitch;
+    cameraButtons[4].x = left; cameraButtons[4].y = bottom;              // zoom
+    cameraButtons[5].x = right; cameraButtons[5].y = bottom;
 
-    VIEW_BTN_X = BUTTON_X;
-    VIEW_BTN_Y = BUTTON_Y_START - 80;
-    TARGET_BTN_X = BUTTON_X;
-    TARGET_BTN_Y = BUTTON_Y_START - 124;
-    PARAM_PANEL_X = screenWidth - PARAM_PANEL_WIDTH - 10;
+    // The radar sits under the HUD title, or in the top-right corner of a phone.
+    RADAR_RADIUS = compactLayout ? 44 : 58;
+    RADAR_X = compactLayout ? screenWidth - RADAR_RADIUS - 24 : 92;
+    RADAR_Y = compactLayout ? RADAR_RADIUS + 28 : 220;
+    // On a short screen, step left of the camera buttons rather than over them.
+    if (compactLayout && RADAR_Y + RADAR_RADIUS + 12 > BUTTON_Y_START - BUTTON_SIZE / 2) {
+        RADAR_X = left - BUTTON_SIZE / 2 - 20 - RADAR_RADIUS;
+    }
+
+    SOUND_BTN_X = 100 + SOUND_BTN_W / 2; // right of the FPS readout
+    SOUND_BTN_Y = 63;
+    POST_BTN_X = SOUND_BTN_X + SOUND_BTN_W + 8;
+    POST_BTN_Y = SOUND_BTN_Y;
+    PHOTO_BTN_X = POST_BTN_X + SOUND_BTN_W + 8;
+    PHOTO_BTN_Y = SOUND_BTN_Y;
+    // The view and rally-target toggles share the row of icon buttons.
+    VIEW_BTN_X = PHOTO_BTN_X + SOUND_BTN_W + 8;
+    VIEW_BTN_Y = SOUND_BTN_Y;
+    TARGET_BTN_X = VIEW_BTN_X + SOUND_BTN_W + 8;
+    TARGET_BTN_Y = SOUND_BTN_Y;
+    PANEL_BTN_X = TARGET_BTN_X + SOUND_BTN_W + 8;
+    PANEL_BTN_Y = SOUND_BTN_Y;
+    // A phone opens the physics panel over the middle of the view.
+    PARAM_PANEL_X = compactLayout ? (screenWidth - PARAM_PANEL_WIDTH) / 2 : screenWidth - PARAM_PANEL_WIDTH - 10;
+    PARAM_PANEL_Y = compactLayout ? Math.max(30, Math.min(110, screenHeight - PARAM_PANEL_HEIGHT + 14)) : 170;
 }
 updateResponsiveLayout();
+let showPhysicsPanel = !compactLayout;
 
 // ============ Deterministic value noise ============
 //
@@ -294,6 +361,9 @@ const PREFETCH_RADIUS_CHUNKS = MOBILE_PROFILE ? VIEW_KEEP_CHUNKS : VIEW_RADIUS_C
 const CHUNK_BUILD_BUDGET = MOBILE_PROFILE ? 1 : 64; // avoid frame spikes when crossing chunk edges
 const CHUNK_DESTROY_BUDGET = MOBILE_PROFILE ? 1 : 64;
 const CHUNK_INITIAL_BUDGET = MOBILE_PROFILE ? 9 : 64; // build the spawn view immediately
+// Each chunk holds a vertex layout, and the runtime has 64 in all: cap the
+// cache well below the 7x7 the hysteresis ring could otherwise keep.
+const CHUNK_CACHE_CAP = MOBILE_PROFILE ? 25 : 36;
 
 // Pure terrain field. Hot path: called by physics every frame and by every
 // vertex of every newly-built chunk. This is the fixed-parameter equivalent
@@ -405,7 +475,7 @@ function createChunkGPU(cx, cy) {
     sys.gl.setAttribute(layout, 0 /* a_position */, posBuf, 3, 'float', false, 0, 0);
     sys.gl.setAttribute(layout, 2 /* a_normal   */, nrmBuf, 3, 'float', false, 0, 0);
     sys.gl.setIndexBuffer(layout, sharedIndexBuffer, 'u16');
-    return { cx, cy, layout, posBuf, nrmBuf };
+    return { cx, cy, k: chunkKey(cx, cy), layout, posBuf, nrmBuf };
 }
 
 function destroyChunkGPU(chunk) {
@@ -421,6 +491,8 @@ const chunkDestroyQueue = [];
 const pendingChunkKeys = new Set();
 let currentChunkX = 0;
 let currentChunkY = 0;
+let lastScanChunkX = NaN;
+let lastScanChunkY = NaN;
 
 function chunkKey(cx, cy) { return cx + ',' + cy; }
 
@@ -434,14 +506,37 @@ function updateChunks(carWorldX, carWorldY) {
     const ccy = Math.floor(carWorldY / CHUNK_WORLD);
     currentChunkX = ccx;
     currentChunkY = ccy;
+    // Nothing to do until the car enters another chunk or work is queued:
+    // the scan below makes keys and lists, which the GC would then collect.
+    if (ccx === lastScanChunkX && ccy === lastScanChunkY && activeChunks.size > 0
+        && chunkBuildQueue.length === 0 && chunkDestroyQueue.length === 0) {
+        return;
+    }
+    lastScanChunkX = ccx;
+    lastScanChunkY = ccy;
 
     // Evict chunks before allocating new ones. This keeps GPU buffer usage
     // bounded even after long drives or fast teleports across chunk rings.
-    for (const [k, chunk] of activeChunks) {
+    for (const chunk of activeChunks.values()) {
         if (Math.abs(chunk.cx - ccx) > VIEW_KEEP_CHUNKS ||
             Math.abs(chunk.cy - ccy) > VIEW_KEEP_CHUNKS) {
-            activeChunks.delete(k);
+            activeChunks.delete(chunk.k);
             chunkDestroyQueue.push(chunk);
+        }
+    }
+
+    if (activeChunks.size > CHUNK_CACHE_CAP) {
+        const spare = [];
+        for (const chunk of activeChunks.values()) {
+            const dx = chunk.cx - ccx, dy = chunk.cy - ccy;
+            if (Math.abs(dx) > VIEW_RADIUS_CHUNKS || Math.abs(dy) > VIEW_RADIUS_CHUNKS) {
+                spare.push({ k: chunk.k, chunk, dist2: dx * dx + dy * dy });
+            }
+        }
+        spare.sort((a, b) => b.dist2 - a.dist2);
+        for (let i = 0; i < spare.length && activeChunks.size > CHUNK_CACHE_CAP; i++) {
+            activeChunks.delete(spare[i].k);
+            chunkDestroyQueue.push(spare[i].chunk);
         }
     }
 
@@ -463,16 +558,17 @@ function updateChunks(carWorldX, carWorldY) {
             }
         }
     }
-    missing.sort((a, b) => a.dist2 - b.dist2);
-    for (const item of missing) {
-        pendingChunkKeys.add(item.k);
-        chunkBuildQueue.push(item);
+    if (missing.length > 0) {
+        for (const item of missing) {
+            pendingChunkKeys.add(item.k);
+            chunkBuildQueue.push(item);
+        }
+        chunkBuildQueue.sort((a, b) => {
+            const adx = a.cx - ccx, ady = a.cy - ccy;
+            const bdx = b.cx - ccx, bdy = b.cy - ccy;
+            return (adx * adx + ady * ady) - (bdx * bdx + bdy * bdy);
+        });
     }
-    chunkBuildQueue.sort((a, b) => {
-        const adx = a.cx - ccx, ady = a.cy - ccy;
-        const bdx = b.cx - ccx, bdy = b.cy - ccy;
-        return (adx * adx + ady * ady) - (bdx * bdx + bdy * bdy);
-    });
 
     const buildBudget = activeChunks.size === 0 ? CHUNK_INITIAL_BUDGET : CHUNK_BUILD_BUDGET;
     for (let built = 0; built < buildBudget && chunkBuildQueue.length > 0;) {
@@ -502,6 +598,7 @@ const PALM_DRAW_RADIUS = MOBILE_PROFILE ? 36.0 : 78.0;
 const PALM_MAX_DRAWS = MOBILE_PROFILE ? 3 : 18;
 const PALM_COLLISION_RADIUS = 0.15;
 const palmDrawList = [];
+const byDistance = (a, b) => a.dist2 - b.dist2;
 
 function palmRand(seed, salt) {
     return hash2((seed * 73856093 + salt * 19349663) | 0,
@@ -636,6 +733,12 @@ const palmVariants = [
     uploadPalmMesh(makePalmMesh(2)),
 ];
 const palmChunks = new Map();
+const tumbleweedVariants = [
+    uploadPalmMesh(makeTumbleweedMesh(1)),
+    uploadPalmMesh(makeTumbleweedMesh(2)),
+];
+const tumbleweedModel = new Float32Array(16);
+const tumbleweedMVP = new Float32Array(16);
 
 function getPalmChunk(cx, cy) {
     const k = chunkKey(cx, cy);
@@ -822,7 +925,6 @@ const rallySphereMesh = Mesh.upload(Mesh.sphere(1.0, 28));
 // ============ Dynamic line buffer for force arrows ============
 
 const linesProgram = createShaderProgram('lines.vert', 'lines.frag');
-const hudOverlayProgram = createShaderProgram('hud_overlay.vert', 'hud_overlay.frag');
 const headlightProgram = createShaderProgram('headlight.vert', 'headlight.frag');
 const MAX_LINE_VERTICES = 256;
 const lineData = new Float32Array(MAX_LINE_VERTICES * 6); // pos(3) + color(3)
@@ -1293,6 +1395,81 @@ if (!MOBILE_PROFILE) {
 const playerCar = cars[0];
 for (let i = 1; i < cars.length; i++) pickAIControls(cars[i]);
 
+// ============ Dust, sound, and speed effects ============
+
+const dust = createDust(MOBILE_PROFILE ? 320 : 1400);
+const tracks = createTracks(MOBILE_PROFILE ? 700 : 2600, getTerrainHeight);
+const TRACK_BASE_RGB = [0.36, 0.22, 0.11];
+const TRACK_COLOR_RGB = new Float32Array(3); // TRACK_BASE_RGB under this frame's light
+const tumbleweeds = createTumbleweeds(MOBILE_PROFILE ? 3 : 6, getTerrainHeight);
+let simTime = 0;      // seconds of simulation; stops in photo mode
+const DUST_RATE = MOBILE_PROFILE ? 64 : 80; // puffs per second per car at speed
+const DUST_COLOR_RGB = new Float32Array([0.86, 0.66, 0.42]);
+const engineAudio = createEngineAudio();
+let playerThrottle = 0;
+let speedFx = 0;      // 0..1, eased: FOV kick, vignette, speed lines
+let cameraShake = 0;  // decays; landings add to it
+let landingImpact = 0;
+const headlightPos = new Float32Array(3);
+const headlightDir = new Float32Array(3);
+
+// Landings, from the grounded flag and the fall speed while airborne.
+function trackLanding(car) {
+    let impact = 0;
+    if (!car.grounded) {
+        car.fallSpeed = Math.max(car.fallSpeed || 0, -car.vz);
+        car.airTime = car.airborneTime;
+    } else if (car.wasGrounded === false) {
+        impact = Math.min(1, (car.fallSpeed || 0) / 11 + (car.airTime || 0) * 0.35);
+        car.fallSpeed = 0;
+    }
+    car.wasGrounded = car.grounded;
+    return impact;
+}
+
+function updateCarEffects(dt) {
+    landingImpact = 0;
+    if (dt <= 0) {
+        dust.update(0);
+        return;
+    }
+    simTime += dt;
+    for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        const impact = trackLanding(car);
+        const groundZ = getTerrainHeight(car.x, car.y);
+        if (impact > 0.08) {
+            dust.burst(car, groundZ, impact, Math.round((MOBILE_PROFILE ? 14 : 36) * (0.4 + impact)));
+            if (i === 0) landingImpact = impact;
+        }
+        dust.emitTrail(car, dt, groundZ, DUST_RATE);
+        tracks.update(car, simTime);
+    }
+    tumbleweeds.update(dt, playerCar, cars, (weed) => {
+        dust.burst(weed, getTerrainHeight(weed.x, weed.y), 0.35, MOBILE_PROFILE ? 6 : 14);
+    });
+    dust.update(dt);
+
+    const speed = Math.hypot(playerCar.vx, playerCar.vy);
+    const targetFx = smoothstep(16, 40, speed);
+    speedFx += (targetFx - speedFx) * (1 - Math.exp(-3 * dt));
+    cameraShake = cameraShake * Math.exp(-5 * dt) + landingImpact * 0.9;
+}
+
+function nearestRival() {
+    let best = null, bestDist = Infinity;
+    for (let i = 1; i < cars.length; i++) {
+        const d = Math.hypot(cars[i].x - playerCar.x, cars[i].y - playerCar.y);
+        if (d < bestDist) { bestDist = d; best = cars[i]; }
+    }
+    return best;
+}
+
+// Smooth pseudo-random shake: a few incommensurate sines per axis.
+function shakeOffset(t, axis) {
+    return Math.sin(t * 37.0 + axis * 1.7) * 0.6 + Math.sin(t * 23.0 + axis * 4.1) * 0.4;
+}
+
 // ============ Rally target ============
 // A moving rally coordinate. It follows the generated road centerline at a
 // steady speed. It is rendered as a metallic sphere and shown on radar only
@@ -1403,9 +1580,15 @@ function getCameraPosition(targetX, targetY, targetZ, out) {
 
 // ============ Touch Input Processing ============
 
+function inPill(mx, my, cx, cy) {
+    return mx >= cx - SOUND_BTN_W / 2 && mx <= cx + SOUND_BTN_W / 2
+        && my >= cy - SOUND_BTN_H / 2 && my <= cy + SOUND_BTN_H / 2;
+}
+
 function updateTouchInput(input) {
-    const mx = input.mouse.x;
-    const my = input.mouse.y;
+    const mx = input.mouse.x / UI_SCALE;
+    const my = input.mouse.y / UI_SCALE;
+    if (input.pointer && input.pointer.type === 'touch') touchSeen = true;
     const touching = input.mouse.left;
     const justPressed = touching && !lastMouseDown;
     activeButtons.clear();
@@ -1416,6 +1599,30 @@ function updateTouchInput(input) {
         && my >= VIEW_BTN_Y - VIEW_BTN_H / 2 && my <= VIEW_BTN_Y + VIEW_BTN_H / 2) {
         cycleViewMode();
         lastMouseDown = touching;
+        return;
+    }
+
+    // Sound and post-processing pills (rising-edge); the first sound press
+    // starts the sound.
+    if (justPressed && inPill(mx, my, SOUND_BTN_X, SOUND_BTN_Y)) {
+        soundButtonPressed = true;
+        lastMouseDown = touching;
+        return;
+    }
+    if (justPressed && inPill(mx, my, POST_BTN_X, POST_BTN_Y)) {
+        postButtonPressed = true;
+        lastMouseDown = touching;
+        return;
+    }
+    if (justPressed && inPill(mx, my, PANEL_BTN_X, PANEL_BTN_Y)) {
+        showPhysicsPanel = !showPhysicsPanel;
+        lastMouseDown = touching;
+        return;
+    }
+    if (justPressed && inPill(mx, my, PHOTO_BTN_X, PHOTO_BTN_Y)) {
+        photoButtonPressed = true;
+        lastMouseDown = touching;
+        photoMouseHeld = true; // the same tap must not leave photo mode again
         return;
     }
 
@@ -1451,13 +1658,18 @@ function updateTouchInput(input) {
         }
     }
 
-    // Param panel covers the top-right; ignore that vertical band for camera buttons.
-    const inParamPanel = mx > screenWidth - PARAM_PANEL_WIDTH - 10
-        && my < PARAM_PANEL_HEIGHT + 10;
+    // Touches on the open physics panel never steer or turn the camera.
+    const inParamPanel = showPhysicsPanel
+        && mx >= PARAM_PANEL_X - 6 && mx <= PARAM_PANEL_X + PARAM_PANEL_WIDTH + 6
+        && my >= PARAM_PANEL_Y - 22 && my <= PARAM_PANEL_Y - 22 + PARAM_PANEL_HEIGHT;
     const inTargetButton = mx >= TARGET_BTN_X - TARGET_BTN_W / 2 && mx <= TARGET_BTN_X + TARGET_BTN_W / 2
         && my >= TARGET_BTN_Y - TARGET_BTN_H / 2 && my <= TARGET_BTN_Y + TARGET_BTN_H / 2;
 
-    if (touching && !inParamPanel && !inTargetButton) {
+    const inSoundButton = inPill(mx, my, SOUND_BTN_X, SOUND_BTN_Y) || inPill(mx, my, POST_BTN_X, POST_BTN_Y)
+        || inPill(mx, my, PHOTO_BTN_X, PHOTO_BTN_Y) || inPill(mx, my, VIEW_BTN_X, VIEW_BTN_Y)
+        || inPill(mx, my, PANEL_BTN_X, PANEL_BTN_Y);
+
+    if (touching && !inParamPanel && !inTargetButton && !inSoundButton) {
         if (mx < screenWidth / 2) {
             touchJoystickActive = true;
             const offsetX = (mx - JOYSTICK_X) / JOYSTICK_RADIUS;
@@ -1506,7 +1718,7 @@ function updateParamKeyboard(dt) {
     if (sys.input.isKeyPressed(42)) resetPhysics();
 
     // Cycle camera view with V (SDL scancode 25).
-    if (sys.input.isKeyPressed(25)) cycleViewMode();
+    if (shortcutPressed('v', 25)) cycleViewMode();
 
     // Continuous adjust while holding [ / - or ] / =.
     // Rate: ~4 steps per second (so it feels snappy without being twitchy).
@@ -1551,7 +1763,19 @@ function updateCamera(dt) {
     const distSpeed = 10 * dt;
     const rotInput = (sys.input.isKeyDown(8) || activeButtons.has('rotRight') ? 1 : 0)
         - (sys.input.isKeyDown(20) || activeButtons.has('rotLeft') ? 1 : 0);
-    if (viewMode === VIEW_FOLLOW) {
+    if (photoMode) {
+        // A slow orbit around the frozen car; Q/E steer it, and the camera
+        // eases low and close until R/F/T/G take over.
+        cameraRotation += (0.12 + rotInput * 0.8) * dt;
+        if (sys.input.isKeyDown(21) || sys.input.isKeyDown(9) || sys.input.isKeyDown(23) || sys.input.isKeyDown(10)) {
+            photoCameraManual = true;
+        }
+        if (!photoCameraManual) {
+            const ease = 1 - Math.exp(-1.6 * dt);
+            cameraAngle += (0.2 - cameraAngle) * ease;
+            cameraDistance += (13 - cameraDistance) * ease;
+        }
+    } else if (viewMode === VIEW_FOLLOW) {
         // Same orbit camera as the initial view, but its azimuth eases toward
         // a point behind the car. Manual rotate adjusts the follow offset.
         followCameraOffset += rotInput * rotSpeed;
@@ -1587,30 +1811,40 @@ const rallyMVP = new Float32Array(16);
 const eye = new Float32Array(3);
 const target = new Float32Array(3);
 const upZ = new Float32Array([0, 0, 1]);
+const fpUp = new Float32Array(3); // the cabin camera's up, the car's
 
-const SKY_COLOR_RGB = new Float32Array([0xe8 / 255, 0xcf / 255, 0x9a / 255]);
 const FOG_COLOR_RGB = new Float32Array([0xe8 / 255, 0xcf / 255, 0x9a / 255]);
+const ZENITH_RGB = new Float32Array([0.30, 0.52, 0.82]);
+const SKY_GLOW_RGB = new Float32Array(3);
+const SUN_COLOR_RGB = new Float32Array(3);
+const SUN_DIR = new Float32Array([0.55, 0.35, 0.76]);
+const MOON_DIR = new Float32Array([-0.55, -0.35, -0.76]);
 const LIGHT_DIR = new Float32Array([0.55, 0.35, 0.76]);
 const LIGHT_COLOR = new Float32Array([1.0, 0.88, 0.68]);
-const DAY_SKY_RGB = [0xe8 / 255, 0xcf / 255, 0x9a / 255];
-const NIGHT_SKY_RGB = [0x12 / 255, 0x18 / 255, 0x2f / 255];
-const SUNSET_SKY_RGB = [0xf0 / 255, 0x84 / 255, 0x46 / 255];
+const DAY_ZENITH_RGB = [0.24, 0.47, 0.80];
+const NIGHT_ZENITH_RGB = [0.015, 0.025, 0.07];
+const SUNSET_ZENITH_RGB = [0.30, 0.16, 0.34];
 const DAY_FOG_RGB = [0xe8 / 255, 0xcf / 255, 0x9a / 255];
 const NIGHT_FOG_RGB = [0x1b / 255, 0x21 / 255, 0x38 / 255];
 const SUNSET_FOG_RGB = [0xe0 / 255, 0x82 / 255, 0x52 / 255];
+const SUNSET_GLOW_RGB = [1.0, 0.42, 0.16];
+const SUN_HIGH_RGB = [1.0, 0.96, 0.84];
+const SUN_LOW_RGB = [1.0, 0.52, 0.22];
 const DAY_LIGHT_RGB = [1.0, 0.86, 0.62];
 const NIGHT_LIGHT_RGB = [0.28, 0.36, 0.68];
 const RALLY_SPHERE_RGB = new Float32Array([0.82, 0.86, 0.90]);
 const DAY_NIGHT_PERIOD_MS = 90000;
 const FOG_START = MOBILE_PROFILE ? 30.0 : 38.0;
 const FOG_END = MOBILE_PROFILE ? 72.0 : 105.0;
-let skyColorARGB = 0xffe8cf9a;
+let nightFactor = 0.0;
+let dayAmount = 1.0;
+let twilightAmount = 0.0;
+let sunHigh = 1.0;
+let starAngle = 0.0;
 let ambientLight = 0.42;
 let headlightNightFactor = 0.0;
 
-const RADAR_X = 92;
-const RADAR_Y = 220;
-const RADAR_RADIUS = 58;
+
 const RADAR_RANGE = 85; // world units shown from center to edge
 
 let currentFPS = 0;
@@ -1635,13 +1869,6 @@ function addColor(out, color, amount) {
     out[2] = Math.min(1, out[2] + color[2] * amount);
 }
 
-function rgbToArgb(rgb) {
-    const r = Math.max(0, Math.min(255, Math.round(rgb[0] * 255)));
-    const g = Math.max(0, Math.min(255, Math.round(rgb[1] * 255)));
-    const b = Math.max(0, Math.min(255, Math.round(rgb[2] * 255)));
-    return (0xff000000 | (r << 16) | (g << 8) | b) >>> 0;
-}
-
 function updateDayNightLighting(timestamp) {
     // A slow continuous cycle: noon -> sunset -> moonlit night -> sunrise.
     const phase = (timestamp / DAY_NIGHT_PERIOD_MS) * Math.PI * 2 + Math.PI * 0.30;
@@ -1649,22 +1876,60 @@ function updateDayNightLighting(timestamp) {
     const daylight = smoothstep(-0.18, 0.42, sunHeight);
     const twilight = (1.0 - Math.abs(daylight * 2.0 - 1.0)) * smoothstep(-0.35, 0.25, sunHeight);
     headlightNightFactor = 1.0 - smoothstep(0.16, 0.46, daylight);
+    nightFactor = 1.0 - smoothstep(-0.12, 0.10, sunHeight);
+    dayAmount = daylight;
+    twilightAmount = twilight;
+    sunHigh = smoothstep(0.35, 0.85, sunHeight);
+    starAngle = phase * 0.5;
 
     ambientLight = mixNumber(0.10, 0.43, daylight) + twilight * 0.08;
-    mixColor(SKY_COLOR_RGB, NIGHT_SKY_RGB, DAY_SKY_RGB, daylight);
-    addColor(SKY_COLOR_RGB, SUNSET_SKY_RGB, twilight * 0.28);
     mixColor(FOG_COLOR_RGB, NIGHT_FOG_RGB, DAY_FOG_RGB, daylight);
     addColor(FOG_COLOR_RGB, SUNSET_FOG_RGB, twilight * 0.22);
+    mixColor(ZENITH_RGB, NIGHT_ZENITH_RGB, DAY_ZENITH_RGB, daylight);
+    addColor(ZENITH_RGB, SUNSET_ZENITH_RGB, twilight * 0.35);
     mixColor(LIGHT_COLOR, NIGHT_LIGHT_RGB, DAY_LIGHT_RGB, daylight);
 
-    const x = Math.cos(phase) * 0.62;
-    const y = 0.36;
-    const z = Math.max(0.10, Math.abs(sunHeight));
+    // The sun travels east to west; the moon sits opposite it.
+    setUnit(SUN_DIR, Math.cos(phase) * 0.62, 0.36, sunHeight);
+    MOON_DIR[0] = -SUN_DIR[0]; MOON_DIR[1] = -SUN_DIR[1]; MOON_DIR[2] = -SUN_DIR[2];
+
+    // Low sun: orange disc and a strong glow along the horizon on its side.
+    const sunVisible = smoothstep(-0.08, 0.03, sunHeight);
+    const lowSun = 1.0 - smoothstep(0.05, 0.45, sunHeight);
+    mixColor(SUN_COLOR_RGB, SUN_HIGH_RGB, SUN_LOW_RGB, lowSun);
+    SUN_COLOR_RGB[0] *= sunVisible; SUN_COLOR_RGB[1] *= sunVisible; SUN_COLOR_RGB[2] *= sunVisible;
+    const glow = twilight * 0.85 + lowSun * sunVisible * 0.15;
+    SKY_GLOW_RGB[0] = SUNSET_GLOW_RGB[0] * glow;
+    SKY_GLOW_RGB[1] = SUNSET_GLOW_RGB[1] * glow;
+    SKY_GLOW_RGB[2] = SUNSET_GLOW_RGB[2] * glow;
+
+    // Light from the sun by day and the moon by night, blended across the
+    // horizon so the terrain shading never jumps.
+    const sunWeight = smoothstep(-0.15, 0.15, sunHeight);
+    setUnit(LIGHT_DIR,
+        mixNumber(MOON_DIR[0], SUN_DIR[0], sunWeight),
+        mixNumber(MOON_DIR[1], SUN_DIR[1], sunWeight),
+        Math.max(0.10, Math.abs(mixNumber(MOON_DIR[2], SUN_DIR[2], sunWeight))));
+}
+
+function setUnit(out, x, y, z) {
     const len = Math.sqrt(x * x + y * y + z * z) || 1;
-    LIGHT_DIR[0] = x / len;
-    LIGHT_DIR[1] = y / len;
-    LIGHT_DIR[2] = z / len;
-    skyColorARGB = rgbToArgb(SKY_COLOR_RGB);
+    out[0] = x / len;
+    out[1] = y / len;
+    out[2] = z / len;
+}
+
+// Fog and sun uniforms shared by every lit scene shader (terrain, palms, cars).
+function setAtmosphere(program) {
+    program.uniform3f('u_eye', eye[0], eye[1], eye[2]);
+    program.uniform3f('u_fog_color', FOG_COLOR_RGB[0], FOG_COLOR_RGB[1], FOG_COLOR_RGB[2]);
+    program.uniform1f('u_fog_start', FOG_START);
+    program.uniform1f('u_fog_end', FOG_END);
+    program.uniform3f('u_sky_glow', SKY_GLOW_RGB[0], SKY_GLOW_RGB[1], SKY_GLOW_RGB[2]);
+    program.uniform3f('u_sun_dir', SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]);
+    program.uniform3f('u_sun_color', SUN_COLOR_RGB[0], SUN_COLOR_RGB[1], SUN_COLOR_RGB[2]);
+    program.uniform3f('u_light_dir', LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]);
+    program.uniform3f('u_light_color', LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
 }
 
 // Build a 4x4 column-major model matrix for the car so its local axes
@@ -1796,14 +2061,9 @@ function drawRallyTarget() {
     carProgram.uniformMatrix4('u_mvp', rallyMVP);
     carProgram.uniformMatrix4('u_model', rallyModel);
     carProgram.uniform3f('u_color', RALLY_SPHERE_RGB[0], RALLY_SPHERE_RGB[1], RALLY_SPHERE_RGB[2]);
-    carProgram.uniform3f('u_light_dir', LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]);
-    carProgram.uniform3f('u_light_color', LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
-    carProgram.uniform3f('u_eye', eye[0], eye[1], eye[2]);
-    carProgram.uniform3f('u_fog_color', FOG_COLOR_RGB[0], FOG_COLOR_RGB[1], FOG_COLOR_RGB[2]);
+    setAtmosphere(carProgram);
     carProgram.uniform1f('u_ambient', Math.max(0.28, ambientLight * 0.95));
     carProgram.uniform1f('u_headlight_on', 0.0);
-    carProgram.uniform1f('u_fog_start', FOG_START);
-    carProgram.uniform1f('u_fog_end', FOG_END);
     carProgram.drawMesh(rallySphereMesh.layout, {
         mode: 'triangles',
         first: 0,
@@ -1816,12 +2076,7 @@ function drawRallyTarget() {
 }
 
 function drawPalms() {
-    palmProgram.uniform3f('u_eye', eye[0], eye[1], eye[2]);
-    palmProgram.uniform3f('u_fog_color', FOG_COLOR_RGB[0], FOG_COLOR_RGB[1], FOG_COLOR_RGB[2]);
-    palmProgram.uniform1f('u_fog_start', FOG_START);
-    palmProgram.uniform1f('u_fog_end', FOG_END);
-    palmProgram.uniform3f('u_light_dir', LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]);
-    palmProgram.uniform3f('u_light_color', LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
+    setAtmosphere(palmProgram);
     palmProgram.uniform1f('u_ambient', ambientLight * 0.82);
 
     palmDrawList.length = 0;
@@ -1834,18 +2089,21 @@ function drawPalms() {
             const dx = palm.x - playerCar.x;
             const dy = palm.y - playerCar.y;
             const dist2 = dx * dx + dy * dy;
-            if (dist2 <= drawRadius2) palmDrawList.push({ palm, dist2 });
+            if (dist2 <= drawRadius2) {
+                palm.dist2 = dist2;
+                palmDrawList.push(palm);
+            }
         }
     }
 
     // Draw only the nearest palms. This keeps the scene under the 64-pass
     // runtime cap while fog hides vegetation culled near the horizon.
-    palmDrawList.sort((a, b) => a.dist2 - b.dist2);
+    palmDrawList.sort(byDistance);
     const visibleChunkCount = Math.min(activeChunks.size, (VIEW_RADIUS_CHUNKS * 2 + 1) * (VIEW_RADIUS_CHUNKS * 2 + 1));
     const passBudget = Math.max(0, 58 - visibleChunkCount - cars.length * 2);
     const count = Math.min(palmDrawList.length, PALM_MAX_DRAWS, passBudget);
     for (let i = 0; i < count; i++) {
-        const palm = palmDrawList[i].palm;
+        const palm = palmDrawList[i];
         const mesh = palmVariants[palm.variant];
         buildTerrainObjectModel(palmModel, palm.x, palm.y, palm.z, palm.rot, palm.scale);
         sys.math.mat4Multiply(palmMVP, viewProj, palmModel);
@@ -1862,13 +2120,41 @@ function drawPalms() {
         });
     }
     prunePalmChunks();
+
+    tumbleweeds.forEach((model, variant) => {
+        const mesh = tumbleweedVariants[variant % tumbleweedVariants.length];
+        sys.math.mat4Multiply(tumbleweedMVP, viewProj, model);
+        palmProgram.uniformMatrix4('u_mvp', tumbleweedMVP);
+        palmProgram.uniformMatrix4('u_model', model);
+        palmProgram.drawMesh(mesh.layout, {
+            mode: 'triangles',
+            first: 0,
+            count: mesh.indexCount,
+            depthTest: true,
+            depthWrite: true,
+            cull: 'none',
+            blend: 'none',
+        });
+    }, tumbleweedModel);
 }
 
 // ============ Frame ============
 
+// Letter shortcuts (M, P, C, V) follow the keyboard layout, so M is the key
+// labelled M on AZERTY too: scancodes are physical positions, but the frame's
+// typed text is layout-aware. Where a platform types no text, the key at the
+// QWERTY position stands in. Driving and camera keys stay physical (WASD).
+let frameText = '';
+function shortcutPressed(letter, qwertyScancode) {
+    if (frameText) return frameText.toLowerCase().includes(letter);
+    return sys.input.isKeyPressed(qwertyScancode);
+}
+
 function frame(timestamp) {
+    const frameStartMs = performance.now();
     updateResponsiveLayout();
     const input = sys.input.get();
+    frameText = input.text || '';
     const dt = input.deltaTime;
     if (dt > 0) {
         currentFPS = 1 / dt;
@@ -1877,31 +2163,51 @@ function frame(timestamp) {
             : smoothedFPS + (currentFPS - smoothedFPS) * 0.12;
     }
     updateDayNightLighting(timestamp);
-    updateRallyTarget(timestamp, dt);
+    updatePhotoMode(input, dt);
+    // Photo mode freezes the world; the camera and the day keep moving.
+    const simDt = photoMode ? 0 : dt;
 
-    updateTouchInput(input);
-    updateParamKeyboard(dt);
-    updateCamera(dt);
-    const forces = updatePhysics(playerCar, dt, gatherPlayerControls(), terrainPhysics);
-    for (let i = 1; i < cars.length; i++) {
-        updatePhysics(cars[i], dt, gatherRallyAIControls(cars[i], dt), terrainPhysics);
+    if (!photoMode) {
+        updateRallyTarget(timestamp, dt);
+        updateTouchInput(input);
+        updateParamKeyboard(dt);
     }
-    resolvePalmCollisions();
-    resolveVehicleCollisions(cars);
+    updateCamera(dt);
+    const playerControls = photoMode ? { throttle: 0, steer: 0 } : gatherPlayerControls();
+    playerThrottle = playerControls.throttle;
+    if (simDt > 0) {
+        lastForces = updatePhysics(playerCar, simDt, playerControls, terrainPhysics);
+        for (let i = 1; i < cars.length; i++) {
+            updatePhysics(cars[i], simDt, gatherRallyAIControls(cars[i], simDt), terrainPhysics);
+        }
+        resolvePalmCollisions();
+        resolveVehicleCollisions(cars);
+    }
+    const forces = lastForces;
 
     const w = sys.window.getWidth();
     const h = sys.window.getHeight();
 
-    // ----- Skia 2D pass: sky background + HUD -----
-    sys.canvas.clear(skyColorARGB);
-    drawHUD(forces);
-    drawTouchControls();
-    drawPhysicsPanel();
-    drawAxisIndicatorFlat();
-    drawRadar();
+    updateCarEffects(simDt);
+    updateAudio(input, dt);
+
+    // ----- Skia 2D pass: the HUD, on a transparent canvas composited last -----
+    sys.canvas.clear(0x00000000);
+    sys.canvas.save();
+    sys.canvas.scale(UI_SCALE, UI_SCALE);
+    paramButtons.length = 0;
+    if (photoBlend < 0.5 && forces) {
+        drawHUD(forces);
+        drawTouchControls();
+        if (showPhysicsPanel) drawPhysicsPanel();
+        if (!compactLayout) drawAxisIndicatorFlat();
+        drawRadar();
+    }
+    drawPhotoOverlay(screenWidth, screenHeight);
+    sys.canvas.restore();
 
     // ----- Build camera matrices -----
-    if (isFirstPersonView()) {
+    if (isFirstPersonView() && !photoMode) {
         // Cabin cam follows the car's actual visual attitude: terrain-aligned
         // while grounded, inertial pitch/roll while airborne.
         const axes = getCarVisualAxes(playerCar);
@@ -1919,20 +2225,31 @@ function frame(timestamp) {
         target[2] = eye[2] + forward.z * 5;
 
         // Use the car's current up so the horizon banks naturally.
-        const fpUp = new Float32Array([normal.x, normal.y, normal.z]);
-        sys.math.mat4Perspective(proj, Math.PI / 2.3, w / h, 0.05, 200.0);
+        fpUp[0] = normal.x; fpUp[1] = normal.y; fpUp[2] = normal.z;
+        cameraFov = Math.PI / 2.3 + speedFx * 0.14;
+        applyCameraShake(timestamp, 0.05);
+        sys.math.mat4Perspective(proj, cameraFov, w / h, 0.05, 200.0);
         sys.math.mat4LookAt(view, eye, target, fpUp);
     } else {
         const tx = playerCar.x, ty = playerCar.y, tz = playerCar.z + CAR_HEIGHT * physics.vehicleScale / 2;
         target[0] = tx; target[1] = ty; target[2] = tz;
         const savedRotation = cameraRotation;
-        if (viewMode === VIEW_FOLLOW) cameraRotation = followCameraRotation;
+        if (viewMode === VIEW_FOLLOW && !photoMode) cameraRotation = followCameraRotation;
         getCameraPosition(tx, ty, tz, eye);
         cameraRotation = savedRotation;
-        sys.math.mat4Perspective(proj, Math.PI / 3, w / h, 0.1, 200.0);
+        cameraFov = Math.PI / 3 + (photoMode ? 0 : speedFx * 0.22);
+        if (!photoMode) applyCameraShake(timestamp, 0.35);
+        sys.math.mat4Perspective(proj, cameraFov, w / h, 0.1, 200.0);
         sys.math.mat4LookAt(view, eye, target, upZ);
     }
     sys.math.mat4Multiply(viewProj, proj, view);
+
+    // ----- Sky dome, behind everything -----
+    // With post-processing, the whole 3D scene goes to an offscreen target.
+    post.begin(renderScale);
+    skyParams.night = nightFactor;
+    skyParams.starAngle = starAngle;
+    drawSky(view, cameraFov, w / h, dt, skyParams);
 
     // ----- Draw terrain (all visible chunks) -----
     updateChunks(playerCar.x, playerCar.y);
@@ -1941,12 +2258,7 @@ function frame(timestamp) {
     terrainProgram.uniformMatrix4('u_mvp', terrainMVP);
     terrainProgram.uniformMatrix4('u_model', terrainModel);
     terrainProgram.uniform1f('u_height_scale', TERRAIN_HEIGHT_SCALE);
-    terrainProgram.uniform3f('u_eye', eye[0], eye[1], eye[2]);
-    terrainProgram.uniform3f('u_fog_color', FOG_COLOR_RGB[0], FOG_COLOR_RGB[1], FOG_COLOR_RGB[2]);
-    terrainProgram.uniform1f('u_fog_start', FOG_START);
-    terrainProgram.uniform1f('u_fog_end', FOG_END);
-    terrainProgram.uniform3f('u_light_dir', LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]);
-    terrainProgram.uniform3f('u_light_color', LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
+    setAtmosphere(terrainProgram);
     terrainProgram.uniform1f('u_ambient', ambientLight);
     for (const chunk of activeChunks.values()) {
         if (!isChunkVisible(chunk)) continue;
@@ -1963,6 +2275,11 @@ function frame(timestamp) {
 
     // ----- Procedural dashed rally road line, snapped to terrain height. -----
     drawRoad(timestamp);
+
+    // ----- Tyre tracks on the sand, darker than the sand under any light -----
+    const trackLight = ambientLight + 0.6 * Math.max(0.2, LIGHT_DIR[2]);
+    for (let k = 0; k < 3; k++) TRACK_COLOR_RGB[k] = TRACK_BASE_RGB[k] * trackLight * LIGHT_COLOR[k];
+    tracks.draw(tracksScene);
 
     // ----- Draw deterministic low-poly palms sharing a few GPU meshes. -----
     drawPalms();
@@ -1996,23 +2313,18 @@ function frame(timestamp) {
     // ----- Draw cars (skip player car in first-person view; we'd be inside it).
     // ----- All cars share one program: setUniform* before each drawMesh is
     // ----- snapshotted into that pass. -----
+    setAtmosphere(carProgram);
     for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
-        if (i === 0 && isFirstPersonView()) continue;
+        if (i === 0 && isFirstPersonView() && !photoMode) continue;
         const mesh = c.mesh.gpu;
         buildCarModel(carModel, c);
         sys.math.mat4Multiply(carMVP, viewProj, carModel);
         carProgram.uniformMatrix4('u_mvp', carMVP);
         carProgram.uniformMatrix4('u_model', carModel);
         carProgram.uniform3f('u_color', c.color[0], c.color[1], c.color[2]);
-        carProgram.uniform3f('u_light_dir', LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]);
-        carProgram.uniform3f('u_light_color', LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
-        carProgram.uniform3f('u_eye', eye[0], eye[1], eye[2]);
-        carProgram.uniform3f('u_fog_color', FOG_COLOR_RGB[0], FOG_COLOR_RGB[1], FOG_COLOR_RGB[2]);
         carProgram.uniform1f('u_ambient', ambientLight * 0.78);
         carProgram.uniform1f('u_headlight_on', headlightNightFactor);
-        carProgram.uniform1f('u_fog_start', FOG_START);
-        carProgram.uniform1f('u_fog_end', FOG_END);
         carProgram.drawMesh(mesh.layout, {
             mode: 'triangles',
             first: 0,
@@ -2023,6 +2335,9 @@ function frame(timestamp) {
             blend: 'none',
         });
     }
+
+    // ----- Dust trails, lit by the sun and the player's headlights. -----
+    drawDust();
 
     // ----- Warm headlight beams fade in at night and off during daytime. -----
     drawHeadlights(timestamp);
@@ -2057,12 +2372,222 @@ function frame(timestamp) {
         }
     }
 
-    // ----- HUD overlay on top of the mesh (chroma-keys out the sky) -----
-    hudOverlayProgram.uniform3f('u_sky_color', SKY_COLOR_RGB[0], SKY_COLOR_RGB[1], SKY_COLOR_RGB[2]);
-    sys.gl.bindScreen();
-    hudOverlayProgram.drawFullscreen();
+    // ----- Upscale the scene with the effects, then the HUD on top -----
+    const screenSpeedFx = photoMode ? 0 : isFirstPersonView() ? speedFx * 0.6 : speedFx;
+    updatePostLook(screenSpeedFx, 0.35 + nightFactor * 0.15);
+    post.end(postLook);
+    updateRenderScale(dt, performance.now() - frameStartMs);
 
     sys.animation.requestFrame(frame);
+}
+
+let cameraFov = Math.PI / 3;
+const skyParams = {
+    zenith: ZENITH_RGB, horizon: FOG_COLOR_RGB, glow: SKY_GLOW_RGB,
+    sunDir: SUN_DIR, sunColor: SUN_COLOR_RGB, moonDir: MOON_DIR,
+    night: 0, starAngle: 0, cloudOctaves: MOBILE_PROFILE ? 2 : 4,
+};
+const tracksScene = {
+    viewProj, eye, color: TRACK_COLOR_RGB, fogStart: FOG_START, fogEnd: FOG_END,
+    get now() { return simTime; },
+};
+const dustScene = {
+    viewProj, view, eye,
+    dustColor: DUST_COLOR_RGB, lightDir: LIGHT_DIR, lightColor: LIGHT_COLOR, ambient: 0,
+    sunDir: SUN_DIR, sunColor: SUN_COLOR_RGB, fogColor: FOG_COLOR_RGB,
+    fogStart: FOG_START, fogEnd: FOG_END,
+    headPos: headlightPos, headDir: headlightDir, headOn: 0,
+    nearFadeFrom: 3, nearFadeTo: 14,
+};
+
+// Landing jolts and a light rumble at speed; scale is in world units.
+function applyCameraShake(timestamp, scale) {
+    const t = timestamp / 1000;
+    const rumble = playerCar.grounded ? speedFx * 0.06 : 0;
+    const amount = (Math.min(1, cameraShake) + rumble) * scale;
+    if (amount < 1e-4) return;
+    for (let axis = 0; axis < 3; axis++) {
+        const offset = shakeOffset(t, axis) * amount;
+        eye[axis] += offset;
+        target[axis] += offset * 0.5;
+    }
+}
+
+function drawDust() {
+    dustScene.ambient = ambientLight;
+    const cosH = Math.cos(playerCar.heading), sinH = Math.sin(playerCar.heading);
+    const lamp = CAR_LENGTH * physics.vehicleScale * 0.5;
+    headlightPos[0] = playerCar.x + cosH * lamp;
+    headlightPos[1] = playerCar.y + sinH * lamp;
+    headlightPos[2] = playerCar.z + CAR_HEIGHT * physics.vehicleScale * 0.5;
+    headlightDir[0] = cosH * 0.97;
+    headlightDir[1] = sinH * 0.97;
+    headlightDir[2] = -0.24;
+    dustScene.headOn = headlightNightFactor;
+    // The photo camera comes close: let the dust show up to it.
+    dustScene.nearFadeFrom = photoMode ? 1 : 3;
+    dustScene.nearFadeTo = photoMode ? 4 : 14;
+    dust.draw(dustScene);
+}
+
+// Sound starts on the first gesture; M or the SOUND button toggles it.
+function updateAudio(input, dt) {
+    const toggle = shortcutPressed('m', 16) || soundButtonPressed;
+    soundButtonPressed = false;
+    const gesture = input.mouse.left
+        || sys.input.isKeyDown(26) || sys.input.isKeyDown(82)
+        || sys.input.isKeyDown(22) || sys.input.isKeyDown(81)
+        || sys.input.isKeyDown(4) || sys.input.isKeyDown(80)
+        || sys.input.isKeyDown(7) || sys.input.isKeyDown(79)
+        || toggle;
+    if (!engineAudio.ready) {
+        // The first gesture only starts the sound, even when it is the toggle.
+        if (gesture && !audioGestureHeld) engineAudio.start();
+    } else if (toggle) {
+        engineAudio.setMuted(!engineAudio.muted);
+    }
+    audioGestureHeld = gesture;
+    engineAudio.update(dt, playerCar, playerThrottle, nearestRival(), landingImpact);
+}
+let audioGestureHeld = false;
+let soundButtonPressed = false;
+
+// ============ Photo mode ============
+// C (or the PHOTO pill) freezes the world mid-action: no HUD, cinematic bars,
+// and a slow orbit around the car. C or a tap returns to the race.
+
+let photoMode = false;
+let photoBlend = 0;          // eases the bars and the HUD in and out
+let photoHintSeconds = 0;
+let photoCameraManual = false;
+let photoButtonPressed = false;
+let photoMouseHeld = false;
+let photoSaved = null;
+let lastForces = null;
+
+function setPhotoMode(value) {
+    if (value === photoMode) return;
+    photoMode = value;
+    if (value) {
+        photoSaved = { rotation: cameraRotation, angle: cameraAngle, distance: cameraDistance };
+        if (viewMode === VIEW_FOLLOW || viewMode === VIEW_FPV) cameraRotation = followCameraRotation;
+        photoCameraManual = false;
+        photoHintSeconds = 4;
+    } else if (photoSaved) {
+        cameraRotation = photoSaved.rotation;
+        cameraAngle = photoSaved.angle;
+        cameraDistance = photoSaved.distance;
+    }
+    engineAudio.setPaused(value);
+}
+
+function updatePhotoMode(input, dt) {
+    const tap = input.mouse.left && !photoMouseHeld;
+    photoMouseHeld = input.mouse.left;
+    if (shortcutPressed('c', 6) || photoButtonPressed || (photoMode && tap)) setPhotoMode(!photoMode);
+    photoButtonPressed = false;
+    photoBlend += ((photoMode ? 1 : 0) - photoBlend) * (1 - Math.exp(-6 * dt));
+    photoHintSeconds = Math.max(0, photoHintSeconds - dt);
+}
+
+function drawPhotoOverlay(w, h) {
+    if (photoBlend < 0.01) return;
+    const bar = h * 0.11 * photoBlend;
+    sys.canvas.setFillColor('#000000');
+    sys.canvas.drawRect(0, 0, w, bar);
+    sys.canvas.drawRect(0, h - bar, w, bar);
+    if (photoMode && photoHintSeconds > 0) {
+        const alpha = Math.round(Math.min(1, photoHintSeconds) * 200).toString(16).padStart(2, '0');
+        sys.canvas.setFillColor('#FFFFFF' + alpha);
+        const text = 'PHOTO MODE   Q/E orbit   R/F angle   T/G zoom   C or tap to return';
+        sys.canvas.drawText(text, w / 2 - sys.canvas.measureText(text, 14) / 2, h - bar / 2 + 5, 14);
+    }
+}
+
+// ============ Post-processing look ============
+
+const post = createPost(MOBILE_PROFILE ? 6 : 4, MOBILE_PROFILE ? 1 : 2);
+let postEnabled = true;
+let postButtonPressed = false;
+const postLook = {
+    effects: true, threshold: 0.75, bloom: 0.5, horizon: -1, haze: 0,
+    lift: new Float32Array(3), gain: new Float32Array(3),
+    saturation: 1, contrast: 0, speedFx: 0, vignette: 0,
+};
+// Grades: [lift, gain, saturation, contrast, bloom, threshold].
+const GRADE_DAY = [[0.0, 0.0, 0.015], [1.03, 1.0, 0.95], 1.08, 0.22, 0.42, 0.80];
+const GRADE_GOLDEN = [[0.03, 0.0, 0.02], [1.08, 0.97, 0.86], 1.18, 0.28, 0.9, 0.6];
+const GRADE_NIGHT = [[0.0, 0.012, 0.035], [0.88, 0.96, 1.10], 0.82, 0.18, 0.95, 0.48];
+const horizonPoint = new Float32Array(4);
+
+// Night -> day by daylight, then toward golden hour by t. Vector grades are
+// written into out, so nothing is allocated per frame.
+function mixGrade(index, t, out) {
+    const a = GRADE_NIGHT[index], b = GRADE_DAY[index], g = GRADE_GOLDEN[index];
+    if (!out) return mixNumber(mixNumber(a, b, dayAmount), g, t);
+    for (let k = 0; k < 3; k++) out[k] = mixNumber(mixNumber(a[k], b[k], dayAmount), g[k], t);
+    return out;
+}
+
+// Screen v (0 = top) of the far horizon ahead, for the heat shimmer band.
+function horizonScreenV() {
+    let fx = -view[2], fy = -view[6];
+    const len = Math.hypot(fx, fy);
+    if (len < 1e-4) return -1;
+    fx /= len; fy /= len;
+    const d = FOG_END * 0.8;
+    const x = eye[0] + fx * d, y = eye[1] + fy * d, z = 0;
+    const m = viewProj;
+    const cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+    const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+    if (cw <= 1e-4) return -1;
+    return 0.5 - 0.5 * (cy / cw);
+}
+
+function updatePostLook(screenSpeedFx, vignette) {
+    const golden = Math.min(1, twilightAmount * 1.4);
+    postLook.effects = postEnabled;
+    mixGrade(0, golden, postLook.lift);
+    mixGrade(1, golden, postLook.gain);
+    postLook.saturation = mixGrade(2, golden);
+    postLook.contrast = mixGrade(3, golden);
+    postLook.bloom = mixGrade(4, golden);
+    postLook.threshold = mixGrade(5, golden);
+    postLook.horizon = horizonScreenV();
+    postLook.haze = sunHigh * (1 - nightFactor);
+    postLook.speedFx = screenSpeedFx;
+    postLook.vignette = vignette;
+}
+
+// Dynamic resolution: when frames are slow and the GPU is the bottleneck
+// (the JavaScript of the frame takes well under the frame time), draw the
+// scene with fewer pixels; when frames are fast for a while, go back up, but
+// never above a scale that was too slow. P or the FX button toggles effects.
+const RENDER_SCALE_MIN = 0.5;
+const RENDER_SCALE_STEP = 0.1;
+let renderScale = MOBILE_PROFILE ? 0.7 : 1.0;
+let renderScaleCeiling = 1.0;
+let slowSeconds = 0;
+let fastSeconds = 0;
+let frameJsMs = 0;
+
+function updateRenderScale(dt, jsMs) {
+    if (shortcutPressed('p', 19) || postButtonPressed) postEnabled = !postEnabled;
+    postButtonPressed = false;
+    if (dt <= 0 || smoothedFPS === 0) return;
+    frameJsMs += (jsMs - frameJsMs) * 0.1;
+    const gpuBound = frameJsMs < 0.6 * (1000 / smoothedFPS);
+    slowSeconds = smoothedFPS < 52 && gpuBound ? slowSeconds + dt : Math.max(0, slowSeconds - dt);
+    fastSeconds = smoothedFPS >= 57 ? fastSeconds + dt : 0;
+    if (slowSeconds > 1.0 && renderScale > RENDER_SCALE_MIN + 1e-3) {
+        renderScale = Math.max(RENDER_SCALE_MIN, renderScale - RENDER_SCALE_STEP);
+        renderScaleCeiling = renderScale;
+        slowSeconds = 0;
+        fastSeconds = 0;
+    } else if (fastSeconds > 3 && renderScale < renderScaleCeiling - 1e-3) {
+        renderScale = Math.min(renderScaleCeiling, renderScale + RENDER_SCALE_STEP);
+        fastSeconds = 0;
+    }
 }
 
 // ============ HUD (Skia 2D) ============
@@ -2162,20 +2687,7 @@ function drawRadar() {
     sys.canvas.drawPath(radarPlayerPath);
 }
 
-function drawHUD(forces) {
-    sys.canvas.setFillColor('#FFFFFF');
-    sys.canvas.drawText('TERRAIN PHYSICS DEMO (3D MESH PIPELINE)', 10, 25, 20);
-
-    sys.canvas.setFillColor('#444444');
-    sys.canvas.drawText('Keys: W/S throttle, A/D steer, Q/E rotate cam, R/F angle, T/G zoom, V cycle view', 10, 50, 12);
-
-    const fpsX = 10;
-    const fpsY = 66;
-    sys.canvas.setFillColor('#00000080');
-    sys.canvas.drawRoundRect(fpsX - 4, fpsY - 14, 86, 22, 5, 5);
-    sys.canvas.setFillColor(smoothedFPS >= 50 ? '#7CFF8B' : smoothedFPS >= 30 ? '#FFE066' : '#FF6666');
-    sys.canvas.drawText(`FPS: ${smoothedFPS.toFixed(0)}`, fpsX, fpsY + 2, 14);
-
+function drawForceLegend() {
     const legendX = screenWidth - 180;
     const legendY = 30;
     sys.canvas.setFillColor('#00000080');
@@ -2203,13 +2715,36 @@ function drawHUD(forces) {
     sys.canvas.drawRect(legendX, legendY + 70, 20, 3);
     sys.canvas.setFillColor('#FFFFFF');
     sys.canvas.drawText('Input', legendX + 30, legendY + 75, 12);
+}
 
-    sys.canvas.setFillColor('#222222');
-    const terrainZ = getTerrainHeight(playerCar.x, playerCar.y);
-    const altitude = playerCar.z - terrainZ;
-    sys.canvas.drawText(`Position: (${playerCar.x.toFixed(1)}, ${playerCar.y.toFixed(1)}, ${playerCar.z.toFixed(1)})  alt=${altitude.toFixed(2)}  vz=${playerCar.vz.toFixed(2)}`, 10, screenHeight - 25, 12);
-    const shownRot = viewMode === VIEW_FOLLOW ? followCameraRotation : cameraRotation;
-    sys.canvas.drawText(`Camera: ${viewModeLabel()} rot=${(shownRot * 180 / Math.PI).toFixed(0)}° ang=${(cameraAngle * 180 / Math.PI).toFixed(0)}° dist=${cameraDistance.toFixed(1)}`, 10, screenHeight - 10, 12);
+function drawHUD(forces) {
+    sys.canvas.setFillColor('#FFFFFF');
+    sys.canvas.drawText(compactLayout ? 'DESERT RACER' : 'TERRAIN PHYSICS DEMO (3D MESH PIPELINE)', 10, 25, compactLayout ? 16 : 20);
+
+    if (!compactLayout && !touchSeen) {
+        sys.canvas.setFillColor('#FFFFFFB0');
+        sys.canvas.drawText('Keys: W/S throttle, A/D steer, Q/E rotate cam, R/F angle, T/G zoom, V view, M sound, P post FX, C photo', 10, 50, 12);
+    }
+
+    const fpsX = 10;
+    const fpsY = 66;
+    sys.canvas.setFillColor('#00000080');
+    sys.canvas.drawRoundRect(fpsX - 4, fpsY - 14, 86, 22, 5, 5);
+    sys.canvas.setFillColor(smoothedFPS >= 50 ? '#7CFF8B' : smoothedFPS >= 30 ? '#FFE066' : '#FF6666');
+    sys.canvas.drawText(`FPS: ${smoothedFPS.toFixed(0)}`, fpsX, fpsY + 2, 14);
+
+    // The force arrows only show with the rally target, and so does their legend.
+    if (showRallyTarget && !compactLayout) drawForceLegend();
+
+    if (!compactLayout) {
+        sys.canvas.setFillColor('#FFFFFFB0');
+        const debugX = JOYSTICK_X + JOYSTICK_RADIUS + 24; // right of the joystick
+        const terrainZ = getTerrainHeight(playerCar.x, playerCar.y);
+        const altitude = playerCar.z - terrainZ;
+        sys.canvas.drawText(`Position: (${playerCar.x.toFixed(1)}, ${playerCar.y.toFixed(1)}, ${playerCar.z.toFixed(1)})  alt=${altitude.toFixed(2)}  vz=${playerCar.vz.toFixed(2)}`, debugX, screenHeight - 25, 12);
+        const shownRot = viewMode === VIEW_FOLLOW ? followCameraRotation : cameraRotation;
+        sys.canvas.drawText(`Camera: ${viewModeLabel()} rot=${(shownRot * 180 / Math.PI).toFixed(0)}° ang=${(cameraAngle * 180 / Math.PI).toFixed(0)}° dist=${cameraDistance.toFixed(1)}`, debugX, screenHeight - 10, 12);
+    }
 
     if (!playerCar.grounded) {
         sys.canvas.setFillColor('#FFCC44');
@@ -2224,10 +2759,9 @@ function drawPhysicsPanel() {
         PARAM_PANEL_WIDTH + 12, PARAM_PANEL_HEIGHT, 8, 8);
 
     sys.canvas.setFillColor('#FFFFFF');
-    sys.canvas.drawText('Physics  [ / ] adjust  1-8 select', PARAM_PANEL_X, PARAM_PANEL_Y - 6, 12);
+    sys.canvas.drawText('Physics  [ ] adjust  1-8 select  Bksp reset', PARAM_PANEL_X, PARAM_PANEL_Y - 6, 11);
 
-    // Rebuild button hit-rects each frame so layout stays in sync.
-    paramButtons.length = 0;
+    // Button hit-rects are rebuilt each frame, so layout stays in sync.
 
     let y = PARAM_PANEL_Y + 14;
     for (let i = 0; i < physicsParams.length; i++) {
@@ -2257,9 +2791,8 @@ function drawPhysicsPanel() {
         sys.canvas.setFillColor('#FFFFFF40');
         sys.canvas.drawRoundRect(decX, btnY, PARAM_BTN_SIZE, PARAM_BTN_SIZE, 3, 3);
         sys.canvas.drawRoundRect(incX, btnY, PARAM_BTN_SIZE, PARAM_BTN_SIZE, 3, 3);
-        sys.canvas.setFillColor('#FFFFFF');
-        sys.canvas.drawText('-', decX + 6, btnY + 14, 14);
-        sys.canvas.drawText('+', incX + 5, btnY + 14, 14);
+        drawIcon('minus', decX + PARAM_BTN_SIZE / 2, btnY + PARAM_BTN_SIZE / 2, 14, '#FFFFFF', 2.6);
+        drawIcon('plus', incX + PARAM_BTN_SIZE / 2, btnY + PARAM_BTN_SIZE / 2, 14, '#FFFFFF', 2.6);
 
         paramButtons.push({ kind: 'dec', index: i, x: decX, y: btnY, w: PARAM_BTN_SIZE, h: PARAM_BTN_SIZE });
         paramButtons.push({ kind: 'inc', index: i, x: incX, y: btnY, w: PARAM_BTN_SIZE, h: PARAM_BTN_SIZE });
@@ -2267,14 +2800,31 @@ function drawPhysicsPanel() {
         y += PARAM_ROW_HEIGHT;
     }
 
-    const resetW = 90, resetH = 22;
+    const resetW = 70, resetH = 22;
     const resetX = PARAM_PANEL_X + PARAM_PANEL_WIDTH - resetW;
     const resetY = y;
     sys.canvas.setFillColor('#FFFFFF40');
     sys.canvas.drawRoundRect(resetX, resetY, resetW, resetH, 4, 4);
+    drawIcon('reset', resetX + 13, resetY + resetH / 2, 14, '#FFFFFF', 2.4);
     sys.canvas.setFillColor('#FFFFFF');
-    sys.canvas.drawText('Reset (Bksp)', resetX + 6, resetY + 15, 11);
+    sys.canvas.drawText('Reset', resetX + 25, resetY + 15, 11);
     paramButtons.push({ kind: 'reset', index: -1, x: resetX, y: resetY, w: resetW, h: resetH });
+}
+
+// A small icon button with its keyboard shortcut in the corner.
+function drawPill(cx, cy, icon, key, on) {
+    const x = cx - SOUND_BTN_W / 2;
+    const y = cy - SOUND_BTN_H / 2;
+    sys.canvas.setFillColor(on ? '#2E7D3AA0' : '#00000080');
+    sys.canvas.drawRoundRect(x, y, SOUND_BTN_W, SOUND_BTN_H, 6, 6);
+    drawIcon(icon, cx - 2, cy - 1, 20, on ? '#7CFF8B' : '#FFFFFFC0', 2.2);
+    drawKeyHint(key, x + SOUND_BTN_W, y + SOUND_BTN_H);
+}
+
+// The shortcut letter in the bottom-right corner of a button.
+function drawKeyHint(key, right, bottom) {
+    sys.canvas.setFillColor('#FFFFFF90');
+    sys.canvas.drawText(key, right - 8, bottom - 3, 9);
 }
 
 function drawTouchControls() {
@@ -2303,38 +2853,20 @@ function drawTouchControls() {
         sys.canvas.setStrokeColor(isActive ? '#44DDFFC0' : '#FFFFFF60');
         sys.canvas.setStrokeWidth(2);
         sys.canvas.drawCircle(btn.x, btn.y, BUTTON_SIZE / 2);
-        sys.canvas.setFillColor(isActive ? '#FFFFFF' : '#FFFFFFA0');
-        sys.canvas.drawText(btn.label, btn.x - 8, btn.y + 6, 20);
+        drawIcon(btn.icon, btn.x, btn.y, 26, isActive ? '#FFFFFF' : '#FFFFFFC0', 2.2);
     }
 
-    sys.canvas.setFillColor('#FFFFFFA0');
-    sys.canvas.drawText('ROTATE', BUTTON_X - 30, BUTTON_Y_START - 25, 10);
-    sys.canvas.drawText('ANGLE', BUTTON_X - 20, BUTTON_Y_START + 80, 10);
-    sys.canvas.drawText('ZOOM', BUTTON_X - 18, BUTTON_Y_START + 185, 10);
 
-    // Rally target visibility toggle button.
-    const tbx = TARGET_BTN_X - TARGET_BTN_W / 2;
-    const tby = TARGET_BTN_Y - TARGET_BTN_H / 2;
-    sys.canvas.setFillColor(showRallyTarget ? '#FFE06680' : '#FFFFFF30');
-    sys.canvas.drawRoundRect(tbx, tby, TARGET_BTN_W, TARGET_BTN_H, 6, 6);
-    sys.canvas.setStrokeColor(showRallyTarget ? '#FFE066C0' : '#FFFFFF60');
-    sys.canvas.setStrokeWidth(2);
-    sys.canvas.drawRoundRect(tbx, tby, TARGET_BTN_W, TARGET_BTN_H, 6, 6);
-    sys.canvas.setFillColor('#FFFFFF');
-    sys.canvas.drawText(showRallyTarget ? 'TARGET ON' : 'TARGET OFF',
-        tbx + 11, TARGET_BTN_Y + 5, 14);
+    // The row of icon buttons, top left.
+    const soundOn = engineAudio.ready && !engineAudio.muted;
+    drawPill(SOUND_BTN_X, SOUND_BTN_Y, soundOn ? 'sound' : 'muted', 'M', soundOn);
+    drawPill(POST_BTN_X, POST_BTN_Y, postEnabled ? 'sparkles' : 'sparklesOff', 'P', postEnabled);
+    drawPill(PHOTO_BTN_X, PHOTO_BTN_Y, 'camera', 'C', false);
 
-    // First-person view toggle button.
-    const vbx = VIEW_BTN_X - VIEW_BTN_W / 2;
-    const vby = VIEW_BTN_Y - VIEW_BTN_H / 2;
-    sys.canvas.setFillColor(viewMode !== VIEW_ORBIT ? '#44DDFF80' : '#FFFFFF30');
-    sys.canvas.drawRoundRect(vbx, vby, VIEW_BTN_W, VIEW_BTN_H, 6, 6);
-    sys.canvas.setStrokeColor(viewMode !== VIEW_ORBIT ? '#44DDFFC0' : '#FFFFFF60');
-    sys.canvas.setStrokeWidth(2);
-    sys.canvas.drawRoundRect(vbx, vby, VIEW_BTN_W, VIEW_BTN_H, 6, 6);
-    sys.canvas.setFillColor('#FFFFFF');
-    sys.canvas.drawText(`${viewModeLabel()} (V)`,
-        vbx + 10, VIEW_BTN_Y + 5, 14);
+    const viewIcon = viewMode === VIEW_ORBIT ? 'viewOrbit' : viewMode === VIEW_FOLLOW ? 'viewFollow' : 'viewFirstPerson';
+    drawPill(VIEW_BTN_X, VIEW_BTN_Y, viewIcon, 'V', false); // the icon shows the mode
+    drawPill(TARGET_BTN_X, TARGET_BTN_Y, 'target', '', showRallyTarget);
+    drawPill(PANEL_BTN_X, PANEL_BTN_Y, 'sliders', '', showPhysicsPanel);
 }
 
 // Start the application

@@ -11,6 +11,7 @@
 #include "graphics/lua_canvas_bindings.h"
 #include "graphics/lua_gl_bindings.h"
 #include "graphics/lua_transform_bindings.h"
+#include "graphics/lua_canvas_effects_bindings.h"
 #include "graphics/skia_wrapper.h"
 #include "graphics/color_util.h"
 #include "core/input.h"
@@ -1101,9 +1102,16 @@ static int l_font_load_from_buffer(lua_State *L)
 static int l_font_set(lua_State *L)
 {
     LuaCanvasContext *ctx = lua_canvas_get_context(L);
-    if (!ctx || lua_gettop(L) < 1)
+    if (!ctx)
     {
         lua_pushboolean(L, 0);
+        return 1;
+    }
+    
+    if (lua_isnoneornil(L, 1))
+    {
+        ctx->active_font = NULL;
+        lua_pushboolean(L, 1);
         return 1;
     }
     const char *name = luaL_checkstring(L, 1);
@@ -1253,6 +1261,8 @@ static int l_input_get(lua_State *L)
     lua_setfield(L, -2, "composition");
     lua_pushboolean(L, input->text_session_active);
     lua_setfield(L, -2, "textInputActive");
+    lua_pushboolean(L, input->text_platform.native_editing);
+    lua_setfield(L, -2, "nativeTextEditing");
 
     lua_pushnumber(L, input->delta_time);
     lua_setfield(L, -2, "deltaTime");
@@ -1428,7 +1438,7 @@ static int l_animation_start(lua_State *L)
     return 0;
 }
 
-static int l_animation_request_frame(lua_State *L)
+static int animation_set_callback(lua_State *L, bool wait)
 {
     luaL_checktype(L, 1, LUA_TFUNCTION);
 
@@ -1442,10 +1452,26 @@ static int l_animation_request_frame(lua_State *L)
     lua_pushvalue(L, 1);
     ctx->animation_callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     ctx->has_animation_callback = true;
+    if (wait)
+        budo_animation_wait_start(&ctx->animation_wait, luaL_optnumber(L, 2, 0.0), ctx->width, ctx->height);
+    else
+        budo_animation_wait_stop(&ctx->animation_wait);
 
     lua_pushinteger(L, 1);
     return 1;
 }
+
+static int l_animation_request_frame(lua_State *L)
+{
+    return animation_set_callback(L, false);
+}
+
+static int l_animation_wait_for_input(lua_State *L)
+{
+    return animation_set_callback(L, true);
+}
+
+BudoAnimationWait *lua_canvas_animation_wait(LuaCanvasContext *ctx) { return ctx ? &ctx->animation_wait : NULL; }
 
 static int l_animation_cancel_frame(lua_State *L)
 {
@@ -1625,6 +1651,7 @@ static const luaL_Reg window_funcs[] = {
 static const luaL_Reg animation_funcs[] = {
     {"start", l_animation_start},
     {"requestFrame", l_animation_request_frame},
+    {"waitForInput", l_animation_wait_for_input},
     {"cancelFrame", l_animation_cancel_frame},
     {NULL, NULL}};
 
@@ -1683,6 +1710,7 @@ LuaCanvasContext *lua_canvas_create(const char *project_dir)
     register_subtable(L, -1, "canvas", canvas_funcs);
     lua_transform_register(L, -1);
     register_subtable(L, -1, "path", path_funcs);
+    lua_canvas_effects_register(L, -1);
     register_subtable(L, -1, "svg", svg_funcs);
     register_subtable(L, -1, "font", font_funcs);
     lua_gl_register(L, -1);

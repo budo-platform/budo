@@ -31,6 +31,8 @@ extern "C"
     void window_destroy(Window *window);
 
     bool window_poll_events(Window *window, InputState *input);
+    
+    void window_wait_events(Window *window, int timeout_ms);
 
     SkiaCanvas *window_get_canvas(Window *window);
 

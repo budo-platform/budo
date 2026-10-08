@@ -5,14 +5,15 @@ Do not edit manually.
 
 | Subsystem | Operations | JavaScript | Lua | Wasmtime | Browser WASM |
 |---|---:|---|---|---|---|
-| `audio` | 25 | desktop, android, web (30) | desktop, android, web (30) | desktop (15) | unsupported |
-| `canvas` | 41 | desktop, android, web (33) | desktop, android, web (33) | desktop (36) | web (17) |
-| `canvas_texture` | 26 | desktop, android, web (26) | unsupported | unsupported | unsupported |
+| `accessibility` | 4 | desktop, android, web (4) | desktop, android, web (4) | desktop (4) | - |
+| `audio` | 40 | desktop, android, web (45) | desktop, android, web (30) | desktop (15) | unsupported |
+| `canvas` | 54 | desktop, android, web (41) | desktop, android, web (41) | desktop (48) | web (30) |
+| `canvas_texture` | 29 | desktop, android, web (29) | unsupported | unsupported | unsupported |
 | `capabilities` | 6 | desktop, android, web (6) | desktop, android, web (6) | desktop (6) | - |
 | `console` | 3 | desktop, android, web (1) | desktop, android, web (1) | desktop (2) | unsupported |
-| `device` | 1 | desktop, android, web (1) | desktop, android, web (1) | desktop (1) | - |
-| `drawing_resources` | 16 | desktop, android, web (16) | desktop, android, web (16) | desktop (14) | web (4) |
-| `file` | 12 | desktop, android, web (19) | desktop, android, web (16) | desktop (6) | unsupported |
+| `device` | 6 | desktop, android, web (6) | desktop, android, web (6) | desktop (6) | web (6) |
+| `drawing_resources` | 17 | desktop, android, web (17) | desktop, android, web (17) | desktop (15) | web (5) |
+| `file` | 17 | desktop, android, web (24) | desktop, android, web (16) | desktop (6) | unsupported |
 | `gl` | 53 | desktop, android, web (50) | desktop, android, web (44) | desktop (43) | web (11) |
 | `input_window` | 14 | desktop, android, web (9) | desktop, android, web (9) | desktop (9) | web (5) |
 | `llamacpp` | 4 | desktop, android (4) | desktop, android (4) | unsupported | unsupported |
@@ -22,7 +23,7 @@ Do not edit manually.
 | `module_lifecycle` | 5 | desktop, android, web (3) | desktop, android, web (3) | desktop (4) | web (4) |
 | `network` | 22 | desktop, android, web (10) | desktop, android, web (3) | desktop (12) | web (6) |
 | `neural` | 14 | desktop, android (9) | desktop, android (9) | desktop (14) | unsupported |
-| `scheduling` | 7 | desktop, android, web (5) | desktop, android, web (3) | desktop (1) | web (1) |
+| `scheduling` | 8 | desktop, android, web (6) | desktop, android, web (4) | desktop (2) | web (2) |
 | `sqlite` | 9 | desktop, android, web (7) | desktop, android, web (7) | desktop (8) | unsupported |
 | `udp` | 5 | desktop, android (5) | desktop, android (5) | desktop (5) | unsupported |
 

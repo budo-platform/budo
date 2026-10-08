@@ -95,6 +95,8 @@ extern "C"
 
     void file_native_close(FileNativeReference *ref);
 
+    int64_t file_native_read(const FileNativeReference *ref, uint64_t offset, void *buffer, size_t size);
+
     void file_set_write_root(FileContext *ctx, const char *write_root);
 
     bool file_has_write_root(FileContext *ctx);

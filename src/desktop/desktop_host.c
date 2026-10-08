@@ -6,8 +6,14 @@ int desktop_host_run(Window *window, InputState *input,
     if (!window || !input || !application || !application->get_driver)
         return 1;
 
-    while (window_poll_events(window, input))
+    for (;;)
     {
+
+        double idle = application->idle_ms ? application->idle_ms(application->context) : -1.0;
+        if (idle > 0.0)
+            window_wait_events(window, idle < 100.0 ? (int)idle + 1 : 100);
+        if (!window_poll_events(window, input))
+            break;
         if (application->keep_running && !application->keep_running(application->context))
             break;
         ApplicationDriver *driver;

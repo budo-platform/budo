@@ -127,6 +127,8 @@ extern "C"
 
     void skia_path_add_circle(SkiaPath *path, float cx, float cy, float radius);
 
+    bool skia_path_add_svg(SkiaPath *path, const char *data);
+
     void skia_path_add_arc(SkiaPath *path, float left, float top, float right, float bottom,
                            float start_angle, float sweep_angle);
 
@@ -188,6 +190,61 @@ extern "C"
     void skia_canvas_clip_rect(SkiaCanvas *canvas, float left, float top, float right, float bottom);
 
     void skia_canvas_clip_path(SkiaCanvas *canvas, SkiaPath *path);
+
+    void skia_canvas_clip_round_rect(SkiaCanvas *canvas, float left, float top, float right, float bottom,
+                                     float rx, float ry);
+
+    void skia_canvas_save_layer(SkiaCanvas *canvas, const SkiaRect *bounds, uint8_t alpha,
+                                float backdrop_sigma);
+
+#define SKIA_GRADIENT_MAX_STOPS 16
+
+    bool skia_paint_set_linear_gradient(SkiaPaint *paint, float x0, float y0, float x1, float y1,
+                                        const uint32_t *colors, const float *stops, int count);
+    bool skia_paint_set_radial_gradient(SkiaPaint *paint, float cx, float cy, float radius,
+                                        const uint32_t *colors, const float *stops, int count);
+    
+    bool skia_paint_set_sweep_gradient(SkiaPaint *paint, float cx, float cy,
+                                       const uint32_t *colors, const float *stops, int count);
+    void skia_paint_clear_shader(SkiaPaint *paint);
+
+#define SKIA_DEFAULT_LINE_HEIGHT 1.25f
+
+    typedef enum
+    {
+        SKIA_TEXT_ALIGN_LEFT = 0,
+        SKIA_TEXT_ALIGN_CENTER = 1,
+        SKIA_TEXT_ALIGN_RIGHT = 2
+    } SkiaTextAlign;
+
+    typedef struct
+    {
+        float width;  
+        float height; 
+        int lines;
+    } SkiaParagraphMetrics;
+
+    typedef struct
+    {
+        const char *text;
+        float size;
+        SkiaFont *font;
+        SkiaColor color;
+        bool has_color;
+    } SkiaTextSpan;
+
+    SkiaParagraphMetrics skia_measure_rich_text(const SkiaTextSpan *spans, int count, float max_width,
+                                                float line_height, int max_lines);
+    SkiaParagraphMetrics skia_canvas_draw_rich_text(SkiaCanvas *canvas, const SkiaTextSpan *spans, int count,
+                                                    float x, float y, float max_width, float line_height,
+                                                    SkiaTextAlign align, int max_lines, SkiaPaint *paint);
+
+    SkiaParagraphMetrics skia_measure_paragraph(const char *text, float max_width, float font_size,
+                                                float line_height, int max_lines, SkiaFont *font);
+    SkiaParagraphMetrics skia_canvas_draw_paragraph(SkiaCanvas *canvas, const char *text, float x, float y,
+                                                    float max_width, float font_size, float line_height,
+                                                    SkiaTextAlign align, int max_lines,
+                                                    SkiaPaint *paint, SkiaFont *font);
 
     SkiaCanvas *skia_canvas_create_gl(int width, int height);
 

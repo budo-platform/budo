@@ -1,6 +1,7 @@
 #ifndef WASM_CANVAS_BINDINGS_H
 #define WASM_CANVAS_BINDINGS_H
 
+#include "core/animation_wait.h"
 #include <stdbool.h>
 #include "core/graphics_activation.h"
 #include <stddef.h>
@@ -22,6 +23,14 @@ extern "C"
     WasmCanvasContext *wasm_canvas_create(const char *project_dir);
 
     SkiaCanvas *wasm_canvas_current_canvas(WasmCanvasContext *ctx);
+    
+    WasmCanvasContext *wasm_canvas_graphics(void *env); 
+    SkiaPaint *wasm_canvas_active_paint(WasmCanvasContext *ctx);
+    
+    BudoAnimationWait *wasm_canvas_animation_wait(WasmCanvasContext *ctx, int *width, int *height);
+    SkiaPath *wasm_canvas_path(WasmCanvasContext *ctx, int id);
+    
+    uint8_t *wasm_canvas_guest_bytes(WasmCanvasContext *ctx, int32_t ptr, int32_t len);
     Window *wasm_canvas_current_window(WasmCanvasContext *ctx);
     
     bool wasm_canvas_exit_requested(const WasmCanvasContext *ctx, int *code);

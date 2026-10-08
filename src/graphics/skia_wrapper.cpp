@@ -9,7 +9,9 @@
 #include "core/SkSurface.h"
 #include "core/SkPaint.h"
 #include "core/SkPath.h"
+#include "core/SkRRect.h"
 #include "core/SkPathBuilder.h"
+#include "utils/SkParsePath.h"
 #include "core/SkColor.h"
 #include "core/SkFont.h"
 #include "core/SkFontMgr.h"
@@ -38,6 +40,9 @@
 #endif
 
 #include <cstring>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 #include <stdlib.h>
 
 /* Cached font manager and default typeface for text rendering */
@@ -252,6 +257,44 @@ struct SkiaFont
     sk_sp<SkTypeface> typeface;
 };
 
+/* Bounded layers clip to their bounds with an extra save below the layer
+ * (Skia treats layer bounds as a hint, and backdrop filters follow the clip).
+ * This records, per canvas, the save counts whose next restore must also pop
+ * that clip, so a single restore() ends the layer. */
+static std::mutex g_layer_clip_mutex;
+static std::unordered_map<SkCanvas *, std::vector<int>> g_layer_clips;
+
+static void push_layer_clip(SkCanvas *canvas, int save_count)
+{
+    std::lock_guard<std::mutex> lock(g_layer_clip_mutex);
+    g_layer_clips[canvas].push_back(save_count);
+}
+
+/* After a restore: true when the save count is back at a layer's clip save. */
+static bool pop_layer_clip(SkCanvas *canvas)
+{
+    std::lock_guard<std::mutex> lock(g_layer_clip_mutex);
+    auto found = g_layer_clips.find(canvas);
+    if (found == g_layer_clips.end())
+        return false;
+    std::vector<int> &counts = found->second;
+    int current = canvas->getSaveCount();
+    while (!counts.empty() && counts.back() > current)
+        counts.pop_back();
+    bool pop = !counts.empty() && counts.back() == current;
+    if (pop)
+        counts.pop_back();
+    if (counts.empty())
+        g_layer_clips.erase(found);
+    return pop;
+}
+
+static void forget_layer_clips(SkCanvas *canvas)
+{
+    std::lock_guard<std::mutex> lock(g_layer_clip_mutex);
+    g_layer_clips.erase(canvas);
+}
+
 /* ============================================
  * Surface Management Implementation
  * ============================================ */
@@ -281,6 +324,8 @@ extern "C"
     {
         if (surface)
         {
+            if (surface->surface)
+                forget_layer_clips(surface->surface->getCanvas());
             delete surface;
         }
     }
@@ -339,7 +384,9 @@ extern "C"
     {
         if (paint)
         {
-            reinterpret_cast<SkPaint *>(paint)->setColor(toSkColor(color));
+            SkPaint *sk_paint = reinterpret_cast<SkPaint *>(paint);
+            sk_paint->setShader(nullptr);
+            sk_paint->setColor(toSkColor(color));
         }
     }
 
@@ -496,6 +543,17 @@ extern "C"
         {
             reinterpret_cast<SkPathBuilder *>(path)->addCircle(cx, cy, radius);
         }
+    }
+
+    bool skia_path_add_svg(SkiaPath *path, const char *data)
+    {
+        if (!path || !data)
+            return false;
+        std::optional<SkPath> parsed = SkParsePath::FromSVGString(data);
+        if (!parsed)
+            return false;
+        reinterpret_cast<SkPathBuilder *>(path)->addPath(*parsed);
+        return true;
     }
 
     void skia_path_add_arc(SkiaPath *path, float left, float top, float right, float bottom,
@@ -727,7 +785,10 @@ extern "C"
     {
         if (canvas)
         {
-            reinterpret_cast<SkCanvas *>(canvas)->restore();
+            SkCanvas *sk_canvas = reinterpret_cast<SkCanvas *>(canvas);
+            sk_canvas->restore();
+            if (pop_layer_clip(sk_canvas))
+                sk_canvas->restore();
         }
     }
 
@@ -744,7 +805,9 @@ extern "C"
     {
         if (canvas)
         {
-            reinterpret_cast<SkCanvas *>(canvas)->restoreToCount(count);
+            SkCanvas *sk_canvas = reinterpret_cast<SkCanvas *>(canvas);
+            sk_canvas->restoreToCount(count);
+            pop_layer_clip(sk_canvas);
         }
     }
 
@@ -812,7 +875,18 @@ extern "C"
     {
         if (canvas && path)
         {
-            reinterpret_cast<SkCanvas *>(canvas)->clipPath(*reinterpret_cast<SkPath *>(path));
+            SkPath sk_path = reinterpret_cast<SkPathBuilder *>(path)->snapshot();
+            reinterpret_cast<SkCanvas *>(canvas)->clipPath(sk_path, true);
+        }
+    }
+
+    void skia_canvas_clip_round_rect(SkiaCanvas *canvas, float left, float top, float right, float bottom,
+                                     float rx, float ry)
+    {
+        if (canvas)
+        {
+            reinterpret_cast<SkCanvas *>(canvas)->clipRRect(
+                SkRRect::MakeRectXY(toSkRect(left, top, right, bottom), rx, ry), true);
         }
     }
 
@@ -1057,6 +1131,7 @@ extern "C"
     {
         if (!canvas)
             return;
+        forget_layer_clips(reinterpret_cast<SkCanvas *>(canvas));
         SkiaGLCanvas *w = find_android_gl_canvas(reinterpret_cast<SkCanvas *>(canvas));
         if (!w)
             return;
@@ -1092,6 +1167,10 @@ extern "C"
                 GrDirectContext *directContext = recordingContext->asDirectContext();
                 if (directContext)
                 {
+                    /* Raw GL calls (sys.gl draws, bindScreen, render targets) may have
+                     * rebound framebuffers and textures since Skia last ran: re-read the
+                     * GL state so this flush draws into Skia's own surface. */
+                    directContext->resetContext();
                     // Submit all pending work to the GPU
                     directContext->flushAndSubmit();
                 }
@@ -1348,6 +1427,7 @@ extern "C"
     {
         if (!canvas)
             return;
+        forget_layer_clips(reinterpret_cast<SkCanvas *>(canvas));
         SkiaGLCanvas *w = find_web_gl_canvas(reinterpret_cast<SkCanvas *>(canvas));
         if (!w)
             return;
@@ -1378,6 +1458,10 @@ extern "C"
                 GrDirectContext *directContext = recordingContext->asDirectContext();
                 if (directContext)
                 {
+                    /* Raw GL calls (sys.gl draws, bindScreen, render targets) may have
+                     * rebound framebuffers and textures since Skia last ran: re-read the
+                     * GL state so this flush draws into Skia's own surface. */
+                    directContext->resetContext();
                     directContext->flushAndSubmit();
                 }
             }
@@ -1623,6 +1707,7 @@ extern "C"
     {
         if (!canvas)
             return;
+        forget_layer_clips(reinterpret_cast<SkCanvas *>(canvas));
         SkiaDesktopGLCanvas *w = find_desktop_gl_canvas(reinterpret_cast<SkCanvas *>(canvas));
         if (!w)
             return;
@@ -1653,7 +1738,13 @@ extern "C"
         {
             GrDirectContext *directContext = recordingContext->asDirectContext();
             if (directContext)
+            {
+                /* Raw GL calls (sys.gl draws, bindScreen, render targets) may have
+                 * rebound framebuffers and textures since Skia last ran: re-read the
+                 * GL state so this flush draws into Skia's own surface. */
+                directContext->resetContext();
                 directContext->flushAndSubmit();
+            }
         }
     }
 
@@ -1704,7 +1795,10 @@ extern "C"
         if (w <= 0 || h <= 0)
             return false;
 
-        /* Force any pending Skia work to the GPU before reading back. */
+        /* Force any pending Skia work to the GPU before reading back. The
+         * flush also re-reads GL state that raw GL drawing earlier in the
+         * frame changed; without that Skia would read whatever framebuffer is
+         * bound now (the screen, bottom-up) as if it were its own surface. */
         skia_canvas_flush(canvas);
 
         SkImageInfo dst = SkImageInfo::Make(w, h, kRGBA_8888_SkColorType, kPremul_SkAlphaType);
@@ -2057,5 +2151,440 @@ extern "C"
         if (!paint)
             return;
         reinterpret_cast<SkPaint *>(paint)->setColorFilter(nullptr);
+    }
+} // extern "C"
+
+#include "effects/SkGradient.h"
+
+#include "core/SkFontMetrics.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+/* ============================================
+ * Layers, gradients, and paragraphs
+ * ============================================ */
+
+static bool make_gradient(const uint32_t *colors, const float *stops, int count,
+                          std::vector<SkColor4f> &out_colors, std::vector<float> &out_stops,
+                          SkGradient &out_gradient)
+{
+    if (!colors || count < 2 || count > SKIA_GRADIENT_MAX_STOPS)
+        return false;
+    out_colors.resize((size_t)count);
+    for (int i = 0; i < count; i++)
+        out_colors[(size_t)i] = SkColor4f::FromColor((SkColor)colors[i]);
+    if (stops)
+    {
+        out_stops.resize((size_t)count);
+        float previous = 0.0f;
+        for (int i = 0; i < count; i++)
+        {
+            float stop = stops[i];
+            if (!(stop >= 0.0f))
+                stop = 0.0f;
+            if (stop > 1.0f)
+                stop = 1.0f;
+            if (stop < previous)
+                stop = previous;
+            out_stops[(size_t)i] = previous = stop;
+        }
+    }
+    SkGradient::Interpolation interpolation;
+    interpolation.fInPremul = SkGradient::Interpolation::InPremul::kYes;
+    interpolation.fColorSpace = SkGradient::Interpolation::ColorSpace::kOKLab;
+    out_gradient = SkGradient(
+        SkGradient::Colors(SkSpan<const SkColor4f>(out_colors.data(), out_colors.size()),
+                           SkSpan<const float>(out_stops.data(), out_stops.size()),
+                           SkTileMode::kClamp),
+        interpolation);
+    return true;
+}
+
+static bool apply_shader(SkiaPaint *paint, sk_sp<SkShader> shader)
+{
+    if (!shader)
+        return false;
+    SkPaint *sk_paint = reinterpret_cast<SkPaint *>(paint);
+    sk_paint->setShader(std::move(shader));
+    sk_paint->setAlpha(255);
+    return true;
+}
+
+static SkFont make_text_font(SkiaFont *font, float font_size)
+{
+    sk_sp<SkTypeface> typeface = font && font->typeface ? font->typeface : ensure_default_typeface();
+    SkFont sk_font(typeface, font_size);
+    sk_font.setEdging(SkFont::Edging::kSubpixelAntiAlias);
+    sk_font.setSubpixel(true);
+    sk_font.setHinting(SkFontHinting::kSlight);
+    return sk_font;
+}
+
+/* Decode one UTF-8 code point at `text[*index]`; invalid bytes decode as
+ * U+FFFD and advance by one byte. */
+static SkUnichar next_utf8(const char *text, size_t length, size_t *index)
+{
+    const unsigned char *bytes = reinterpret_cast<const unsigned char *>(text);
+    size_t i = *index;
+    unsigned char lead = bytes[i];
+    int extra = lead < 0x80 ? 0 : (lead >> 5) == 0x6 ? 1 : (lead >> 4) == 0xE ? 2 : (lead >> 3) == 0x1E ? 3 : -1;
+    *index = i + 1;
+    if (extra == 0)
+        return lead;
+    if (extra < 0 || i + (size_t)extra >= length)
+        return 0xFFFD;
+    SkUnichar value = lead & (0x3F >> extra);
+    for (int k = 1; k <= extra; k++)
+    {
+        unsigned char next = bytes[i + (size_t)k];
+        if ((next & 0xC0) != 0x80)
+            return 0xFFFD;
+        value = (value << 6) | (next & 0x3F);
+    }
+    *index = i + 1 + (size_t)extra;
+    return value;
+}
+
+struct TextChar
+{
+    SkUnichar c;
+    float advance;
+    int span;
+    size_t offset; /* byte offset in the span's text */
+    size_t length; /* UTF-8 byte length */
+};
+
+struct SpanStyle
+{
+    SkFont font;
+    SkFontMetrics metrics;
+    float size;
+};
+
+struct ParagraphLine
+{
+    size_t start; /* character indices */
+    size_t end;
+    float width;
+    bool ellipsis;
+    int ellipsis_span;
+    float ellipsis_width;
+    float height;
+    float ascent;  /* most negative ascent in the line */
+    float descent; /* largest descent in the line */
+};
+
+struct ParagraphLayout
+{
+    std::vector<TextChar> chars;
+    std::vector<SpanStyle> styles;
+    std::vector<ParagraphLine> lines;
+    float width = 0.0f;
+    float height = 0.0f;
+};
+
+static const char *ellipsis_for(const SkFont &font)
+{
+    return font.unicharToGlyph(0x2026) != 0 ? "\xE2\x80\xA6" : "...";
+}
+
+static float ellipsis_width(const SkFont &font)
+{
+    const char *ellipsis = ellipsis_for(font);
+    return font.measureText(ellipsis, strlen(ellipsis), SkTextEncoding::kUTF8);
+}
+
+/* Greedy line breaking over styled spans. Code-point advances add up to
+ * SkFont::measureText (no shaping), so lines are measured from per-character
+ * widths in each span's own font. */
+static void layout_rich_text(const SkiaTextSpan *spans, int span_count, float max_width, float line_height,
+                             int max_lines, ParagraphLayout &layout)
+{
+    std::vector<SkUnichar> characters;
+    std::vector<SkGlyphID> glyphs;
+    std::vector<SkScalar> advances;
+    for (int s = 0; s < span_count; s++)
+    {
+        float size = spans[s].size > 0.0f ? spans[s].size : (float)BUDO_DEFAULT_FONT_SIZE;
+        SpanStyle style{make_text_font(spans[s].font, size), {}, size};
+        style.font.getMetrics(&style.metrics);
+        layout.styles.push_back(style);
+        const char *text = spans[s].text ? spans[s].text : "";
+        size_t length = strlen(text);
+        characters.clear();
+        size_t first = layout.chars.size();
+        for (size_t i = 0; i < length;)
+        {
+            size_t offset = i;
+            SkUnichar c = next_utf8(text, length, &i);
+            characters.push_back(c);
+            layout.chars.push_back({c, 0.0f, s, offset, i - offset});
+        }
+        size_t count = characters.size();
+        glyphs.resize(count);
+        advances.resize(count);
+        if (count)
+        {
+            style.font.unicharsToGlyphs(SkSpan<const SkUnichar>(characters.data(), count),
+                                        SkSpan<SkGlyphID>(glyphs.data(), count));
+            style.font.getWidths(SkSpan<const SkGlyphID>(glyphs.data(), count), SkSpan<SkScalar>(advances.data(), count));
+        }
+        for (size_t i = 0; i < count; i++)
+            layout.chars[first + i].advance = characters[i] == '\n' ? 0.0f : advances[i];
+    }
+
+    std::vector<TextChar> &chars = layout.chars;
+    size_t count = chars.size();
+    auto is_space = [&](size_t i) { return chars[i].c == ' ' || chars[i].c == '\t'; };
+    auto push = [&](size_t start, size_t end) {
+        float width = 0.0f;
+        while (end > start && is_space(end - 1))
+            end--;
+        for (size_t i = start; i < end; i++)
+            width += chars[i].advance;
+        layout.lines.push_back({start, end, width, false, 0, 0.0f, 0.0f, 0.0f, 0.0f});
+    };
+
+    bool wrap = max_width > 0.0f;
+    size_t start = 0;
+    while (count > 0 && start <= count)
+    {
+        size_t i = start;
+        size_t last_break = SIZE_MAX;
+        float width = 0.0f;
+        bool hard_break = false;
+        for (; i < count; i++)
+        {
+            if (chars[i].c == '\n')
+            {
+                hard_break = true;
+                break;
+            }
+            if (is_space(i))
+                last_break = i;
+            else if (wrap && width + chars[i].advance > max_width && i > start)
+                break;
+            width += chars[i].advance;
+        }
+        if (i >= count || hard_break)
+        {
+            push(start, i);
+            start = i + 1;
+            if (!hard_break)
+                break;
+        }
+        else
+        {
+            size_t end = last_break != SIZE_MAX && last_break > start ? last_break : i;
+            push(start, end);
+            start = end;
+            while (start < count && is_space(start))
+                start++;
+        }
+        if (max_lines > 0 && (int)layout.lines.size() >= max_lines)
+        {
+            if (start < count || hard_break)
+            {
+                ParagraphLine &last = layout.lines.back();
+                last.ellipsis = true;
+                last.ellipsis_span = last.end > last.start ? chars[last.end - 1].span
+                                     : last.start < count ? chars[last.start].span
+                                                          : 0;
+                last.ellipsis_width = ellipsis_width(layout.styles[(size_t)last.ellipsis_span].font);
+                float limit = wrap ? max_width - last.ellipsis_width : last.width;
+                while (last.end > last.start && last.width > limit)
+                    last.width -= chars[--last.end].advance;
+                while (last.end > last.start && is_space(last.end - 1))
+                    last.width -= chars[--last.end].advance;
+                last.width += last.ellipsis_width;
+            }
+            break;
+        }
+    }
+
+    /* Each line is as tall as its largest span; empty lines take the style
+     * of the character that ends them. */
+    for (ParagraphLine &line : layout.lines)
+    {
+        bool any = false;
+        auto include = [&](int span) {
+            const SpanStyle &style = layout.styles[(size_t)span];
+            line.height = std::max(line.height, style.size * line_height);
+            line.ascent = any ? std::min(line.ascent, style.metrics.fAscent) : style.metrics.fAscent;
+            line.descent = any ? std::max(line.descent, style.metrics.fDescent) : style.metrics.fDescent;
+            any = true;
+        };
+        for (size_t i = line.start; i < line.end; i++)
+            include(chars[i].span);
+        if (line.ellipsis)
+            include(line.ellipsis_span);
+        if (!any && span_count > 0)
+            include(line.start < count ? chars[line.start].span : chars.empty() ? 0 : chars.back().span);
+        layout.width = std::max(layout.width, line.width);
+        layout.height += line.height;
+    }
+}
+
+extern "C"
+{
+    void skia_canvas_save_layer(SkiaCanvas *canvas, const SkiaRect *bounds, uint8_t alpha,
+                                float backdrop_sigma)
+    {
+        if (!canvas)
+            return;
+        SkRect rect;
+        if (bounds)
+            rect = toSkRect(bounds->left, bounds->top, bounds->right, bounds->bottom);
+        SkPaint layer_paint;
+        layer_paint.setAlpha(alpha);
+        sk_sp<SkImageFilter> backdrop;
+        if (backdrop_sigma > 0.0f)
+            backdrop = SkImageFilters::Blur(backdrop_sigma, backdrop_sigma, SkTileMode::kClamp, nullptr);
+        SkCanvas *sk_canvas = reinterpret_cast<SkCanvas *>(canvas);
+        if (bounds)
+        {
+            sk_canvas->save();
+            sk_canvas->clipRect(rect, true);
+            push_layer_clip(sk_canvas, sk_canvas->getSaveCount());
+        }
+        SkCanvas::SaveLayerRec rec(bounds ? &rect : nullptr, alpha < 255 ? &layer_paint : nullptr,
+                                   backdrop.get(), 0);
+        sk_canvas->saveLayer(rec);
+    }
+
+    bool skia_paint_set_linear_gradient(SkiaPaint *paint, float x0, float y0, float x1, float y1,
+                                        const uint32_t *colors, const float *stops, int count)
+    {
+        std::vector<SkColor4f> sk_colors;
+        std::vector<float> sk_stops;
+        SkGradient gradient;
+        if (!paint || !make_gradient(colors, stops, count, sk_colors, sk_stops, gradient))
+            return false;
+        SkPoint points[2] = {{x0, y0}, {x1, y1}};
+        return apply_shader(paint, SkShaders::LinearGradient(points, gradient));
+    }
+
+    bool skia_paint_set_radial_gradient(SkiaPaint *paint, float cx, float cy, float radius,
+                                        const uint32_t *colors, const float *stops, int count)
+    {
+        std::vector<SkColor4f> sk_colors;
+        std::vector<float> sk_stops;
+        SkGradient gradient;
+        if (!paint || !(radius > 0.0f) || !make_gradient(colors, stops, count, sk_colors, sk_stops, gradient))
+            return false;
+        return apply_shader(paint, SkShaders::RadialGradient({cx, cy}, radius, gradient));
+    }
+
+    bool skia_paint_set_sweep_gradient(SkiaPaint *paint, float cx, float cy,
+                                       const uint32_t *colors, const float *stops, int count)
+    {
+        std::vector<SkColor4f> sk_colors;
+        std::vector<float> sk_stops;
+        SkGradient gradient;
+        if (!paint || !make_gradient(colors, stops, count, sk_colors, sk_stops, gradient))
+            return false;
+        return apply_shader(paint, SkShaders::SweepGradient({cx, cy}, gradient));
+    }
+
+    void skia_paint_clear_shader(SkiaPaint *paint)
+    {
+        if (paint)
+            reinterpret_cast<SkPaint *>(paint)->setShader(nullptr);
+    }
+
+    SkiaParagraphMetrics skia_measure_rich_text(const SkiaTextSpan *spans, int count, float max_width,
+                                                float line_height, int max_lines)
+    {
+        return skia_canvas_draw_rich_text(nullptr, spans, count, 0.0f, 0.0f, max_width, line_height,
+                                          SKIA_TEXT_ALIGN_LEFT, max_lines, nullptr);
+    }
+
+    SkiaParagraphMetrics skia_canvas_draw_rich_text(SkiaCanvas *canvas, const SkiaTextSpan *spans, int count,
+                                                    float x, float y, float max_width, float line_height,
+                                                    SkiaTextAlign align, int max_lines, SkiaPaint *paint)
+    {
+        SkiaParagraphMetrics metrics = {0.0f, 0.0f, 0};
+        if (!spans || count <= 0)
+            return metrics;
+        if (!(line_height > 0.0f))
+            line_height = SKIA_DEFAULT_LINE_HEIGHT;
+        ParagraphLayout layout;
+        layout_rich_text(spans, count, max_width, line_height, max_lines, layout);
+        metrics.width = layout.width;
+        metrics.height = layout.height;
+        metrics.lines = (int)layout.lines.size();
+        if (!canvas || !paint)
+            return metrics;
+
+        SkCanvas *sk_canvas = reinterpret_cast<SkCanvas *>(canvas);
+        const SkPaint &base = *reinterpret_cast<SkPaint *>(paint);
+        float box = max_width > 0.0f ? max_width : layout.width;
+        float top = y;
+        std::string run;
+        auto draw_run = [&](int span, const std::string &text, float run_x, float baseline) {
+            if (text.empty())
+                return;
+            sk_sp<SkTextBlob> blob = SkTextBlob::MakeFromString(text.c_str(), layout.styles[(size_t)span].font);
+            if (!blob)
+                return;
+            if (!spans[span].has_color)
+            {
+                sk_canvas->drawTextBlob(blob, run_x, baseline, base);
+                return;
+            }
+            SkPaint styled = base;
+            styled.setShader(nullptr);
+            styled.setColor(toSkColor(spans[span].color));
+            sk_canvas->drawTextBlob(blob, run_x, baseline, styled);
+        };
+        for (const ParagraphLine &line : layout.lines)
+        {
+            float baseline = top + (line.height - (line.descent - line.ascent)) * 0.5f - line.ascent;
+            float pen = x;
+            if (align == SKIA_TEXT_ALIGN_CENTER)
+                pen += (box - line.width) * 0.5f;
+            else if (align == SKIA_TEXT_ALIGN_RIGHT)
+                pen += box - line.width;
+            size_t i = line.start;
+            while (i < line.end)
+            {
+                int span = layout.chars[i].span;
+                float run_x = pen;
+                run.clear();
+                for (; i < line.end && layout.chars[i].span == span; i++)
+                {
+                    const TextChar &c = layout.chars[i];
+                    run.append(spans[span].text + c.offset, c.length);
+                    pen += c.advance;
+                }
+                draw_run(span, run, run_x, baseline);
+            }
+            if (line.ellipsis)
+                draw_run(line.ellipsis_span, ellipsis_for(layout.styles[(size_t)line.ellipsis_span].font), pen, baseline);
+            top += line.height;
+        }
+        return metrics;
+    }
+
+    SkiaParagraphMetrics skia_measure_paragraph(const char *text, float max_width, float font_size,
+                                                float line_height, int max_lines, SkiaFont *font)
+    {
+        return skia_canvas_draw_paragraph(nullptr, text, 0.0f, 0.0f, max_width, font_size, line_height,
+                                          SKIA_TEXT_ALIGN_LEFT, max_lines, nullptr, font);
+    }
+
+    SkiaParagraphMetrics skia_canvas_draw_paragraph(SkiaCanvas *canvas, const char *text, float x, float y,
+                                                    float max_width, float font_size, float line_height,
+                                                    SkiaTextAlign align, int max_lines,
+                                                    SkiaPaint *paint, SkiaFont *font)
+    {
+        SkiaParagraphMetrics none = {0.0f, 0.0f, 0};
+        if (!text || !(font_size > 0.0f))
+            return none;
+        SkiaTextSpan span = {text, font_size, font, 0, false};
+        return skia_canvas_draw_rich_text(canvas, &span, 1, x, y, max_width, line_height, align, max_lines, paint);
     }
 } // extern "C"

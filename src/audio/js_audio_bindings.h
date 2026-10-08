@@ -15,6 +15,16 @@ extern "C"
 
     void js_audio_cleanup(JsAudioContext *state);
 
+    struct FileContext;
+    
+    void js_audio_set_files(JsAudioContext *state, struct FileContext *const *files);
+    
+    void js_audio_poll(JsAudioContext *state);
+    
+    bool js_audio_has_pending_work(JsAudioContext *state);
+    
+    double js_audio_max_idle_ms(JsAudioContext *state);
+
 #ifdef __cplusplus
 }
 #endif

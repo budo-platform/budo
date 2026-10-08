@@ -15,8 +15,6 @@
   /** Decode a PNG/JPG file from the project directory and upload it as a 2D texture. */
   loadTexture2D(path: string): number;
 
-  /** Create a cubemap from 6 raw RGBA8 face buffers (order: +X, -X, +Y, -Y, +Z, -Z). */
-  createTextureCube(size: number, format: "rgba8" | "rgb8" | "r8", faces: ArrayBufferView[]): number;
 
   /** Decode 6 image files (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
   loadTextureCube(paths: [string, string, string, string, string, string]): number;
@@ -24,14 +22,14 @@
   /** Replace a sub-rectangle of a 2D texture with new pixel data. */
   updateTexture2D(textureId: number, x: number, y: number, w: number, h: number, pixels: ArrayBufferView): void;
 
-  /** Destroy a texture created with createTexture2D / loadTexture2D / createTextureCube. */
+  /** Destroy a texture created with createTexture2D, loadTexture2D, or loadTextureCube. */
   destroyTexture(textureId: number): void;
 
   /** Create an empty vertex layout. Returns a layout ID; bind attributes via setAttribute. */
   createVertexLayout(): number;
 
   /** Bind one vertex attribute slot to a buffer (use setIndexBuffer for the index buffer). */
-  setAttribute(layoutId: number, location: number, bufferId: number, size: number, type: "float" | "u8" | "u16" | "u32" | "i8" | "i16" | "i32", normalized: boolean, stride: number, offset: number, divisor?: number): void;
+  setAttribute(layoutId: number, location: number, bufferId: number, size: number, type: "float" | "byte" | "ubyte" | "short" | "ushort" | "int" | "uint", normalized: boolean, stride: number, offset: number, divisor?: number): void;
 
   /** Attach an index buffer (u16 or u32) to a vertex layout. */
   setIndexBuffer(layoutId: number, bufferId: number, type: "u16" | "u32"): void;
@@ -63,8 +61,6 @@
   /** Bind a cubemap texture to a sampler uniform. */
   bindTextureCube(programId: number, uniformName: string, textureId: number, textureUnit: number): void;
 
-  /** Draw immediately against a vertex layout (with optional index buffer + GL state). */
+  /** Draw immediately against a vertex layout (with optional index buffer + GL state). Set options.instanceCount, with per-instance attributes (setAttribute divisor 1), to draw instances. */
   drawMesh(programId: number, layoutId: number, options: GLDrawOptions): void;
 
-  /** Draw instanced geometry immediately. */
-  drawMeshInstanced(programId: number, layoutId: number, options: GLDrawOptions, instanceCount: number): void;

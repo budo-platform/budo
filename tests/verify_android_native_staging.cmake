@@ -1,6 +1,34 @@
-if(NOT DEFINED BUDO_EXECUTABLE OR NOT DEFINED PROJECT_DIR OR NOT DEFINED STAGING_ROOT)
-    message(FATAL_ERROR "BUDO_EXECUTABLE, PROJECT_DIR, and STAGING_ROOT are required")
+if(NOT DEFINED BUDO_EXECUTABLE OR NOT DEFINED PROJECT_DIR OR NOT DEFINED BUILD_CACHE)
+    message(FATAL_ERROR "BUDO_EXECUTABLE, PROJECT_DIR, and BUILD_CACHE are required")
 endif()
+
+# The packager keeps one build directory per app in a cache (the user cache by
+# default). Point it at a test-owned directory; clear_android_build_cache()
+# before a run makes staged_android_app_root() find the one it produced.
+set(ENV{BUDO_ANDROID_BUILD_CACHE_DIR} "${BUILD_CACHE}")
+get_filename_component(android_build_cache_parent "${BUILD_CACHE}" DIRECTORY)
+file(MAKE_DIRECTORY "${android_build_cache_parent}")
+
+function(clear_android_build_cache)
+    file(REMOVE_RECURSE "${BUILD_CACHE}")
+endfunction()
+
+function(staged_android_app_root out)
+    file(GLOB entries LIST_DIRECTORIES true RELATIVE "${BUILD_CACHE}" "${BUILD_CACHE}/*")
+    set(found "")
+    foreach(entry IN LISTS entries)
+        if(IS_DIRECTORY "${BUILD_CACHE}/${entry}" AND NOT entry MATCHES "^\\.")
+            list(APPEND found "${BUILD_CACHE}/${entry}")
+        endif()
+    endforeach()
+    list(LENGTH found count)
+    if(NOT count EQUAL 1)
+        message(FATAL_ERROR "Expected one Android build directory in ${BUILD_CACHE}, found: ${found}")
+    endif()
+    set(${out} "${found}" PARENT_SCOPE)
+endfunction()
+
+clear_android_build_cache()
 
 execute_process(
     COMMAND "${BUDO_EXECUTABLE}" android-apk "${PROJECT_DIR}" --no-build
@@ -10,6 +38,7 @@ execute_process(
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "Native Android staging failed (${result}):\n${output}\n${error}")
 endif()
+staged_android_app_root(STAGING_ROOT)
 
 set(native_root "${STAGING_ROOT}/android/app/src/main/cpp/budo_native_app")
 set(asset_root "${STAGING_ROOT}/android/app/src/main/assets/app")

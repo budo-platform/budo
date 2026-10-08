@@ -396,6 +396,146 @@
         "javascript": "getError",
         "lua": "getError"
       }
+    },
+    {
+      "name": "get_sample_rate",
+      "wrapper_symbol": "audio_stream_sample_rate",
+      "signature": "() -> i32 frames per second of the device (stream callbacks run at it)",
+      "exports": {
+        "javascript": "getSampleRate"
+      }
+    },
+    {
+      "name": "open_output",
+      "wrapper_symbol": "audio_output_open",
+      "signature": "(options?: {channels: 1|2, latencyMs}, callback: (buffer: f32[] interleaved, info) -> void) -> i32 stream; -1 on failure",
+      "exports": {
+        "javascript": "openOutput"
+      }
+    },
+    {
+      "name": "close_output",
+      "wrapper_symbol": "audio_output_close",
+      "signature": "(stream: i32) -> void",
+      "exports": {
+        "javascript": "closeOutput"
+      }
+    },
+    {
+      "name": "open_input",
+      "wrapper_symbol": "audio_input_open",
+      "signature": "(options?: {channels: 1|2, latencyMs}, callback: (samples: f32[] interleaved, info) -> void) -> i32 stream; -1 on failure",
+      "exports": {
+        "javascript": "openInput"
+      }
+    },
+    {
+      "name": "close_input",
+      "wrapper_symbol": "audio_input_close",
+      "signature": "(stream: i32) -> void",
+      "exports": {
+        "javascript": "closeInput"
+      }
+    },
+    {
+      "name": "open_decoder",
+      "binding_symbols": {
+        "javascript": "js_audio_open_decoder"
+      },
+      "signature": "(source: assets/|files/ path | bytes, options?: {sampleRate, channels}) -> i32 decoder; -1 on failure",
+      "exports": {
+        "javascript": "openDecoder"
+      }
+    },
+    {
+      "name": "create_decoder",
+      "binding_symbols": {
+        "javascript": "js_audio_create_decoder"
+      },
+      "signature": "(options?: {sampleRate, channels}) -> i32 push decoder",
+      "exports": {
+        "javascript": "createDecoder"
+      }
+    },
+    {
+      "name": "feed_decoder",
+      "binding_symbols": {
+        "javascript": "js_audio_feed_decoder"
+      },
+      "signature": "(decoder: i32, bytes: bytes|null, end?: bool) -> bool",
+      "exports": {
+        "javascript": "feedDecoder"
+      }
+    },
+    {
+      "name": "decode",
+      "binding_symbols": {
+        "javascript": "js_audio_decode"
+      },
+      "signature": "(decoder: i32, out: f32[]) -> i32 frames; 0 at the end or when bytes are needed; -1 on failure",
+      "exports": {
+        "javascript": "decode"
+      }
+    },
+    {
+      "name": "get_decoder_info",
+      "binding_symbols": {
+        "javascript": "js_audio_get_decoder_info"
+      },
+      "signature": "(decoder: i32) -> decoder info",
+      "exports": {
+        "javascript": "getDecoderInfo"
+      }
+    },
+    {
+      "name": "seek_decoder",
+      "binding_symbols": {
+        "javascript": "js_audio_seek_decoder"
+      },
+      "signature": "(decoder: i32, seconds: f64) -> bool",
+      "exports": {
+        "javascript": "seekDecoder"
+      }
+    },
+    {
+      "name": "close_decoder",
+      "binding_symbols": {
+        "javascript": "js_audio_close_decoder"
+      },
+      "signature": "(decoder: i32) -> void",
+      "exports": {
+        "javascript": "closeDecoder"
+      }
+    },
+    {
+      "name": "fft",
+      "binding_symbols": {
+        "javascript": "js_audio_fft"
+      },
+      "signature": "(re: f32[], im: f32[], inverse: bool) -> bool; in place, power-of-two lengths",
+      "exports": {
+        "javascript": "fft"
+      }
+    },
+    {
+      "name": "get_spectrum",
+      "binding_symbols": {
+        "javascript": "js_audio_get_spectrum"
+      },
+      "signature": "(samples: f32[], out_db: f32[]) -> f32[] Hann-windowed levels in dB, samples.length / 2 bins",
+      "exports": {
+        "javascript": "getSpectrum"
+      }
+    },
+    {
+      "name": "detect_pitch",
+      "binding_symbols": {
+        "javascript": "js_audio_detect_pitch"
+      },
+      "signature": "(samples: f32[], sample_rate: f64, options: pitch options) -> pitch {frequency, clarity, level}",
+      "exports": {
+        "javascript": "detectPitch"
+      }
     }
   ]
 }

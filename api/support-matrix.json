@@ -1,5 +1,74 @@
 {
   "subsystems": {
+    "accessibility": {
+      "availabilityGates": [],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": "transient_returns_false",
+      "operationCount": 4,
+      "platformDifferences": {
+        "desktop": {
+          "details": [
+            "Nodes become NSAccessibilityElement children of the window's content view for VoiceOver.",
+            "isActive() follows VoiceOver and Switch Control; BUDO_ACCESSIBILITY=1 forces it (for Accessibility Inspector).",
+            "Windows and Linux (src/accessibility/accessibility_desktop.c) report isAvailable() == false until UI Automation and AT-SPI bridges exist; update() still succeeds."
+          ],
+          "source": "src/accessibility/accessibility_macos.m"
+        },
+        "web": {
+          "details": [
+            "Nodes are mirrored as invisible ARIA elements over the canvas.",
+            "isActive() is always true because browsers do not report screen readers."
+          ],
+          "source": "src/web/web_accessibility.c"
+        }
+      },
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 4,
+          "namespace": "sys.accessibility",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "lua": {
+          "constantExportCount": 0,
+          "exportCount": 4,
+          "namespace": "sys.accessibility",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ]
+        },
+        "wasmtime": {
+          "constantExportCount": 0,
+          "exportCount": 4,
+          "namespace": "env",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "javascript": "Stateless bindings over the process accessibility service, which owns the published tree and a mutex-protected action queue filled by the platform UI thread.",
+        "lua": "Stateless bindings over the process accessibility service, which owns the published tree and a mutex-protected action queue filled by the platform UI thread.",
+        "wasmtime": "Stateless host imports over the process accessibility service; trees and actions cross the boundary as JSON in guest memory."
+      },
+      "typescript": {
+        "description": "Expose what the app draws to screen readers: publish a flat list of nodes every frame they change, and apply the actions users perform through assistive technology.",
+        "interface": "SysAccessibility",
+        "kind": "methods"
+      },
+      "unsupportedRuntimes": {}
+    },
     "audio": {
       "availabilityGates": [],
       "capabilityGate": null,
@@ -19,7 +88,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 25,
+      "operationCount": 40,
       "platformDifferences": {
         "android": {
           "details": [
@@ -40,7 +109,7 @@
       "runtimes": {
         "javascript": {
           "constantExportCount": 5,
-          "exportCount": 30,
+          "exportCount": 45,
           "namespace": "sys.audio",
           "omittedOperations": [],
           "platforms": [
@@ -53,7 +122,23 @@
           "constantExportCount": 5,
           "exportCount": 30,
           "namespace": "sys.audio",
-          "omittedOperations": [],
+          "omittedOperations": [
+            "get_sample_rate",
+            "open_output",
+            "close_output",
+            "open_input",
+            "close_input",
+            "open_decoder",
+            "create_decoder",
+            "feed_decoder",
+            "decode",
+            "get_decoder_info",
+            "seek_decoder",
+            "close_decoder",
+            "fft",
+            "get_spectrum",
+            "detect_pitch"
+          ],
           "platforms": [
             "desktop",
             "android",
@@ -74,7 +159,22 @@
             "destroy_buffer",
             "play_buffer",
             "stop_buffer",
-            "get_error"
+            "get_error",
+            "get_sample_rate",
+            "open_output",
+            "close_output",
+            "open_input",
+            "close_input",
+            "open_decoder",
+            "create_decoder",
+            "feed_decoder",
+            "decode",
+            "get_decoder_info",
+            "seek_decoder",
+            "close_decoder",
+            "fft",
+            "get_spectrum",
+            "detect_pitch"
           ],
           "platforms": [
             "desktop"
@@ -118,7 +218,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 41,
+      "operationCount": 54,
       "platformDifferences": {
         "android": {
           "details": [
@@ -138,7 +238,7 @@
       "runtimes": {
         "browser_wasm": {
           "constantExportCount": 0,
-          "exportCount": 17,
+          "exportCount": 30,
           "namespace": "env",
           "omittedOperations": [
             "svg_draw",
@@ -164,7 +264,7 @@
             "rotate_around",
             "skew",
             "reset_transform",
-            "clip_rect"
+            "set_gradient"
           ],
           "platforms": [
             "web"
@@ -172,7 +272,7 @@
         },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 33,
+          "exportCount": 41,
           "namespace": [
             "sys.canvas"
           ],
@@ -184,7 +284,12 @@
             "set_color_matrix_filter",
             "set_blend_color_filter",
             "clear_color_filter",
-            "rotate_around"
+            "rotate_around",
+            "set_linear_gradient",
+            "set_radial_gradient",
+            "set_sweep_gradient",
+            "clear_gradient",
+            "save_layer_bounds"
           ],
           "platforms": [
             "desktop",
@@ -194,7 +299,7 @@
         },
         "lua": {
           "constantExportCount": 0,
-          "exportCount": 33,
+          "exportCount": 41,
           "namespace": [
             "sys.canvas"
           ],
@@ -206,7 +311,12 @@
             "set_color_matrix_filter",
             "set_blend_color_filter",
             "clear_color_filter",
-            "rotate_around"
+            "rotate_around",
+            "set_linear_gradient",
+            "set_radial_gradient",
+            "set_sweep_gradient",
+            "clear_gradient",
+            "save_layer_bounds"
           ],
           "platforms": [
             "desktop",
@@ -216,14 +326,15 @@
         },
         "wasmtime": {
           "constantExportCount": 0,
-          "exportCount": 36,
+          "exportCount": 48,
           "namespace": "env",
           "omittedOperations": [
             "font_set",
             "set_stroke_cap",
             "set_stroke_join",
             "set_image_filter",
-            "set_color_filter"
+            "set_color_filter",
+            "set_gradient"
           ],
           "platforms": [
             "desktop"
@@ -250,7 +361,7 @@
           "kind": "throws_on_invalid_arguments_or_operation_failure"
         }
       },
-      "operationCount": 26,
+      "operationCount": 29,
       "platformDifferences": {
         "web": {
           "details": [
@@ -264,7 +375,7 @@
       "runtimes": {
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 26,
+          "exportCount": 29,
           "namespace": [
             "sys.graphics",
             "CanvasTexture",
@@ -459,12 +570,21 @@
       "capabilityRelationships": [],
       "constantCount": 0,
       "errorConvention": "transient_returns_false",
-      "operationCount": 1,
+      "operationCount": 6,
       "platformDifferences": {},
       "runtimes": {
+        "browser_wasm": {
+          "constantExportCount": 0,
+          "exportCount": 6,
+          "namespace": "env",
+          "omittedOperations": [],
+          "platforms": [
+            "web"
+          ]
+        },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 1,
+          "exportCount": 6,
           "namespace": "sys.device",
           "omittedOperations": [],
           "platforms": [
@@ -475,7 +595,7 @@
         },
         "lua": {
           "constantExportCount": 0,
-          "exportCount": 1,
+          "exportCount": 6,
           "namespace": "sys.device",
           "omittedOperations": [],
           "platforms": [
@@ -486,7 +606,7 @@
         },
         "wasmtime": {
           "constantExportCount": 0,
-          "exportCount": 1,
+          "exportCount": 6,
           "namespace": "env",
           "omittedOperations": [],
           "platforms": [
@@ -513,11 +633,11 @@
       "constantCount": 0,
       "errorConvention": {
         "browser_wasm": {
-          "details": "The browser bridge exposes only path create, move, line, close, and draw. Creation returns -1 after the fixed registry is full or allocation fails; invalid handles are ignored.",
+          "details": "The browser bridge exposes only path create, move, line, close, addSvg, and draw. Creation returns -1 after the fixed registry is full or allocation fails; invalid handles are ignored.",
           "kind": "documented_sentinel_on_failure"
         },
         "javascript": {
-          "details": "Path calls ignore invalid handles, while failed path/SVG/font allocation or loading and invalid managed buffer arguments can throw or return -1 according to the binding. Runtime-owned handles are released when the canvas context is destroyed.",
+          "details": "Path calls ignore invalid handles (addSvg returns false for them and for data that does not parse), while failed path/SVG/font allocation or loading and invalid managed buffer arguments can throw or return -1 according to the binding. Runtime-owned handles are released when the canvas context is destroyed.",
           "kind": "throws_on_invalid_arguments_or_operation_failure"
         },
         "lua": {
@@ -529,7 +649,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 16,
+      "operationCount": 17,
       "platformDifferences": {
         "web": {
           "details": [
@@ -543,7 +663,7 @@
       "runtimes": {
         "browser_wasm": {
           "constantExportCount": 0,
-          "exportCount": 4,
+          "exportCount": 5,
           "namespace": "env",
           "omittedOperations": [
             "path_reset",
@@ -565,7 +685,7 @@
         },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 16,
+          "exportCount": 17,
           "namespace": [
             "sys.path",
             "sys.svg",
@@ -580,7 +700,7 @@
         },
         "lua": {
           "constantExportCount": 0,
-          "exportCount": 16,
+          "exportCount": 17,
           "namespace": [
             "sys.path",
             "sys.svg",
@@ -595,7 +715,7 @@
         },
         "wasmtime": {
           "constantExportCount": 0,
-          "exportCount": 14,
+          "exportCount": 15,
           "namespace": "env",
           "omittedOperations": [
             "font_load",
@@ -634,12 +754,12 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 12,
+      "operationCount": 17,
       "platformDifferences": {},
       "runtimes": {
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 19,
+          "exportCount": 24,
           "namespace": [
             "sys.files",
             "sys.assets"
@@ -661,7 +781,12 @@
           "omittedOperations": [
             "append_binary",
             "pick_text",
-            "save_text"
+            "save_text",
+            "open_read",
+            "read_block",
+            "seek",
+            "get_read_info",
+            "close_read"
           ],
           "platforms": [
             "desktop",
@@ -679,7 +804,12 @@
             "append_binary",
             "pick_text",
             "save_text",
-            "get_error"
+            "get_error",
+            "open_read",
+            "read_block",
+            "seek",
+            "get_read_info",
+            "close_read"
           ],
           "platforms": [
             "desktop"
@@ -2018,7 +2148,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 7,
+      "operationCount": 8,
       "platformDifferences": {
         "desktop": {
           "details": [
@@ -2039,7 +2169,7 @@
       "runtimes": {
         "browser_wasm": {
           "constantExportCount": 0,
-          "exportCount": 1,
+          "exportCount": 2,
           "namespace": "guest.exports",
           "omittedOperations": [
             "animation_start",
@@ -2055,7 +2185,7 @@
         },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 5,
+          "exportCount": 6,
           "namespace": [
             "sys.animation",
             "sys.timer"
@@ -2072,7 +2202,7 @@
         },
         "lua": {
           "constantExportCount": 0,
-          "exportCount": 3,
+          "exportCount": 4,
           "namespace": "sys.animation",
           "omittedOperations": [
             "timer_once",
@@ -2088,7 +2218,7 @@
         },
         "wasmtime": {
           "constantExportCount": 0,
-          "exportCount": 1,
+          "exportCount": 2,
           "namespace": "guest.exports",
           "omittedOperations": [
             "animation_start",

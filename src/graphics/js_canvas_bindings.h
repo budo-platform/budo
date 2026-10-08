@@ -1,6 +1,7 @@
 #ifndef JS_CANVAS_BINDINGS_H
 #define JS_CANVAS_BINDINGS_H
 
+#include "core/animation_wait.h"
 #include "graphics/js_core_bindings.h"
 #include "quickjs.h"
 #include "graphics/skia_wrapper.h"
@@ -30,6 +31,7 @@ extern "C"
 
         JSValue animation_callback;
         bool has_animation_callback;
+        BudoAnimationWait animation_wait;
 
         SkiaDrawingDesk drawingDesk;
 
@@ -77,6 +79,8 @@ extern "C"
     bool js_graphic_call_animation(JSGraphicContext *ctx, double timestamp);
 
     bool js_graphic_has_animation(JSGraphicContext *ctx);
+    
+    BudoAnimationWait *js_graphic_animation_wait(JSGraphicContext *graphic_ctx);
 
 #ifdef __cplusplus
 }

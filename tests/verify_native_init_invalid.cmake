@@ -6,6 +6,9 @@ foreach(arguments
         "--language;rust"
         "--template;gpu"
         "--language;c;--template;unknown"
+        "--language;c;--template;ui"
+        "--template;ui;--language;c"
+        "--template;ui;--template;ui"
         "--language;c;--language;c"
         "--language;c;extra")
     file(REMOVE_RECURSE "${TEST_ROOT}")

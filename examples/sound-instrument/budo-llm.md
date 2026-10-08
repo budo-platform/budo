@@ -36,6 +36,7 @@ Output discipline for generated apps:
 ## Architecture chooser
 
 - **Simple 2D**: `main.ts` constants/state + `update(input,dt)` + `render()` + `frame()`.
+- **App UI** (forms, settings, tools, editors): `budo init <dir> --template ui`, then build on the budo-ui widgets in `ui/` (see UI toolkit) instead of hand-drawing controls.
 - **Medium 2D**: `main.ts` orchestration; `model.ts` deterministic state; `view.ts` canvas; `io.ts` DB/file/network/audio.
 - **Canvas + shader**: `main.ts` transparent Skia UI → flush → fullscreen shader; vertex/fragment files generate/post-process/composite.
 - **3D**: `main.ts` resources/update/ordered passes; math/scene modules; explicit mesh/fullscreen shaders.
@@ -70,7 +71,7 @@ Canvas GUI invariants:
 - Use `app.json` for network, filesystem, neural, orientation, and packaging metadata.
 - Gate optional `neural|midi|udp|http|sensors` via `sys.capabilities.*.available`; for older web wiring use e.g. `sys.capabilities?.udp?.available === true`.
 - Author app GLSL as GLSL ES 300: `#version 300 es`. Desktop translates to GLSL 150.
-- Examples show architecture; `budo.d.ts` is the JS/TS signature authority. `examples/gui-framework` demonstrates retained widgets, stacks/splitters, focus, authoritative edits, IME/candidate placement, and Android keyboard lifecycle.
+- Examples show architecture; `budo.d.ts` is the JS/TS signature authority. `examples/budo-ui` is the UI toolkit: immediate-mode widgets with motion, keyboard focus, accessibility, authoritative edits, IME/candidate placement, and the Android keyboard lifecycle.
 
 ## Project, CLI, metadata
 
@@ -83,19 +84,24 @@ budo <project_dir|file>                 # shorthand for run
 budo compile <project_dir|file> [--build-dir DIR --sdk DIR --offline --run --debug|--release --sanitize address,undefined]
 budo cache native|sdk inspect [--json]
 budo cache native|sdk clean --all
-budo init <project_dir> [--language js|c --template canvas|gpu]
+budo cache android inspect [--json]     # per-app Android build directories (Budo Pro)
+budo cache android clean --all|<package>
+budo init <project_dir> [--template ui | --language c --template canvas|gpu]
 budo web-serve <project_dir>
 budo web-export <project_dir> [-o DIR]
 budo android-apk <project_dir> [--release|--debug -o DIR --install --no-build --clean]
 budo android-aab <project_dir> [--release|--debug -o DIR --no-build --clean]
 budo budo.d.ts
 budo budo-llm.md
+budo version                            # also --version, -v; include the output in bug reports
 budo help
 ```
+A release APK without a `signing` block in app.json is signed with the Android debug key (installable for testing, never publish it); release AAB requires the release key. app.json `permissions` lists Android permissions, e.g. `"RECORD_AUDIO"` for `sys.audio.openInput`.
 
-Android APK/AAB packaging is a Budo Pro feature. Public builds keep the
-commands discoverable, but require the private Android feature pack under
-`private/android` before packaging is enabled.
+Android APK/AAB packaging is a Budo Pro feature. The released Budo binaries
+include it for free during the public launch (a later release makes it paid).
+Builds from source without the private Android feature pack under
+`private/android` keep the commands, which then report packaging as unavailable.
 
 Single `.js/.ts/.lua/.wat/.wasm` files are staged as matching `main.*` in a temporary virtual app; project-relative assets and `app.json` are absent unless using a real project dir. `--from-input` stages stdin similarly.
 
@@ -175,11 +181,16 @@ Colors: JS/Lua accept `"#RRGGBB"`, `"#RRGGBBAA"`, numeric ARGB `0xAARRGGBB`. The
 ```js
 sys.window.getWidth(); sys.window.getHeight(); sys.window.getDisplayDensity();
 sys.animation.requestFrame(callback); sys.animation.cancelFrame(handle);
+sys.animation.waitForInput(callback, timeoutMs?); // like requestFrame, but runs on the next input/resize/timeout
 sys.timer.once(delayMs, callback); sys.timer.every(intervalMs, callback); sys.timer.clear(id);
 sys.input.get(); sys.input.isKeyDown(scancode); sys.input.isKeyPressed(scancode);
 ```
 
+Battery: when nothing animates, end the frame with `sys.animation.waitForInput(frame, timeoutMs?)` instead of `requestFrame(frame)`. The last frame stays on screen, desktop sleeps on events and Android stops rendering until input, a resize, the timeout, or the next JS timer. Apps that draw to the screen with `sys.gl` passes after the canvas (post effects) must keep calling `requestFrame` while those passes run.
+
 `sys.input.get()` creates a fresh aggregate JS object; call it once per frame and pass that snapshot through update/render. Its `focused` field means **host window focus**, not editor/widget focus; track widget focus separately and use window focus only to pause/blur as intended.
+
+Window-less apps: the window (web canvas, Android surface) opens only on the first graphics call (`sys.canvas`, `sys.gl`, `sys.window`, `sys.animation`, `sys.input`, ...), even from a later timer. An app that never uses graphics shows nothing and ends once no timers, promise jobs, fetches, UDP/MIDI listeners, file pickers, or llama.cpp requests remain. `sys.exit(code = 0)` ends any app at once with that status (`budo run` exit status; web dispatches a `budoexit` event with `detail.code`). Load errors exit with 1.
 
 Width/height, pointer, canvas, and `u_resolution` are matching physical pixels; density scales only authored constants (e.g. `margin=16*density`, `fontSize=18*density`, `hitRadius=Math.max(visualRadius,22*density)`). On resize, recompute UI, resize targets, and clamp or preserve relative placement (`x*=newWidth/oldWidth`) without recreating unrelated state. Measure text; no automatic layout/wrap.
 
@@ -195,6 +206,7 @@ Width/height, pointer, canvas, and `u_resolution` are matching physical pixels; 
   textEdit:null|{text,selectionStart,selectionEnd},
   composition:{active,changed,text,selectionStart,selectionEnd},
   textInputActive:boolean,
+  nativeTextEditing:boolean, // web/Android edit text sessions themselves (paste, selection): do not handle editing shortcuts
   deltaTime,totalTime,frameCount,focused
 }
 ```
@@ -211,7 +223,7 @@ sys.animation.requestFrame(frame);
 
 Edges reset each frame; held states persist (see output discipline). `pointer` is primary mouse/touch, `pointers` active multitouch, `mouse` desktop-specific. For cooldowns, store second-based deadlines and initialize `nextAllowed=0` so `totalTime>=nextAllowed` accepts the first event.
 
-`input.text` is layout-aware committed text. Full editors use `sys.input.startTextInput({text,selectionStart,selectionEnd,multiline?})`; each frame apply authoritative `textEdit`, render persistent composition, then `sys.input.updateTextInput({text,selectionStart,selectionEnd,caret:{x,y,width,height}})`; call `sys.input.stopTextInput()` on blur. Selections are UTF-16; caret geometry is physical pixels. Desktop/web/Android support composition; web/Android add native replacement, paste/autocorrection, and soft keyboards. Android Back and single-line Done/Return finalize composition into `textEdit`; stale pre-commit snapshots are rejected. Physical controls/navigation/shortcuts use scancodes. Timers <=0 run next frame; `every` minimum is 1 ms.
+`input.text` is layout-aware committed text. Full editors use `sys.input.startTextInput({text,selectionStart,selectionEnd,multiline?})`; each frame apply authoritative `textEdit`, render persistent composition, then `sys.input.updateTextInput({text,selectionStart,selectionEnd,caret:{x,y,width,height}})`; call `sys.input.stopTextInput()` on blur. Selections are UTF-16; caret geometry is physical pixels. Desktop/web/Android support composition; web/Android add native replacement, paste/autocorrection, and soft keyboards. Android Back and single-line Done/Return finalize composition into `textEdit`; stale pre-commit snapshots are rejected. Physical controls/navigation use scancodes (QWERTY positions); letter shortcuts match `input.text` (when no text session is active) so they follow the keyboard layout. Timers <=0 run next frame; `every` minimum is 1 ms.
 
 Text-session rules for canvas forms:
 
@@ -238,28 +250,45 @@ sys.canvas.measureTextRect(text,fontSize=32); sys.canvas.drawArc(x,y,w,h,startDe
 sys.canvas.setFillColor(color); sys.canvas.setStrokeColor(color); sys.canvas.setStrokeWidth(width);
 sys.canvas.setAntiAlias(bool); sys.canvas.setAlpha(0..255);
 sys.canvas.setStrokeCap('butt'|'round'|'square'); sys.canvas.setStrokeJoin('miter'|'round'|'bevel');
-sys.canvas.setBlendMode(mode); sys.canvas.setImageFilter(name,...args); sys.canvas.setColorFilter(name,...args); sys.canvas.getError();
+sys.canvas.setBlendMode(mode); sys.canvas.setImageFilter(name,...args); sys.canvas.setColorFilter(name,...args);
 
 sys.canvas.save(); sys.canvas.restore(); sys.canvas.translate(dx,dy);
 sys.canvas.rotate(deg); sys.canvas.rotate(deg,px,py); sys.canvas.scale(sx,sy);
 sys.canvas.skew(sx,sy); sys.canvas.reset(); sys.canvas.clipRect(x,y,w,h);
+sys.canvas.clipRoundRect(x,y,w,h,rx,ry=rx); sys.canvas.clipPath(path); // anti-aliased
+sys.canvas.saveLayer(alpha=255, x?,y?,w?,h?, backdropBlur=0); // ... draw ...; sys.canvas.restore();
+
+sys.canvas.setGradient('linear',x0,y0,x1,y1,colors,stops?); sys.canvas.setGradient('radial',cx,cy,r,colors,stops?);
+sys.canvas.setGradient('sweep',cx,cy,colors,stops?); sys.canvas.setGradient(null); // clear
+
+sys.canvas.drawParagraph(text,x,y,width,fontSize=32,{align:'left'|'center'|'right',lineHeight:1.25,maxLines:0}); // y is the TOP
+sys.canvas.measureParagraph(text,width,fontSize=32,{lineHeight,maxLines}); // both -> {width,height,lines}
+sys.canvas.drawRichText(['plain ', {text:'bold', size:24, color:'#C00', font:'Heavy'}], x, y, width, {size:16, align, lineHeight, maxLines});
+sys.canvas.measureRichText(spans, width, options); // mixed sizes/colors/fonts, baselines aligned, ≤64 spans
 
 const path = sys.path.create(); sys.path.reset(path); sys.path.moveTo(path,x,y); sys.path.lineTo(path,x,y);
 sys.path.quadTo(path,x1,y1,x2,y2); sys.path.cubicTo(path,x1,y1,x2,y2,x3,y3);
 sys.path.close(path); sys.path.addRect(path,x,y,w,h); sys.path.addCircle(path,cx,cy,r); sys.canvas.drawPath(path);
+sys.path.addSvg(path, 'M5 12h14M12 5v14'); // SVG `d` data, all commands; returns false (path unchanged) if it does not parse
 ```
 
 Advanced paint: blend modes `src-over|src|dst-over|dst-in|dst-out|src-in|src-out|clear|plus|multiply|screen|overlay|darken|lighten|color-dodge|color-burn|hard-light|soft-light|difference|exclusion|hue|saturation|color|luminosity`. Image filters: `setImageFilter('blur',sigmaX,sigmaY?)`, `setImageFilter('drop-shadow',dx,dy,sigmaX,sigmaY?,color)`, `setImageFilter('drop-shadow-only',dx,dy,sigmaX,sigmaY?,color)`, `setImageFilter('none'|null|undefined)`. Color filters: `setColorFilter('matrix',array20)`, `setColorFilter('blend',color,blendMode)`, `setColorFilter('none'|null|undefined)`. Unknown names throw `RangeError`; missing required args throw `TypeError`.
+
+Gradients: `colors` is an array of 2–16 colors, `stops` an optional array of one 0..1 position per color (default evenly spaced). Colors interpolate in OKLab. A gradient replaces the paint color for fills, strokes, and text, makes the paint opaque (`setAlpha` then fades it), and stays until `setGradient(null)` or the next `setFillColor`/`setStrokeColor`. Sweep starts at the positive x axis.
+
+Layers: `saveLayer(alpha)` groups what follows and composites it on `restore()` with one opacity, so overlapping shapes do not show through each other (true group fade-out). With a rectangle, the layer is clipped to it. `backdropBlur > 0` starts the layer with a blurred copy of what is already drawn below: frosted glass. Typical panel: `save(); clipRoundRect(x,y,w,h,r); saveLayer(255,x,y,w,h,20); setFillColor('#FFFFFF80'); drawRect(x,y,w,h); restore(); restore();`. Layers cost an offscreen pass; keep them to panels, not every row.
+
+Paragraphs: lines break at spaces and `\n`; words wider than the width break between characters; `width` 0 disables wrapping. `maxLines` ends the last line with an ellipsis. Lines are vertically centered in `fontSize*lineHeight`, so a paragraph occupies exactly `height`. Use `measureParagraph` for layout, then `drawParagraph` at the same width. Single-style text only (no mixed fonts/colors inside one paragraph).
 
 ### SVG, fonts, graphics textures
 
 ```js
 const svg = sys.svg.load('icon.svg'); const svg2 = sys.svg.loadFromBuffer(buffer);
 sys.canvas.drawSvg(svg,x,y,w,h); sys.svg.destroy(svg); sys.svg.getWidth(svg); sys.svg.getHeight(svg);
-sys.font.load(path, name=path); sys.font.loadFromBuffer(buffer, name='buffer'); sys.canvas.setFont(name); sys.font.reset();
+sys.font.load(path, name=path); sys.font.loadFromBuffer(buffer, name='buffer'); sys.canvas.setFont(name); sys.canvas.setFont(null); // null (Lua nil) = default font
 
 const surface = sys.graphics.createCanvasTexture(w,h); // JS only
-surface.canvas.clear('transparent'); surface.canvas.drawRect(x,y,w,h); surface.canvas.drawCircle(cx,cy,r);
+surface.canvas.clear('#00000000'); surface.canvas.drawRect(x,y,w,h); surface.canvas.drawCircle(cx,cy,r);
 surface.canvas.drawText(text,x,y,size); surface.resize(w,h); surface.destroy();
 // CanvasTexture fields: id,width,height,texture,target,canvas
 ```
@@ -270,24 +299,21 @@ SVG `load*` returns id >= 0 or `-1`. `CanvasTexture` is Skia canvas plus GL text
 
 Budo writes built-ins immediately before each draw: `uniform sampler2D u_canvas`=unit 0, `uniform vec2 u_resolution`=active viewport/target physical size, `uniform float u_time`=frame seconds; region draws add `uniform vec2 u_offset`. Do not call app setters for these names—the draw overwrites them; use distinct custom uniforms. App samplers use units 1..7. Fullscreen attributes: `in vec2 a_position`, `in vec2 a_texCoord`.
 
-Canvas/pointer pixels are top-left; fullscreen `v_uv` is bottom-left. Compare input with `vec2 fragPxTopLeft=vec2(v_uv.x*u_resolution.x,(1.0-v_uv.y)*u_resolution.y)` and sample canvas with `texture(u_canvas,vec2(v_uv.x,1.0-v_uv.y))`. Generated backgrounds may remain in GL UV space; convert one side once, never mix origins. `u_canvas` is premultiplied RGBA: over opaque `bg`, output `vec4(ui.rgb+bg*(1.0-ui.a),1.0)`, not `mix(bg,ui.rgb,ui.a)` (which applies alpha twice).
+Canvas/pointer pixels are top-left, and so is fullscreen/region `a_texCoord`/`v_uv` ((0,0) = top-left): sample `texture(u_canvas, v_uv)` directly (upright; canvas textures and render targets drawn by these passes too), and compare with input via `vec2 fragPx = v_uv * u_resolution`. Only `gl_FragCoord` is bottom-left: `vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y)` converts it. Convert one side once, never mix origins. `u_canvas` is premultiplied RGBA: over opaque `bg`, output `vec4(ui.rgb+bg*(1.0-ui.a),1.0)`, not `mix(bg,ui.rgb,ui.a)` (which applies alpha twice).
 
-ShaderProgram object (from `createShaderProgram`) is chainable: `id`, `use()`, `uniform1i(name,i)`, `uniform1f(name,x)`, `uniform2f(name,x,y)`, `uniform3f(name,x,y,z)`, `uniform4f(name,x,y,z,w)`, `uniformMatrix4(name,mat16)`, `texture(name,texOrCanvasTexture,unit)`, `canvasTexture(name,surface,unit)`, `renderTargetTexture(name,targetId,unit)`, `drawFullscreen(sourceTexture?)`, `drawRegion(x,y,w,h,targetId?)`, `drawMesh(layoutId,options)`. `use()` is optional: setters/draws auto-bind. Vector/matrix3/`*v` arrays exist only on numeric `sys.gl.setUniform*`.
-
-Do not pass a ShaderProgram object to numeric `sys.gl.*` methods: use `shader.uniformMatrix4(...).drawMesh(...)`, or pass `shader.id` to `sys.gl.setUniformMatrix4()` / `sys.gl.drawMesh()`. Mixing forms throws `Invalid shader program id`.
+Programs are numeric handles; every operation is a `sys.gl` function taking the handle first (there is no program object: `createShaderProgram` does not exist). Setters and draws bind the program themselves, so `useProgram` is optional.
 
 Program creation throws on compile/link failure; after draws, `getLastError()` returns the last error or `""`. GLSL removes uniforms not read by the shader body: built-in assignment silently skips them, but explicit `uniform*` throws `InternalError: Uniform not found`. Remove the declaration+setter or use the value; inside `frame()`, this repeats because animation callbacks survive exceptions.
 
 ```js
 const p = sys.gl.createProgram('shader.vert','shader.frag');
-const shader = sys.gl.createShaderProgram({vertex:'shader.vert', fragment:'shader.frag'});
-const shaderAlt = sys.gl.createShaderProgram('shader.vert', 'shader.frag');
 const p2 = sys.gl.createProgramFromBuffer(vertexBytes, fragmentBytes);
 sys.gl.destroyProgram(p); sys.gl.useProgram(p); sys.gl.bindScreen(); sys.gl.bindRenderTarget(rt?);
 sys.gl.bindScreen(); // alias of sys.gl.bindScreen(): bind default framebuffer + window-size viewport
 sys.gl.drawFullscreen(p); sys.gl.drawFullscreenImmediate(shaderOrId, sourceTexture?);
 sys.gl.drawRegion(p,x,y,w,h,targetId?); sys.gl.drawRegionImmediate(shaderOrId,x,y,w,h,targetId?);
-shader.use().uniform1f('u_strength',0.5).texture('u_tex',tex,1).drawFullscreen();
+sys.gl.setUniform1f(p,'u_strength',0.5); sys.gl.bindTexture2D(p,'u_tex',tex,1); sys.gl.drawFullscreen(p);
+sys.gl.drawFullscreenImmediate(p, textureOrCanvasTexture); // samples that source as u_canvas for this pass
 
 sys.gl.setUniform1i(p,name,i); sys.gl.setUniform1f(p,name,f); sys.gl.setUniform2f(p,name,x,y);
 sys.gl.setUniform3f(p,name,x,y,z); sys.gl.setUniform4f(p,name,x,y,z,w);
@@ -297,14 +323,14 @@ sys.gl.setUniform1iv(p,name,i32); sys.gl.getLastError(); sys.gl.getProjectDir();
 
 const rt = sys.gl.createRenderTarget(w,h,depth=false); sys.gl.resizeRenderTarget(rt,w,h);
 sys.gl.bindTexture(program,'u_prev',rt,1); sys.gl.destroyRenderTarget(rt);
-sys.gl.bindCanvasTexture(program,'u_ui',surface,1); shader.canvasTexture('u_ui',surface,1);
+sys.gl.bindCanvasTexture(program,'u_ui',surface,1); // flushes the surface's pending drawing first
 ```
 
-A render target exposes its color texture through the target ID. Sample it with `shader.renderTargetTexture(name,targetId,unit)` (or numeric `bindTexture`); `shader.texture()` is for ordinary texture IDs/CanvasTexture, not render-target IDs. `depth=true` adds an internal depth renderbuffer for testing, not a sampleable depth texture/`target.depth`; encode linear depth into a color channel for depth post-processing. Shaders come from project-relative files or ArrayBuffer-backed `create*FromBuffer`; there is no inline pipeline-description API.
+A render target exposes its color texture through the target ID. Sample it with `sys.gl.bindTexture(program,name,targetId,unit)`; `bindTexture2D` is for ordinary texture IDs and `bindCanvasTexture` for CanvasTextures, not render-target IDs. `depth=true` adds an internal depth renderbuffer for testing, not a sampleable depth texture/`target.depth`; encode linear depth into a color channel for depth post-processing. Shaders come from project-relative files or ArrayBuffer-backed `create*FromBuffer`; there is no inline pipeline-description API.
 
-Render-target color persists across frames and Budo exposes no `sys.gl.clear`; clear it with a fullscreen/region pass whose fragment shader outputs the clear color, e.g. `clearShader.drawRegion(0,0,w,h,targetId)`. Create/resize targets only with positive dimensions. Each depth-tested mesh draw to an offscreen depth target currently clears that target's depth before drawing, so separate draws do not depth-occlude one another. Batch mutually occluding objects into one indexed draw or design passes so cross-draw depth is unnecessary.
+Render-target color persists across frames and Budo exposes no `sys.gl.clear`; clear it with a fullscreen/region pass whose fragment shader outputs the clear color, e.g. `sys.gl.drawRegion(clearProgram,0,0,w,h,targetId)`. Create/resize targets only with positive dimensions. `drawMesh` without `target` draws into the render target selected by `sys.gl.bindRenderTarget(rt)`, otherwise to the screen; `target: -1` forces the screen. An offscreen depth target's depth is cleared by the frame's first depth-tested mesh draw into it, like the screen's, so the mesh draws of one frame occlude one another (draw a whole 3D scene into a target, then post-process it).
 
-Multi-pass order is explicit: draw source texture → target A; bind A to pass B with `renderTargetTexture`; draw B → target B; draw/flush transparent canvas; bind screen; final shader samples target B plus built-in `u_canvas`. Before/after mode should feed the chosen source/effect texture into the same final HUD compositor, not bypass it. Resize existing render targets with `resizeRenderTarget()`; do not destroy/recreate unchanged programs/source textures on every window resize. A fullscreen pass overwrites every target pixel, so no separate color-clear pass is needed when that pass is guaranteed to cover the full target.
+Multi-pass order is explicit: draw source texture → target A; bind A to pass B with `sys.gl.bindTexture`; draw B → target B; draw/flush transparent canvas; bind screen; final shader samples target B plus built-in `u_canvas`. Before/after mode should feed the chosen source/effect texture into the same final HUD compositor, not bypass it. Resize existing render targets with `resizeRenderTarget()`; do not destroy/recreate unchanged programs/source textures on every window resize. A fullscreen pass overwrites every target pixel, so no separate color-clear pass is needed when that pass is guaranteed to cover the full target.
 
 3D:
 
@@ -316,17 +342,17 @@ sys.gl.updateBuffer(vbo, data, byteOffset=0); sys.gl.destroyBuffer(vbo);
 const tex = sys.gl.loadTexture2D('image.png'); const tex2 = sys.gl.loadTexture2DFromBuffer(bytes);
 const tex3 = sys.gl.createTexture2D(w,h,'rgba8'|'rgb8'|'r8', pixels?);
 const cube = sys.gl.loadTextureCube([px,nx,py,ny,pz,nz]); const cube2 = sys.gl.loadTextureCubeFromBuffer([px,nx,py,ny,pz,nz]);
-sys.gl.createTextureCube(size,'rgba8'|'rgb8'|'r8', faceBuffers); sys.gl.updateTexture2D(tex,x,y,w,h,pixels); sys.gl.destroyTexture(tex);
+sys.gl.updateTexture2D(tex,x,y,w,h,pixels); sys.gl.destroyTexture(tex); // 'r8' is one channel (red)
 
 const layout = sys.gl.createVertexLayout();
-sys.gl.setAttribute(layout, location, buffer, size, 'float'|'u8'|'u16'|'u32'|'i8'|'i16'|'i32', normalized, stride, offset, divisor?);
+sys.gl.setAttribute(layout, location, buffer, size, 'float'|'byte'|'ubyte'|'short'|'ushort'|'int'|'uint', normalized, stride, offset, divisor?); // other names silently mean 'float'
 sys.gl.setIndexBuffer(layout, ibo, 'u16'|'u32'); sys.gl.getAttribLocation(program,name); sys.gl.destroyVertexLayout(layout);
 sys.gl.bindTexture2D(program,'u_albedo',tex,1); sys.gl.bindTextureCube(program,'u_env',cube,2);
 sys.gl.drawMesh(program, layout, {mode:'triangles', first:0, count, target, depthTest:true, depthWrite:true, cull:'back', blend:'alpha'});
 sys.gl.drawMeshImmediate(program, layout, options);
 ```
 
-Although `setAttribute(...,divisor)` reaches the backend, current JS/Lua bindings do not expose `drawMeshInstanced`; do not call it from managed apps. Reuse persistent layouts with bounded `drawMesh` calls, or update one preallocated combined vertex buffer and draw once. Never allocate combined arrays in the frame loop.
+Instancing: give per-instance attributes `divisor` 1 in `setAttribute` and pass `instanceCount` in the `drawMesh` options (there is no `drawMeshInstanced`). Otherwise reuse persistent layouts with bounded `drawMesh` calls, or update one preallocated combined vertex buffer and draw once. Never allocate combined arrays in the frame loop.
 
 Dynamic combined meshes trade draw-call count for QuickJS CPU work and upload bandwidth: keep object/vertex counts bounded and prefer rigid per-object draws when batching would require large per-frame CPU transforms. Post-process taps offset from the base UV must clamp UVs and account for each sampled pixel's occupancy/depth mask; otherwise cleared background samples bleed dark/color fringes around silhouettes.
 
@@ -334,7 +360,7 @@ GPU handles are bounded integer IDs, not mutable objects. Cross-platform limits 
 
 Uniforms default to zero and persist on a program. Before every body draw, set every changing uniform used by that shader (`u_model`, `u_mvp`, material/color, camera/light data), then draw with that body's persistent layout. Omitting `u_model` can collapse world-space positions/normals even if `u_mvp` still places geometry; omitting color commonly yields transparent/black output.
 
-Draw options: `mode triangles|triangle_strip|triangle_fan|lines|line_strip|points`; `count` required; `target` optional; `depthTest` false by default; `depthWrite` true when depthTest; `cull none|back|front`; `blend none|alpha|add|premultiplied`.
+Draw options: `mode triangles|triangle_strip|triangle_fan|lines|line_strip|points`; `count` required; `first`, `target`, `instanceCount` (default 1) optional; `depthTest` true and `depthWrite` true by default; `cull none|back|front` (default none); `blend alpha|premult|add|none` (default alpha).
 
 Standard mesh attribute locations: 0 `a_position` vec3, 1 `a_uv` vec2, 2 `a_normal` vec3, 3 `a_color` vec3/vec4, 4 `a_tangent` vec3.
 
@@ -372,7 +398,24 @@ const b2 = sys.audio.loadBuffer('hit.ogg'); const b3 = sys.audio.loadBufferFromB
 sys.audio.setBufferData(b, samplesMinus1To1, offset=0); sys.audio.destroyBuffer(b);
 const play = sys.audio.playBuffer(b, loop=false, gain=1); sys.audio.stopBuffer(play);
 sys.audio.midiToFreq(note); sys.audio.getError();
+// Streams: Budo calls back to fill output chunks / hand over captured ones (Float32Array, interleaved, info.frames*info.channels,
+// info: {frames:256, channels, sampleRate, time, latency, underruns|overruns}); outputs play exactly what is written (no master gain).
+const out = sys.audio.openOutput({channels:2}, (buffer, info) => { /* fill buffer */ }); sys.audio.closeOutput(out); // -1 on failure; latencyMs:N fixes the queue, omitted = adaptive
+const mic = sys.audio.openInput({channels:1}, (samples, info) => { /* copy what you keep */ }); sys.audio.closeInput(mic);
+sys.audio.getSampleRate(); // the device rate streams run at
+// Decoders: WAV/MP3/Ogg/FLAC to float frames a block at a time (any size); path (assets/|files/, seekable) or bytes; push mode for byte sources.
+const dec = sys.audio.openDecoder('assets/song.mp3', {sampleRate: sys.audio.getSampleRate(), channels:2}); // -1 on failure
+sys.audio.decode(dec, float32Out); // frames decoded: 0 at the end (push: or bytes needed), -1 error
+sys.audio.getDecoderInfo(dec); // {sampleRate, channels, sourceSampleRate, sourceChannels, duration (-1 unknown), position, ready, ended, needsData, seekable}
+sys.audio.seekDecoder(dec, seconds); sys.audio.closeDecoder(dec);
+const push = sys.audio.createDecoder({sampleRate, channels}); sys.audio.feedDecoder(push, bytes, isLast); // no seek, no duration
+// Analysis (native, ~40x faster than the same maths in JS): Float32Array in, no allocation per call on the JS side.
+sys.audio.fft(re, im, inverse); // in place, same power-of-two length (2..2^20); inverse scaled by 1/n
+sys.audio.getSpectrum(samples, outDb); // Hann-windowed dB, samples.length/2 bins (bin k = k*rate/length Hz), full-scale sine ~0 dB
+sys.audio.detectPitch(samples, sampleRate, {minFrequency:50, maxFrequency:4000, minClarity:0.7, minLevel:-60}); // {frequency (0: none), clarity 0..1, level dB}; McLeod method, fundamental even under louder harmonics; lowest = rate/(length/2)
 ```
+
+Streams and analysis are JS only. Their callbacks run on the app thread before and after each frame's drawing: keep them quick. Output queues are adaptive unless `latencyMs` is given (start 20 ms, 40 Android, 30 web; grow after an underrun, shrink when steady; `info.latency` is the current size). Recording needs `RECORD_AUDIO` in app.json `permissions` on Android (the first openInput asks and returns -1: open again once granted) and https or localhost on the web.
 
 Start audio lazily from a user gesture; web audio may fail/stay silent at load. `input.keyboard` contains modifiers only, so it is not an "any key" signal: use `pointer.pressed` or explicit `isKeyPressed(scancode)`. Initialize transactionally—mark ready only after the required resources exist; on failure destroy partial oscillators and allow a later gesture to retry.
 
@@ -403,7 +446,7 @@ sys.midi.onSessionMessage(s, callback); sys.midi.sessionSend(s,status,d1,d2); sy
 sys.midi.sessionNoteOff(s,ch,note,vel); sys.midi.sessionControlChange(s,ch,cc,value); sys.midi.sessionSendRaw(s,bytes); sys.midi.getSessions();
 ```
 
-Message shape: `{status,data1,data2,type,channel}`. SysEx adds `data`. RTP messages add `network:true`.
+Message shape: `{status,data1,data2,type,channel,timestamp}` (timestamp: monotonic µs, 0 if unknown). SysEx adds `data` (complete F0..F7, reassembled across packets, ≤65535 bytes). Messages and SysEx arrive in device order; real-time bytes are not reported; ≤1024 events (32 SysEx) per frame. RTP messages add `network:true`. Device indices shift on hot-plug: remember devices by name and re-resolve in `onDevicesChanged`.
 
 ### SQLite, files/assets, network, UDP
 
@@ -414,6 +457,7 @@ sys.db.lastInsertId(db); sys.db.getError(); sys.db.close(db); // params: null,bo
 
 sys.files.list(); // [{name:'assets',type:'directory'}, {name:'files',type:'directory'}]
 sys.files.list('assets'); sys.files.readText('assets/config.json'); sys.files.readBinary('assets/image.png');
+const f = sys.files.openRead('files/big.bin'); sys.files.read(f, 65536); /* ArrayBuffer, empty at the end, null on error */ sys.files.seek(f, byteOffset); sys.files.getReadInfo(f); /* {size, position} */ sys.files.closeRead(f); // block reads, JS only; openRead returns null on failure
 sys.assets.list(); sys.assets.readText('config.json'); sys.assets.readBinary('image.png'); // read-only wrapper over sys.files assets/
 sys.assets.exists('config.json'); sys.assets.isDirectory('images'); sys.assets.size('image.png'); sys.assets.getError();
 sys.files.list('files'); sys.files.readText('files/settings.json');
@@ -454,6 +498,15 @@ sys.sensors.start(); sys.sensors.stop(); sys.sensors.isActive();
 sys.sensors.getAccel();   // {x,y,z} m/s^2 or null
 sys.sensors.getCompass(); // {x,y,z,heading} uT/degrees or null
 sys.device.keepScreenOn(true|false); // returns accepted bool
+sys.device.setClipboardText(text); sys.device.getClipboardText(); // string|null; web returns the last copied/pasted text
+sys.device.haptic('light'|'medium'|'heavy'|'selection'|'success'|'warning'|'error'); // false without haptics (desktop)
+sys.device.getPreferences(); // {darkMode, reducedMotion, highContrast, fontScale, safeArea:{top,right,bottom,left}, keyboardInset} (physical px; keyboardInset: height the on-screen keyboard covers, 0 when hidden)
+sys.device.setCursor('default'|'text'|'pointer'|'grab'|'grabbing'|'move'|'ew-resize'|'ns-resize'|'nwse-resize'|'nesw-resize'|'not-allowed'|'wait'|'crosshair'|'none');
+
+sys.accessibility.isAvailable(); // web, Android, macOS (VoiceOver); false on Windows/Linux for now
+sys.accessibility.isActive();    // a screen reader probably runs (always true on web)
+sys.accessibility.update([{id, role, label, value?, x, y, width, height, checked?, selected?, focused?, disabled?, expanded?, min?, max?, rangeValue?}]);
+sys.accessibility.takeActions(); // [{id, action:'press'|'focus'|'increment'|'decrement'|'setValue', value}]
 
 sys.capabilities.neural.available; sys.capabilities.midi.available; sys.capabilities.udp.available;
 sys.capabilities.http.available; sys.capabilities.sensors.available;
@@ -497,6 +550,37 @@ cancels generation on pause.
 
 Tensor info: `{name, shape:number[], dtype:'float32'|'int32'|'int64'|'uint8'}`. JS tensor arrays: `Float32Array|Int32Array|BigInt64Array|Uint8Array`. Dynamic shape dimension is `-1`; inferred from input element count when possible. Execution providers: macOS CoreML then CPU; Android NNAPI then CPU; Linux CPU. ONNX only. Requires `app.json` `{ "neural": true }` for apps.
 
+### UI toolkit (budo-ui)
+
+JavaScript only. `budo init <dir> --template ui` writes the library to `ui/` (the app owns and may edit it; `ui/README.md` lists every widget) and a starter `main.js`. Immediate mode: draw the whole interface from app data every frame; the library keeps only interaction and motion state under stable ids.
+
+```js
+import { createUI, themes } from './ui/budo-ui.js';
+const ui = createUI();            // once, outside the frame
+ui.setTheme('system');            // or themes.light / themes.dark; colors animate
+const name = { value: '' }; let on = false, level = 0.5, choice = 'A';
+function frame() {
+  ui.begin(sys.input.get());      // ui.bounds = window minus notches/system bars
+  ui.clear();
+  const [a, b, c, d, e] = ui.rows(ui.inset(ui.bounds, ui.dp(16)), [48, 48, 48, 48, 48].map(ui.dp), ui.dp(8));
+  ui.field('name', a, name, { placeholder: 'Name' });     // edits name.value in place
+  on = ui.toggle('on', 'Enabled', b, on);                  // returns the new value
+  level = ui.slider('level', c, level, { label: 'Level' });
+  choice = ui.segmented('choice', d, ['A', 'B', 'C'], choice);
+  if (ui.button('save', 'Save', e, { primary: true })) ui.toast('Saved');  // true on click
+  ui.end();
+  ui.nextFrame(frame);            // next frame while animating, else wait for input
+}
+sys.animation.requestFrame(frame);
+```
+
+- Rectangles are physical pixels; `ui.dp(n)` converts dp, `ui.sp(n)` follows the text scale. `rows`/`columns(rect, sizes, gap)` take numbers, `{weight:n}`, or `{content:n}`; also `inset`, `split`, `scroll(id, rect, contentHeight, draw)`, `panel(rect, draw)`, `scope(id, draw)`.
+- Widgets: `button` (`primary`, `ghost`, `danger`, `icon: 'plus'`), `iconButton(id, icon, rect, {label})`, `menu`, `contextMenu`, `toggle`, `checkbox`, `radio`, `segmented`, `tabs`, `select`, `slider`, `field`, `inlineEdit`, `textArea(id, rect, {value}, {placeholder,label,maxLength,readOnly})` (multiline: wrap, scroll, selection, word moves, undo), `label`, `paragraph`, `richText`, `progress`, `spinner`, `skeleton`, `tooltip`, `toast`, `list` (returns `{selectedId, move, swipedId}`), `table(id, rect, {columns:[{key,label,width?,align?,sortable?}], rowCount, row:i=>obj, rowId:i=>id, selectedId, sort})` (virtualized; returns `{selectedId, activatedId, sort}`, app re-sorts), `tree(id, rect, [{id,label,children?,icon?,expanded?}], {selectedId})` (returns `{selectedId, activatedId, toggledId}`), `dialog`/`sheet` (return true when dismissed), `navigator(id, rect, stack, drawPage)` (returns true on back) with `shared(tag, rect, draw)`, `glass`, `layer`, `overlay`.
+- Icons: `ui.icon(nameOrPathData, rect, {color})`; built in: check close plus minus chevronLeft/Right/Up/Down arrowLeft/Right menu more search trash edit copy star heart home user info alert refresh sun moon folder file; `ui.registerIcon(name, d)` adds 24-unit SVG path data. Theme tokens `elevation` (3 shadow levels, `ui.shadow(rect, level)`) and `accentGradient` ([top, bottom] colors for accent fills).
+- Motion: `ui.spring(key, target)`, `ui.color(key, color)`, `ui.rect(key, rect)`, `ui.presence(key, visible, t => ...)`. Never hand-roll easing for widget states.
+- Custom widgets: draw with `ui.fill/outline/text` or `sys.canvas`, then `ui.interact(id, rect, { cursor, a11y: { role, label } })` → `{hovered, held, clicked, focused}`; `a11y` makes it Tab-focusable and screen-reader visible.
+- Built in, no app code: keyboard focus (Tab, Enter/Space, focus traps in dialogs), touch momentum, cursors, clipboard, haptics, reduced motion, dark mode, text scale, screen readers. Call `ui.nextFrame(frame)` (not `requestFrame`) at the end so idle apps sleep; `ui.wakeAfter(seconds)` schedules timed changes.
+
 ## Lua runtime
 
 Lua 5.4 globals: `sys`, `console.log`, callback-based `fetch`, `json_parse`. No Budo module system beyond normal Lua libraries. Same core namespaces as JS except `sys.timer` and `sys.graphics` are not available. `sys.capabilities` exists on desktop, Android, and current web builds.
@@ -518,6 +602,7 @@ Arrays/lists are 1-based Lua tables.
 No sys.timer. No sys.graphics/CanvasTexture.
 Lua `sys.input` supports the same committed text, textEdit, composition, and start/update/stopTextInput session contract as JS.
 sys.animation.start(callback) aliases requestFrame.
+sys.exit(code) sets the status; the app ends after the current script or callback returns.
 fetch(url, callback) or fetch(url, options, callback); callback(response,error).
 response table: status,statusText,ok,url,redirected,headers,body,bodyLen.
 json_parse(jsonString) returns Lua table.
@@ -532,13 +617,17 @@ sys.midi.sendRaw(handle, bytesTable); SysEx data is 1-based table.
 sys.db.query returns 1-based list of row tables.
 sys.neural.run(model,{input={data={...},shape={...}}}) returns output tables {data,shape,dtype}.
 sys.neural.setInput(model,name,dataTable,shape?) and getOutput(model,name) also exist.
+sys.canvas.setGradient('linear',x0,y0,x1,y1,{'#F00','#00F'},{0,1}); colors/stops are 1-based tables.
+sys.canvas.drawParagraph(text,x,y,width,size,{align='center',lineHeight=1.25,maxLines=2}) returns {width,height,lines}.
+sys.canvas.drawRichText({'plain ', { text = 'big', size = 24, color = '#C00' }}, x, y, width, { size = 16 }); spans are 1-based tables.
+sys.accessibility.update(nodes) takes a 1-based table of node tables; takeActions() returns one.
 ```
 
 Lua `sys.gl` includes: `createProgram`, `createProgramFromBuffer`, `destroyProgram`, `drawFullscreen`, uniforms `setUniform1i/1f/2f/3f/4f`, render targets `createRenderTarget/destroyRenderTarget/resizeRenderTarget/drawRegion/bindTexture`, 3D buffers/textures/layout/uniform arrays/mesh draw, plus `loadTextureCube` and `loadTextureCubeFromBuffer`.
 
 ## WebAssembly runtime
 
-WASM runs through Wasmtime. Imports are from module `env`. Exports: optional `init`, recommended `frame(timestamp:f32)`, optional `memory`. `init` runs once; `frame` runs per frame. String-backed host calls require exported memory, but current runtime resolves exported `memory` after `init`; therefore do string-backed calls from `frame` or later, not `init`.
+WASM runs through Wasmtime. Imports are from module `env`. Exports: optional `init`, recommended `frame(timestamp:f32)`, optional `memory`. `init` runs once; `frame` runs per frame. A module without `frame` that never draws runs `init` without a window and ends. Import `app_exit(i32)` ends the app with that status (it traps to stop the module). String-backed host calls require exported memory, but current runtime resolves exported `memory` after `init`; therefore do string-backed calls from `frame` or later, not `init`.
 
 Numeric-only imports can be used in `init`: drawing shapes, transforms, scalar input/window, math, capability probes. String-backed calls needing memory include GL program/uniform names, DB, file, SVG, UDP host strings, network, raw MIDI/RTP-MIDI strings, neural strings, text draw/measure.
 
@@ -565,7 +654,11 @@ WASM import groups (exact names):
 ```text
 Drawing: canvas_clear(i32), canvas_draw_rect(f32x4), canvas_draw_round_rect(f32x6), canvas_draw_circle(f32x3), canvas_draw_oval(f32x4), canvas_draw_line(f32x4), canvas_draw_point(f32x2), canvas_draw_arc(f32x6,i32), canvas_read_pixels(ptr,max)->bytes, canvas_draw_text(ptr,len,x,y,size)->width, canvas_measure_text(ptr,len,size)->width, canvas_measure_text_rect(ptr,len,size,outW,outH).
 Canvas style: canvas_set_fill_color(i32), canvas_set_stroke_color(i32), canvas_set_stroke_width(f32), canvas_set_anti_alias(i32), canvas_set_alpha(i32), advanced canvas_set_blend_mode(i32), canvas_set_blur_filter(f32,f32), canvas_set_drop_shadow_filter(f32,f32,f32,f32,i32), canvas_set_drop_shadow_only_filter(f32,f32,f32,f32,i32), canvas_clear_image_filter(), canvas_set_color_matrix_filter(ptr,len20), canvas_set_blend_color_filter(color,blendMode), canvas_clear_color_filter().
-Transform/path: transform_save/restore/translate/rotate/rotate_around/scale, canvas_skew, canvas_reset_transform, canvas_clip_rect, path_create/reset/move_to/line_to/quad_to/cubic_to/close/add_rect/add_circle/draw.
+Gradients: canvas_set_linear_gradient(x0,y0,x1,y1,colorsPtr,stopsPtr,count), canvas_set_radial_gradient(cx,cy,r,colorsPtr,stopsPtr,count), canvas_set_sweep_gradient(cx,cy,colorsPtr,stopsPtr,count), canvas_clear_gradient(). Colors are u32 ARGB, stops f32; stopsPtr -1 spaces colors evenly; count 2..16. Fill/stroke color setters clear the gradient.
+Paragraphs: canvas_draw_paragraph(ptr,len,x,y,width,size,align(0 left,1 center,2 right),lineHeight,maxLines)->height, canvas_measure_paragraph(ptr,len,width,size,lineHeight,maxLines,outPtr)->height; outPtr >= 0 receives {f32 width, f32 height, i32 lines}. y is the paragraph top; lineHeight <= 0 means 1.25.
+Rich text: canvas_draw_rich_text(spansPtr,count,x,y,width,align,lineHeight,maxLines)->height, canvas_measure_rich_text(spansPtr,count,width,lineHeight,maxLines,outPtr)->height; spans are 16-byte records {i32 textPtr, i32 textLen, f32 size (<=0 default), u32 argb (0 = paint)}.
+Frames/device/accessibility: animation_wait_for_input(f32 timeoutMs) skips frame() calls until input, resize, or timeout (<=0: none); device_set_clipboard_text(ptr,len)->i32, device_get_clipboard_text(ptr,max)->byteLength or -1, device_haptic(kind 0 light..6 error)->i32, device_get_preference(id 0 darkMode,1 reducedMotion,2 highContrast,3 fontScale,4..7 safe top/right/bottom/left)->f32, device_set_cursor(0 default,1 text,2 pointer,3 grab,4 grabbing,5 move,6 ew,7 ns,8 nwse,9 nesw,10 not-allowed,11 wait,12 crosshair,13 none)->i32; accessibility_is_available/is_active()->i32, accessibility_update(jsonPtr,len)->i32, accessibility_take_actions(ptr,max)->JSON length (written only when it fits).
+Transform/path: transform_save/restore/translate/rotate/rotate_around/scale, canvas_skew, canvas_reset_transform, canvas_clip_rect, canvas_clip_round_rect(x,y,w,h,rx,ry), canvas_clip_path(path), canvas_save_layer(alpha), canvas_save_layer_bounds(x,y,w,h,alpha,backdropBlur) (end both with transform_restore), path_create/reset/move_to/line_to/quad_to/cubic_to/close/add_rect/add_circle/draw, path_add_svg(path,ptr,len)->i32 (1 when parsed; also in the browser bridge).
 SVG/window/input/log/math: svg_load/destroy/draw/get_width/get_height; window_get_width/height/display_density; input_get_mouse_x/y, input_get_mouse_button(0 left,1 middle,2 right), input_get_key_down(scancode), input_get_delta_time, input_get_total_time; log_int, log_float; sin, cos, sqrt, atan2(y,x).
 GL shaders: gl_create_program(vPtr,vLen,fPtr,fLen)->id, gl_destroy_program, gl_draw_fullscreen, gl_set_uniform_1i/1f/2f/3f/4f, gl_set_uniform_matrix3fv/4fv, gl_set_uniform_1iv/1fv/2fv/3fv/4fv.
 GL targets/3D: gl_create_render_target(w,h,depth)->id, gl_destroy_render_target, gl_resize_render_target, gl_draw_region(program,x,y,w,h,target), gl_bind_texture(program,namePtr,nameLen,rt,unit), gl_create_buffer, gl_buffer_data, gl_buffer_sub_data, gl_destroy_buffer, gl_create_texture_2d, gl_load_texture_2d, gl_update_texture_2d, gl_destroy_texture, gl_load_texture_cube, gl_create_vertex_layout, gl_destroy_vertex_layout, gl_set_attribute, gl_set_index_buffer, gl_bind_texture_2d, gl_bind_texture_cube, gl_draw_mesh, gl_get_attrib_location.
@@ -634,15 +727,15 @@ Canvas + shader compositing (Skia UI over a generated background):
 // precision highp float; in vec2 v_uv; out vec4 o; uniform sampler2D u_canvas;
 // uniform vec2 u_resolution; uniform float u_time;
 // void main(){ vec3 bg = 0.5+0.5*cos(u_time+v_uv.xyx+vec3(0,2,4));
-//   vec4 ui = texture(u_canvas, vec2(v_uv.x, 1.0-v_uv.y));
+//   vec4 ui = texture(u_canvas, v_uv);
 //   o = vec4(ui.rgb + bg*(1.0-ui.a), 1.0); }
-const shader = sys.gl.createShaderProgram({vertex:'fs.vert', fragment:'fs.frag'});
+const program = sys.gl.createProgram('fs.vert', 'fs.frag');
 function frame(t) {
   sys.canvas.clear('#00000000');
   sys.canvas.setFillColor('#FFFFFF');
   sys.canvas.drawText('Hello', 40, 80, 32);
   sys.gl.bindScreen();
-  shader.drawFullscreen(); // draw supplies u_canvas/u_resolution/u_time
+  sys.gl.drawFullscreen(program); // draw supplies u_canvas/u_resolution/u_time
   sys.animation.requestFrame(frame);
 }
 sys.animation.requestFrame(frame);

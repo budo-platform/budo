@@ -55,6 +55,25 @@ static void test_timer_isolation(JSRuntimeContext *canvas_a,
     assert(canvas_b->current_timestamp_ms == 5000.0);
 }
 
+static void test_timer_callback_adding_timers(JSRuntimeContext *canvas)
+{
+    eval_direct(canvas,
+                "globalThis.grown = 0;"
+                "sys.timer.once(1, function () {"
+                "  for (let i = 0; i < 64; i++) sys.timer.once(1000000, function () {});"
+                "  grown++;"
+                "});");
+    double now = canvas->current_timestamp_ms;
+    js_runtime_process_timers(canvas, now + 2.0);
+    eval_direct(canvas, "if (grown !== 1) throw Error('the timer did not fire');");
+    js_runtime_process_timers(canvas, now + 4.0);
+    eval_direct(canvas, "if (grown !== 1) throw Error('a fired one-shot timer fired again');");
+    int active = 0;
+    for (int i = 0; i < canvas->timer_count; i++)
+        active += canvas->timers[i].active ? 1 : 0;
+    assert(active >= 64);
+}
+
 static void test_resource_isolation(JSRuntimeContext *canvas_a,
                                     JSRuntimeContext *canvas_b,
                                     JSGraphicContext *graphic_a,
@@ -104,6 +123,7 @@ int main(int argc, char **argv)
                 "sys.canvas.measureTextRect('Canvas workspace', 20).width <= 0) "
                 "throw Error('default font text measurement is zero');");
     test_timer_isolation(canvas_a, canvas_b);
+    test_timer_callback_adding_timers(canvas_a);
     test_resource_isolation(canvas_a, canvas_b, graphic_a, graphic_b);
     eval_direct(canvas_a, "console.log('canvas conformance');");
 

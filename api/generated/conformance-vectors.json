@@ -523,6 +523,246 @@
     {
       "exports": {
         "javascript": [
+          "getSampleRate"
+        ]
+      },
+      "operation": "get_sample_rate",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> i32 frames per second of the device (stream callbacks run at it)",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "openOutput"
+        ]
+      },
+      "operation": "open_output",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(options?: {channels: 1|2, latencyMs}, callback: (buffer: f32[] interleaved, info) -> void) -> i32 stream; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "closeOutput"
+        ]
+      },
+      "operation": "close_output",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(stream: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "openInput"
+        ]
+      },
+      "operation": "open_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(options?: {channels: 1|2, latencyMs}, callback: (samples: f32[] interleaved, info) -> void) -> i32 stream; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "closeInput"
+        ]
+      },
+      "operation": "close_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(stream: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "openDecoder"
+        ]
+      },
+      "operation": "open_decoder",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(source: assets/|files/ path | bytes, options?: {sampleRate, channels}) -> i32 decoder; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "createDecoder"
+        ]
+      },
+      "operation": "create_decoder",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(options?: {sampleRate, channels}) -> i32 push decoder",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "feedDecoder"
+        ]
+      },
+      "operation": "feed_decoder",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(decoder: i32, bytes: bytes|null, end?: bool) -> bool",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "decode"
+        ]
+      },
+      "operation": "decode",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(decoder: i32, out: f32[]) -> i32 frames; 0 at the end or when bytes are needed; -1 on failure",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getDecoderInfo"
+        ]
+      },
+      "operation": "get_decoder_info",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(decoder: i32) -> decoder info",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "seekDecoder"
+        ]
+      },
+      "operation": "seek_decoder",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(decoder: i32, seconds: f64) -> bool",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "closeDecoder"
+        ]
+      },
+      "operation": "close_decoder",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(decoder: i32) -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "fft"
+        ]
+      },
+      "operation": "fft",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(re: f32[], im: f32[], inverse: bool) -> bool; in place, power-of-two lengths",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getSpectrum"
+        ]
+      },
+      "operation": "get_spectrum",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(samples: f32[], out_db: f32[]) -> f32[] Hann-windowed levels in dB, samples.length / 2 bins",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "detectPitch"
+        ]
+      },
+      "operation": "detect_pitch",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(samples: f32[], sample_rate: f64, options: pitch options) -> pitch {frequency, clarity, level}",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
           "drawPath"
         ],
         "lua": [
@@ -1362,6 +1602,259 @@
     {
       "exports": {
         "javascript": [
+          "setGradient"
+        ],
+        "lua": [
+          "setGradient"
+        ]
+      },
+      "operation": "set_gradient",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "set or clear a linear/radial/sweep gradient on the default paint",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_linear_gradient"
+        ]
+      },
+      "operation": "set_linear_gradient",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x0:f32, y0:f32, x1:f32, y1:f32, colors_ptr:i32, stops_ptr:i32, count:i32) -> void; stops_ptr < 0 spaces colors evenly",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_radial_gradient"
+        ]
+      },
+      "operation": "set_radial_gradient",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(cx:f32, cy:f32, radius:f32, colors_ptr:i32, stops_ptr:i32, count:i32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_set_sweep_gradient"
+        ]
+      },
+      "operation": "set_sweep_gradient",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(cx:f32, cy:f32, colors_ptr:i32, stops_ptr:i32, count:i32) -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_clear_gradient"
+        ]
+      },
+      "operation": "clear_gradient",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "clipRoundRect"
+        ],
+        "lua": [
+          "clipRoundRect"
+        ],
+        "wasmtime": [
+          "canvas_clip_round_rect"
+        ]
+      },
+      "operation": "clip_round_rect",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32, rx:f32, ry:f32) -> void; managed bindings default ry to rx",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "clipPath"
+        ],
+        "lua": [
+          "clipPath"
+        ],
+        "wasmtime": [
+          "canvas_clip_path"
+        ]
+      },
+      "operation": "clip_path",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path) -> void; unknown paths throw in managed bindings",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "saveLayer"
+        ],
+        "lua": [
+          "saveLayer"
+        ],
+        "wasmtime": [
+          "canvas_save_layer"
+        ]
+      },
+      "operation": "save_layer",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(alpha?:0..255, x?, y?, width?, height?, backdropBlur?) -> void; restore() composites the layer",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "wasmtime": [
+          "canvas_save_layer_bounds"
+        ]
+      },
+      "operation": "save_layer_bounds",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(x:f32, y:f32, width:f32, height:f32, alpha:i32, backdrop_blur:f32) -> void; clips the layer to its bounds",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawParagraph"
+        ],
+        "lua": [
+          "drawParagraph"
+        ],
+        "wasmtime": [
+          "canvas_draw_paragraph"
+        ]
+      },
+      "operation": "draw_paragraph",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "draw wrapped UTF-8 text in a box and return its metrics",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "measureParagraph"
+        ],
+        "lua": [
+          "measureParagraph"
+        ],
+        "wasmtime": [
+          "canvas_measure_paragraph"
+        ]
+      },
+      "operation": "measure_paragraph",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "measure wrapped UTF-8 text",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "drawRichText"
+        ],
+        "lua": [
+          "drawRichText"
+        ],
+        "wasmtime": [
+          "canvas_draw_rich_text"
+        ]
+      },
+      "operation": "draw_rich_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "draw wrapped text made of styled spans and return its metrics",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "measureRichText"
+        ],
+        "lua": [
+          "measureRichText"
+        ],
+        "wasmtime": [
+          "canvas_measure_rich_text"
+        ]
+      },
+      "operation": "measure_rich_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "measure wrapped styled spans",
+      "subsystem": "canvas",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
           "neural"
         ],
         "lua": [
@@ -1567,6 +2060,116 @@
     {
       "exports": {
         "javascript": [
+          "setClipboardText"
+        ],
+        "lua": [
+          "setClipboardText"
+        ],
+        "wasmtime": [
+          "device_set_clipboard_text"
+        ]
+      },
+      "operation": "set_clipboard_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(text: string) -> bool",
+      "subsystem": "device",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getClipboardText"
+        ],
+        "lua": [
+          "getClipboardText"
+        ],
+        "wasmtime": [
+          "device_get_clipboard_text"
+        ]
+      },
+      "operation": "get_clipboard_text",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> string|null",
+      "subsystem": "device",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "haptic"
+        ],
+        "lua": [
+          "haptic"
+        ],
+        "wasmtime": [
+          "device_haptic"
+        ]
+      },
+      "operation": "haptic",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(kind?: haptic) -> bool",
+      "subsystem": "device",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getPreferences"
+        ],
+        "lua": [
+          "getPreferences"
+        ],
+        "wasmtime": [
+          "device_get_preference"
+        ]
+      },
+      "operation": "get_preferences",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> preferences",
+      "subsystem": "device",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "setCursor"
+        ],
+        "lua": [
+          "setCursor"
+        ],
+        "wasmtime": [
+          "device_set_cursor"
+        ]
+      },
+      "operation": "set_cursor",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(name?: cursor) -> bool",
+      "subsystem": "device",
+      "test": "basic_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
           "create"
         ],
         "lua": [
@@ -1759,6 +2362,28 @@
         "wasmtime"
       ],
       "signature": "(path, cx:f32, cy:f32, radius:f32) -> void",
+      "subsystem": "drawing_resources",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "addSvg"
+        ],
+        "lua": [
+          "addSvg"
+        ],
+        "wasmtime": [
+          "path_add_svg"
+        ]
+      },
+      "operation": "path_add_svg",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path, data:string) -> bool",
       "subsystem": "drawing_resources",
       "test": "canvas_host_runtime_conformance"
     },
@@ -2158,6 +2783,86 @@
         "wasmtime"
       ],
       "signature": "() -> string",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "openRead"
+        ]
+      },
+      "operation": "open_read",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: string) -> i32 handle|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "read"
+        ]
+      },
+      "operation": "read_block",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: i32, max_bytes?: i32) -> bytes (empty at the end)|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "seek"
+        ]
+      },
+      "operation": "seek",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: i32, byte_offset: f64) -> bool",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "getReadInfo"
+        ]
+      },
+      "operation": "get_read_info",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: i32) -> {size, position}",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "closeRead"
+        ]
+      },
+      "operation": "close_read",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(handle: i32) -> void",
       "subsystem": "file",
       "test": "sqlite_file_runtime_conformance"
     },
@@ -4583,6 +5288,28 @@
         "wasmtime"
       ],
       "signature": "(callback(timestamp_ms)) -> handle 1; replace the persistent managed frame callback",
+      "subsystem": "scheduling",
+      "test": "canvas_host_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "waitForInput"
+        ],
+        "lua": [
+          "waitForInput"
+        ],
+        "wasmtime": [
+          "animation_wait_for_input"
+        ]
+      },
+      "operation": "wait_for_input",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(callback(timestamp_ms), timeout_ms?) -> handle 1; like request_frame, but the callback runs only on the next input event, canvas resize, or timeout; hosts may sleep meanwhile",
       "subsystem": "scheduling",
       "test": "canvas_host_runtime_conformance"
     },

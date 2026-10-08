@@ -852,7 +852,7 @@ static int l_gl_draw_mesh(lua_State *L)
     int program_id = (int)luaL_checkinteger(L, 1);
     int layout_id = (int)luaL_checkinteger(L, 2);
 
-    int first = 0, count = 0, target_id = -1, instance_count = 1;
+    int first = 0, count = 0, target_id = 0, instance_count = 1;
     WindowGLPrimitive mode = WINDOW_GL_PRIM_TRIANGLES;
     WindowGLDrawState state;
     state.depth_test = true;

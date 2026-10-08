@@ -1,0 +1,9 @@
+{
+    "name": "Microphone",
+    "description": "Records the microphone with sys.audio.openInput: a level meter, a waveform, a spectrogram with the dominant note, recording and playback, and live monitoring.",
+    "author": "Budo",
+    "version": "1.0.0",
+    "date": "2026-10-06",
+    "icon": "icon.svg",
+    "permissions": ["RECORD_AUDIO"]
+}

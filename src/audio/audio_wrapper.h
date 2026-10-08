@@ -1,6 +1,8 @@
 #ifndef AUDIO_WRAPPER_H
 #define AUDIO_WRAPPER_H
 
+#include "audio_streams.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -115,6 +117,24 @@ extern "C"
     }
 
     const char *audio_get_error(AudioContext *ctx);
+
+    int audio_stream_sample_rate(AudioContext *ctx);
+    
+    int audio_output_open(AudioContext *ctx, int channels, double latency_ms);
+    void audio_output_close(AudioContext *ctx, int id);
+    
+    int audio_output_wanted(AudioContext *ctx, int id);
+    int audio_output_write(AudioContext *ctx, int id, const float *frames, int count);
+    
+    int audio_input_open(AudioContext *ctx, int channels, double latency_ms);
+    void audio_input_close(AudioContext *ctx, int id);
+    int audio_input_available(AudioContext *ctx, int id);
+    int audio_input_read(AudioContext *ctx, int id, float *frames, int count);
+    bool audio_stream_get_stats(AudioContext *ctx, bool input, int id, AudioStreamStats *out);
+    
+    bool audio_streams_active(AudioContext *ctx);
+    
+    void audio_streams_serviced(AudioContext *ctx);
 
 #ifdef __cplusplus
 }

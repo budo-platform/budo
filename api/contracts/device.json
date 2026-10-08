@@ -44,6 +44,18 @@
       "platforms": [
         "desktop"
       ]
+    },
+    "browser_wasm": {
+      "source": "src/web/web_main.c",
+      "registration_symbol": "js_web_wasm_start",
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "export_extractor": "javascript_object_key",
+      "export_prefixes": [
+        "device_"
+      ]
     }
   },
   "operations": [
@@ -55,7 +67,68 @@
       "exports": {
         "javascript": "keepScreenOn",
         "lua": "keepScreenOn",
-        "wasmtime": "device_keep_screen_on"
+        "wasmtime": "device_keep_screen_on",
+        "browser_wasm": "device_keep_screen_on"
+      }
+    },
+    {
+      "name": "set_clipboard_text",
+      "wrapper_symbol": "device_set_clipboard_text",
+      "signature": "(text: string) -> bool",
+      "typescript_description": "Copy UTF-8 text to the system clipboard. Returns false when the platform refuses. On the web, the browser may require a recent user gesture.",
+      "exports": {
+        "javascript": "setClipboardText",
+        "lua": "setClipboardText",
+        "wasmtime": "device_set_clipboard_text",
+        "browser_wasm": "device_set_clipboard_text"
+      }
+    },
+    {
+      "name": "get_clipboard_text",
+      "wrapper_symbol": "device_get_clipboard_text",
+      "signature": "() -> string|null",
+      "typescript_description": "Read the clipboard text, or null when it holds none. On the web, browsers only expose the clipboard asynchronously, so this returns the last text copied, cut, or pasted on the page.",
+      "exports": {
+        "javascript": "getClipboardText",
+        "lua": "getClipboardText",
+        "wasmtime": "device_get_clipboard_text",
+        "browser_wasm": "device_get_clipboard_text"
+      }
+    },
+    {
+      "name": "haptic",
+      "wrapper_symbol": "device_haptic",
+      "signature": "(kind?: haptic) -> bool",
+      "typescript_description": "Play haptic feedback (default \"light\"). Returns false where the device has no haptics (desktop). Throws RangeError on an unknown kind.",
+      "exports": {
+        "javascript": "haptic",
+        "lua": "haptic",
+        "wasmtime": "device_haptic",
+        "browser_wasm": "device_haptic"
+      }
+    },
+    {
+      "name": "get_preferences",
+      "wrapper_symbol": "device_get_preferences",
+      "signature": "() -> preferences",
+      "typescript_description": "Read the user's system preferences: dark mode, reduced motion, high contrast, text scale, safe-area insets, and the on-screen keyboard's height, in physical pixels. Cheap to call every frame.",
+      "exports": {
+        "javascript": "getPreferences",
+        "lua": "getPreferences",
+        "wasmtime": "device_get_preference",
+        "browser_wasm": "device_get_preference"
+      }
+    },
+    {
+      "name": "set_cursor",
+      "wrapper_symbol": "device_set_cursor",
+      "signature": "(name?: cursor) -> bool",
+      "typescript_description": "Set the mouse cursor shape using CSS cursor names (default \"default\"). Returns false where there is no mouse cursor. Throws RangeError on an unknown name.",
+      "exports": {
+        "javascript": "setCursor",
+        "lua": "setCursor",
+        "wasmtime": "device_set_cursor",
+        "browser_wasm": "device_set_cursor"
       }
     }
   ]

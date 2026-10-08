@@ -119,6 +119,52 @@ static void runtime_call_animation(ManagedRuntimeKind kind,
     }
 }
 
+static BudoAnimationWait *runtime_animation_wait(ManagedRuntimeKind kind,
+                                                const ManagedRuntimeCommon *contexts)
+{
+    switch (kind)
+    {
+    case MANAGED_RUNTIME_JAVASCRIPT:
+        return js_graphic_animation_wait(contexts->js_graphic_ctx);
+    case MANAGED_RUNTIME_LUA:
+        return lua_canvas_animation_wait(contexts->lua_ctx);
+    case MANAGED_RUNTIME_WEBASSEMBLY:
+#ifdef BUDO_MANAGED_WASMTIME
+        return wasm_canvas_animation_wait(contexts->wasm_ctx, NULL, NULL);
+#else
+        return NULL;
+#endif
+    }
+    return NULL;
+}
+
+double managed_runtime_idle_ms(ManagedRuntimeKind kind,
+                               const ManagedRuntimeCommon *contexts,
+                               double timestamp_ms)
+{
+    if (!contexts || !runtime_has_animation(kind, contexts))
+        return -1.0;
+    double idle = budo_animation_wait_remaining(runtime_animation_wait(kind, contexts), timestamp_ms);
+    
+    if (idle >= 0.0 && kind == MANAGED_RUNTIME_JAVASCRIPT)
+    {
+        double audio = js_audio_max_idle_ms(contexts->js_audio_ctx);
+        if (audio >= 0.0 && audio < idle)
+            idle = audio;
+    }
+    if (idle >= 0.0 && kind == MANAGED_RUNTIME_JAVASCRIPT && contexts->js_ctx)
+    {
+        const JSRuntimeContext *js = contexts->js_ctx;
+        for (int i = 0; i < js->timer_count; i++)
+            if (js->timers[i].active)
+            {
+                double due = js->timers[i].fire_time - timestamp_ms;
+                idle = due < idle ? (due > 0.0 ? due : 0.0) : idle;
+            }
+    }
+    return idle;
+}
+
 static bool runtime_is_loaded(ManagedRuntimeKind kind,
                               const ManagedRuntimeCommon *contexts)
 {
@@ -150,7 +196,9 @@ void managed_runtime_frame(ManagedRuntimeKind kind,
 
     managed_runtime_set_frame_context(kind, contexts, frame);
     subsystem_registry_poll(subsystems);
-    if (runtime_has_animation(kind, contexts))
+    if (runtime_has_animation(kind, contexts) &&
+        budo_animation_wait_due(runtime_animation_wait(kind, contexts), frame->input,
+                                frame->width, frame->height, timestamp_ms))
     {
         skia_canvas_clear(frame->canvas, SKIA_COLOR_WHITE);
         runtime_call_animation(kind, contexts, timestamp_ms);
@@ -159,6 +207,9 @@ void managed_runtime_frame(ManagedRuntimeKind kind,
     {
         js_runtime_process_timers(contexts->js_ctx, timestamp_ms);
         js_runtime_execute_pending_jobs(contexts->js_ctx);
+
+        if (js_audio_has_pending_work(contexts->js_audio_ctx))
+            js_audio_poll(contexts->js_audio_ctx);
     }
 }
 

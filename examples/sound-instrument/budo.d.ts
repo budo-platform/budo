@@ -90,6 +90,8 @@ interface InputState {
     textEdit: TextInputEdit | null;
     composition: TextInputComposition;
     textInputActive: boolean;
+    /** The platform edits text itself (web input element, mobile IME): do not handle clipboard or editing shortcuts. */
+    nativeTextEditing: boolean;
   deltaTime: number;
   totalTime: number;
   frameCount: number;
@@ -206,17 +208,55 @@ interface Response {
   arrayBuffer(): ArrayBuffer;
 }
 
+interface ParagraphOptions {
+    /** Horizontal alignment inside the paragraph width. Default "left". */
+    align?: "left" | "center" | "right";
+    /** Line height as a multiple of the font size. Default 1.25. */
+    lineHeight?: number;
+    /** Stop after this many lines and end the last one with an ellipsis. 0 (default) means no limit. */
+    maxLines?: number;
+}
+
+/** A run of rich text: a string, or text with its own size, color, or registered font. */
+type RichTextSpan = string | {
+    text: string;
+    /** Font size; defaults to the `size` option, then 32. */
+    size?: number;
+    /** Text color; defaults to the paint color (or gradient). */
+    color?: Color;
+    /** Name of a font registered with sys.font.load; defaults to the active font. */
+    font?: string;
+};
+
+interface RichTextOptions extends ParagraphOptions {
+    /** Default size of spans that do not set one. Default 32. */
+    size?: number;
+}
+
+interface ParagraphMetrics {
+    /** Width of the widest line. */
+    width: number;
+    /** Total height: lines × line height. */
+    height: number;
+    /** Number of lines. */
+    lines: number;
+}
+
 interface CanvasTextureCanvas {
     /** Clear this offscreen canvas texture. */
     clear(color?: Color): void;
-    /** Flush this offscreen canvas texture so its GL texture can be sampled. */
-    flush(): void;
     /** Draw a filled/stroked rectangle into this offscreen canvas texture. */
     drawRect(x: number, y: number, width: number, height: number): void;
     /** Draw a filled/stroked circle into this offscreen canvas texture. */
     drawCircle(cx: number, cy: number, radius: number): void;
     /** Draw text into this offscreen canvas texture. */
     drawText(text: string, x: number, y: number, fontSize?: number): void;
+    /** Set or clear a gradient on this canvas texture's paint; same forms as sys.canvas.setGradient. */
+    setGradient(kind?: "linear" | "radial" | "sweep" | "none" | null, ...args: (number | Color[] | number[])[]): boolean;
+    /** Draw wrapped text into this offscreen canvas texture; same arguments as sys.canvas.drawParagraph. */
+    drawParagraph(text: string, x: number, y: number, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics;
+    /** Measure wrapped text with this canvas texture's font; same arguments as sys.canvas.measureParagraph. */
+    measureParagraph(text: string, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics;
 }
 
 interface CanvasTexture {
@@ -232,8 +272,6 @@ interface CanvasTexture {
     readonly target: number;
     /** Skia drawing API for this offscreen texture. */
     readonly canvas: CanvasTextureCanvas;
-    /** Flush pending Skia work so the backing GL texture can be sampled. */
-    flush(): void;
     /** Resize this texture-backed Skia surface. */
     resize(width: number, height: number): void;
     /** Destroy the owned Skia surface, GL texture, and framebuffer. */
@@ -243,6 +281,87 @@ interface CanvasTexture {
 // -- sys.gl namespace ---------------------------------------------------------
 
 interface SysGL {
+  /** Compile and link a vertex/fragment shader pair. Returns a positive program ID. Throws on failure. */
+  createProgram(vertexPath: string, fragmentPath: string): number;
+
+  /** Compile and link a vertex/fragment shader pair from in-memory shader source buffers. Returns a positive program ID. Throws on failure. */
+  createProgramFromBuffer(vertexSource: ArrayBuffer | ArrayBufferView, fragmentSource: ArrayBuffer | ArrayBufferView): number;
+
+  /** Destroy a previously created shader program. */
+  destroyProgram(programId: number): void;
+
+  /** Bind a shader program immediately as the current GL program. */
+  useProgram(program: number): void;
+
+  /** Bind the screen/default framebuffer immediately and set the viewport to the window size. */
+  bindScreen(): void;
+
+  /** Bind an app render target immediately and set its viewport. Omit targetId to bind the screen. */
+  bindRenderTarget(targetId?: number): void;
+
+  /** Draw a fullscreen shader immediately using the given program. */
+  drawFullscreen(programId: number): void;
+
+  /** Draw a fullscreen shader immediately against the currently bound target. */
+  drawFullscreenImmediate(program: number, sourceTexture?: number | CanvasTexture): void;
+
+  /** Set an integer uniform on a shader program. */
+  setUniform1i(programId: number, name: string, value: number): void;
+
+  /** Set a float uniform on a shader program. */
+  setUniform1f(programId: number, name: string, value: number): void;
+
+  /** Set a vec2 uniform on a shader program. */
+  setUniform2f(programId: number, name: string, x: number, y: number): void;
+
+  /** Set a vec3 uniform on a shader program. */
+  setUniform3f(programId: number, name: string, x: number, y: number, z: number): void;
+
+  /** Set a vec4 uniform on a shader program. */
+  setUniform4f(programId: number, name: string, x: number, y: number, z: number, w: number): void;
+
+  /** Return the last OpenGL/shader error string, or "". */
+  getLastError(): string;
+
+  /** Return the loaded project directory path. */
+  getProjectDir(): string;
+
+  /** Create an offscreen render target. Returns a render target ID. */
+  createRenderTarget(width: number, height: number, depth?: boolean): number;
+
+  /** Destroy a previously created render target. */
+  destroyRenderTarget(targetId: number): void;
+
+  /** Resize an existing render target to new dimensions. */
+  resizeRenderTarget(targetId: number, width: number, height: number): void;
+
+  /** Draw a rectangular region immediately using a shader program. If targetId is given, draws into that render target. */
+  drawRegion(programId: number, x: number, y: number, w: number, h: number, targetId?: number): void;
+
+  /** Bind a render target's color texture to a sampler uniform in a shader program. */
+  bindTexture(programId: number, name: string, renderTargetId: number, textureUnit: number): void;
+
+  /** Bind a CanvasTexture's flushed GL texture to a sampler uniform in a shader program. */
+  bindCanvasTexture(programId: number, name: string, canvasTexture: CanvasTexture, textureUnit: number): void;
+
+  /** Decode PNG/JPG image bytes from an ArrayBuffer or TypedArray and upload them as a 2D texture. */
+  loadTexture2DFromBuffer(buffer: ArrayBuffer | ArrayBufferView): number;
+
+  /** Decode six image buffers (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
+  loadTextureCubeFromBuffer(faces: [ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView]): number;
+
+  /** Draw a rectangular shader region immediately against the current or given render target. */
+  drawRegionImmediate(program: number, x: number, y: number, w: number, h: number, targetId?: number): void;
+
+  /** Draw a mesh immediately using the current or explicitly selected render target. */
+  drawMeshImmediate(program: number, layoutId: number, options: GLDrawOptions): void;
+
+  /** Bind a render target's color texture to a sampler uniform for the next immediate draw. */
+  renderTargetTexture(programId: number, uniformName: string, renderTargetId: number, textureUnit: number): void;
+
+  /** Bind a texture (a createTexture2D / loadTexture2D id, or a CanvasTexture) to a sampler uniform for the next immediate draw. */
+  texture(programId: number, uniformName: string, texture: number | CanvasTexture, textureUnit: number): void;
+
   // ---- 3D pipeline ----------------------------------------------------------
 
   /** Create a vertex or index buffer. If `data` is given, uploads it immediately. */
@@ -260,8 +379,6 @@ interface SysGL {
   /** Decode a PNG/JPG file from the project directory and upload it as a 2D texture. */
   loadTexture2D(path: string): number;
 
-  /** Create a cubemap from 6 raw RGBA8 face buffers (order: +X, -X, +Y, -Y, +Z, -Z). */
-  createTextureCube(size: number, format: "rgba8" | "rgb8" | "r8", faces: ArrayBufferView[]): number;
 
   /** Decode 6 image files (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
   loadTextureCube(paths: [string, string, string, string, string, string]): number;
@@ -269,14 +386,14 @@ interface SysGL {
   /** Replace a sub-rectangle of a 2D texture with new pixel data. */
   updateTexture2D(textureId: number, x: number, y: number, w: number, h: number, pixels: ArrayBufferView): void;
 
-  /** Destroy a texture created with createTexture2D / loadTexture2D / createTextureCube. */
+  /** Destroy a texture created with createTexture2D, loadTexture2D, or loadTextureCube. */
   destroyTexture(textureId: number): void;
 
   /** Create an empty vertex layout. Returns a layout ID; bind attributes via setAttribute. */
   createVertexLayout(): number;
 
   /** Bind one vertex attribute slot to a buffer (use setIndexBuffer for the index buffer). */
-  setAttribute(layoutId: number, location: number, bufferId: number, size: number, type: "float" | "u8" | "u16" | "u32" | "i8" | "i16" | "i32", normalized: boolean, stride: number, offset: number, divisor?: number): void;
+  setAttribute(layoutId: number, location: number, bufferId: number, size: number, type: "float" | "byte" | "ubyte" | "short" | "ushort" | "int" | "uint", normalized: boolean, stride: number, offset: number, divisor?: number): void;
 
   /** Attach an index buffer (u16 or u32) to a vertex layout. */
   setIndexBuffer(layoutId: number, bufferId: number, type: "u16" | "u32"): void;
@@ -308,11 +425,9 @@ interface SysGL {
   /** Bind a cubemap texture to a sampler uniform. */
   bindTextureCube(programId: number, uniformName: string, textureId: number, textureUnit: number): void;
 
-  /** Draw immediately against a vertex layout (with optional index buffer + GL state). */
+  /** Draw immediately against a vertex layout (with optional index buffer + GL state). Set options.instanceCount, with per-instance attributes (setAttribute divisor 1), to draw instances. */
   drawMesh(programId: number, layoutId: number, options: GLDrawOptions): void;
 
-  /** Draw instanced geometry immediately. */
-  drawMeshInstanced(programId: number, layoutId: number, options: GLDrawOptions, instanceCount: number): void;
 }
 
 interface GLDrawOptions {
@@ -322,24 +437,167 @@ interface GLDrawOptions {
   first?: number;
   /** Vertex / index count. Required. */
   count: number;
-  /** Optional render target id (default: backbuffer). */
+  /** Render target id. Default: the target bound with `bindRenderTarget`, else the screen; `-1` forces the screen. */
   target?: number;
-  /** Enable depth testing. Default: false. */
+  /** Instances to draw, with per-instance attributes (setAttribute divisor 1). Default: 1. */
+  instanceCount?: number;
+  /** Enable depth testing. Default: true. */
   depthTest?: boolean;
-  /** Write to the depth buffer. Default: true when depthTest is true. */
+  /** Write to the depth buffer. Default: true. */
   depthWrite?: boolean;
   /** Cull-face mode. Default: "none". */
   cull?: "none" | "back" | "front";
-  /** Blend mode. Default: "none". */
-  blend?: "none" | "alpha" | "add" | "premultiplied";
+  /** Blend mode: "alpha" (straight alpha), "premult" (premultiplied colors), "add", or "none". Default: "alpha". */
+  blend?: "none" | "alpha" | "add" | "premult";
+}
+// -- Audio streams and decoders ----------------------------------------------
+
+/** Options for sys.audio.openOutput and sys.audio.openInput. */
+interface AudioStreamOptions {
+  /** 1 or 2. Default: 2 for outputs, 1 for inputs. */
+  channels?: 1 | 2;
+  /** How much audio the queue holds, in milliseconds (1 to 2000), fixed. Leave it out for an adaptive queue (outputs): as small as this device and app allow, growing after an underrun and shrinking back when steady. */
+  latencyMs?: number;
+}
+
+/** Handed to stream callbacks with each chunk. The object is reused: read it during the call. */
+interface AudioStreamInfo {
+  /** Frames in this chunk (256). */
+  readonly frames: number;
+  readonly channels: number;
+  /** The device rate: samples per second per channel. */
+  readonly sampleRate: number;
+  /** Stream time of the chunk's first frame, in seconds. */
+  readonly time: number;
+  /** The queue's size, in seconds. */
+  readonly latency: number;
+  /** Outputs: times the queue ran dry. */
+  readonly underruns?: number;
+  /** Inputs: times captured audio was dropped because the app fell behind. */
+  readonly overruns?: number;
+}
+
+/**
+ * Fills (output) or receives (input) one chunk: `samples` is interleaved
+ * (left, right, left, …), `info.frames * info.channels` long. Output buffers
+ * start silent; input samples are valid during the call only.
+ */
+type AudioStreamCallback = (samples: Float32Array, info: AudioStreamInfo) => void;
+
+/** Options for sys.audio.openDecoder and sys.audio.createDecoder. */
+interface AudioDecoderOptions {
+  /** Rate of the decoded frames; 0 (default) keeps the file's. Use sys.audio.getSampleRate() to play. */
+  sampleRate?: number;
+  /** 1 or 2 (default). */
+  channels?: 1 | 2;
+}
+
+/** State of a decoder (sys.audio.getDecoderInfo). */
+interface AudioDecoderInfo {
+  /** Rate and channels of the decoded frames. */
+  readonly sampleRate: number;
+  readonly channels: number;
+  /** The file's own rate and channels; 0 until known (push decoders). */
+  readonly sourceSampleRate: number;
+  readonly sourceChannels: number;
+  /** Seconds in all; -1 when unknown (push decoders). */
+  readonly duration: number;
+  /** Seconds decoded so far. */
+  readonly position: number;
+  /** The format is known. */
+  readonly ready: boolean;
+  /** Every frame has been decoded. */
+  readonly ended: boolean;
+  /** Push decoders: feed more bytes to go on. */
+  readonly needsData: boolean;
+  readonly seekable: boolean;
+}
+
+/** sys.files.getReadInfo: a file open for block reads. */
+interface FileReadInfo {
+  /** Size in bytes. */
+  readonly size: number;
+  /** Where the next read starts, in bytes. */
+  readonly position: number;
+}
+
+/** Options for sys.audio.detectPitch. */
+interface PitchOptions {
+  /** Lowest pitch reported, in Hz. Default: 50. */
+  minFrequency?: number;
+  /** Highest pitch reported, in Hz. Default: 4000. */
+  maxFrequency?: number;
+  /** Clarity (0 to 1) under which there is no pitch. Default: 0.7. */
+  minClarity?: number;
+  /** RMS level in dB under which there is no pitch. Default: -60. */
+  minLevel?: number;
+}
+
+/** The result of sys.audio.detectPitch. */
+interface PitchResult {
+  /** The pitch in Hz, or 0 when there is none (noise, silence, out of range). */
+  frequency: number;
+  /** How periodic the sound is, 0 to 1: above 0.9 for a clear note. */
+  clarity: number;
+  /** RMS level of the samples, in dB. */
+  level: number;
 }
 
 // Generated by scripts/generate-contract-artifacts.py. Do not edit.
-// Source: api/contracts/{capabilities,device,math}.json
+// Source: api/contracts/{capabilities,device,math,accessibility}.json
 
 /** A stable capability availability entry. */
 interface CapabilityEntry {
   readonly available: boolean;
+}
+
+/** One element exposed to screen readers by sys.accessibility.update(). */
+interface AccessibilityNode {
+  /** Stable id, returned with the actions on this node. */
+  id: string;
+  role: "button" | "checkbox" | "radio" | "switch" | "slider" | "textbox" | "list" | "listitem" | "heading" | "text" | "combobox" | "option" | "tab" | "image" | "group" | "link";
+  /** What a screen reader announces. */
+  label: string;
+  /** Text of fields, or a readable slider value. */
+  value?: string;
+  /** Bounds in physical canvas pixels. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  checked?: boolean;
+  selected?: boolean;
+  focused?: boolean;
+  disabled?: boolean;
+  expanded?: boolean;
+  /** Sliders: range and current value. */
+  min?: number;
+  max?: number;
+  rangeValue?: number;
+}
+
+/** An action requested through assistive technology. */
+interface AccessibilityAction {
+  readonly id: string;
+  readonly action: "press" | "focus" | "increment" | "decrement" | "setValue";
+  /** New text for setValue. */
+  readonly value: string;
+}
+
+/** System preferences reported by sys.device.getPreferences(). */
+interface DevicePreferences {
+  /** The system uses a dark appearance. */
+  readonly darkMode: boolean;
+  /** The user asked for less motion. */
+  readonly reducedMotion: boolean;
+  /** The user asked for more contrast. */
+  readonly highContrast: boolean;
+  /** Text size multiplier chosen by the user (1 = default). */
+  readonly fontScale: number;
+  /** Insets, in physical pixels, to keep free of content (notches, system bars). */
+  readonly safeArea: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number };
+  /** Height, in physical pixels from the bottom, covered by the on-screen keyboard; 0 when hidden or on desktop. */
+  readonly keyboardInset: number;
 }
 
 /** Stable per-feature availability probes for the current process and platform. */
@@ -362,6 +620,16 @@ interface SysCapabilities {
 interface SysDevice {
   /** Request that the screen stays on, or release this application's request. Returns false when the platform cannot apply the change. */
   keepScreenOn(enabled: boolean): boolean;
+  /** Copy UTF-8 text to the system clipboard. Returns false when the platform refuses. On the web, the browser may require a recent user gesture. */
+  setClipboardText(text: string): boolean;
+  /** Read the clipboard text, or null when it holds none. On the web, browsers only expose the clipboard asynchronously, so this returns the last text copied, cut, or pasted on the page. */
+  getClipboardText(): string | null;
+  /** Play haptic feedback (default "light"). Returns false where the device has no haptics (desktop). Throws RangeError on an unknown kind. */
+  haptic(kind?: "light" | "medium" | "heavy" | "selection" | "success" | "warning" | "error"): boolean;
+  /** Read the user's system preferences: dark mode, reduced motion, high contrast, text scale, safe-area insets, and the on-screen keyboard's height, in physical pixels. Cheap to call every frame. */
+  getPreferences(): DevicePreferences;
+  /** Set the mouse cursor shape using CSS cursor names (default "default"). Returns false where there is no mouse cursor. Throws RangeError on an unknown name. */
+  setCursor(name?: "default" | "text" | "pointer" | "grab" | "grabbing" | "move" | "ew-resize" | "ns-resize" | "nwse-resize" | "nesw-resize" | "not-allowed" | "wait" | "crosshair" | "none"): boolean;
 }
 
 /** In-place 3D math helpers. Matrices, vectors, and quaternions use caller-owned Float32Array storage; mat4 values are column-major. */
@@ -396,6 +664,18 @@ interface SysMath {
   quatMultiply(out: Float32Array, a: Float32Array, b: Float32Array): void;
   quatSlerp(out: Float32Array, a: Float32Array, b: Float32Array, t: number): void;
   quatToMat4(out: Float32Array, value: Float32Array): void;
+}
+
+/** Expose what the app draws to screen readers: publish a flat list of nodes every frame they change, and apply the actions users perform through assistive technology. */
+interface SysAccessibility {
+  /** Whether this platform exposes accessibility nodes to assistive technology (web, Android, and macOS; not Windows or Linux yet). */
+  isAvailable(): boolean;
+  /** Whether a screen reader or other assistive service probably runs (always true on the web, where browsers do not tell). Apps may skip building the tree when false. */
+  isActive(): boolean;
+  /** Replace the published tree (at most 512 nodes, in reading order; bounds in physical canvas pixels). Cheap when nothing changed. WebAssembly passes a JSON array of the same objects. */
+  update(nodes: AccessibilityNode[]): boolean;
+  /** Return and clear the actions requested through assistive technology since the last call: press, focus, increment, decrement, or setValue (with `value`). WebAssembly receives them as a JSON array. */
+  takeActions(): AccessibilityAction[];
 }
 
 // -- sys.canvas object --------------------------------------------------------
@@ -497,6 +777,30 @@ interface SysCanvas {
   /** Clip drawing to a rectangle. */
   clipRect(x: number, y: number, width: number, height: number): void;
 
+  /** Clip drawing to an anti-aliased rounded rectangle. `radiusY` defaults to `radiusX`. Undo with `restore()` after a `save()`. */
+  clipRoundRect(x: number, y: number, width: number, height: number, radiusX: number, radiusY?: number): void;
+
+  /** Clip drawing to an anti-aliased path from `sys.path.create()`. Throws RangeError on an unknown path. */
+  clipPath(path: number): void;
+
+  /** Draw what follows into an offscreen layer; `restore()` composites it back. `alpha` (0–255, default 255) fades the whole group at once, so overlapping shapes do not show through each other. With a rectangle, the layer is clipped to it. `backdropBlur` (> 0) starts the layer with a blurred copy of what is already drawn below (frosted glass); combine with `clipRoundRect` for rounded panels. */
+  saveLayer(alpha?: number, x?: number, y?: number, width?: number, height?: number, backdropBlur?: number): void;
+
+  /** Fill and stroke with a gradient instead of the paint color. Forms: `setGradient("linear", x0, y0, x1, y1, colors, stops?)`; `setGradient("radial", cx, cy, radius, colors, stops?)`; `setGradient("sweep", cx, cy, colors, stops?)` (conic, starting at the positive x axis). `colors` holds 2 to 16 colors; `stops` (optional) holds one 0..1 position per color. Colors interpolate in OKLab. The gradient makes the paint opaque (`setAlpha` then fades it) and stays until `setGradient()` / `setGradient(null)` / `setGradient("none")` or until `setFillColor` / `setStrokeColor` is called. Throws TypeError on invalid arguments and RangeError on an unknown kind. */
+  setGradient(kind?: "linear" | "radial" | "sweep" | "none" | null, ...args: (number | Color[] | number[])[]): boolean;
+
+  /** Draw text wrapped to `width` (0 = no wrapping) with the active font. `y` is the TOP of the paragraph, not a baseline. Lines break at spaces and `\n`; words wider than a line break between characters. Returns the paragraph metrics. The default font size is 32. */
+  drawParagraph(text: string, x: number, y: number, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics;
+
+  /** Measure text wrapped to `width` without drawing it; same layout as `drawParagraph`. */
+  measureParagraph(text: string, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics;
+
+  /** Draw a paragraph of styled spans (mixed sizes, colors, and fonts) wrapped to `width`, from the TOP at `y`. Each line is as tall as its largest span; baselines align. Same wrapping, alignment, and `maxLines` rules as `drawParagraph`. At most 64 spans. */
+  drawRichText(spans: RichTextSpan[], x: number, y: number, width: number, options?: RichTextOptions): ParagraphMetrics;
+
+  /** Measure styled spans wrapped to `width` without drawing them; same layout as `drawRichText`. */
+  measureRichText(spans: RichTextSpan[], width: number, options?: RichTextOptions): ParagraphMetrics;
+
 }
 
 // -- sys.graphics object ------------------------------------------------------
@@ -536,6 +840,9 @@ interface SysPath {
 
   /** Add a circle subpath. */
   addCircle(pathId: number, cx: number, cy: number, radius: number): void;
+
+  /** Append SVG path data (the `d` attribute of an SVG `<path>`: M, L, H, V, C, S, Q, T, A, Z, absolute or relative). Returns false, leaving the path unchanged, for an unknown path or data that does not parse. Draw it scaled with sys.canvas.translate/scale. */
+  addSvg(pathId: number, data: string): boolean;
 
 }
 
@@ -615,6 +922,9 @@ interface SysAnimation {
 
   /** Cancel the stored animation callback. */
   cancelFrame(handle: number): void;
+
+  /** Like `requestFrame`, but the callback runs only on the next input event, canvas resize, or after `timeoutMs` (default: no timeout). Until then the last frame stays on screen and Budo sleeps (desktop) or stops rendering (Android), saving battery. Call it instead of `requestFrame` when nothing is animating; call `requestFrame` again to resume continuous frames. */
+  waitForInput(callback: (timestamp: number) => void, timeoutMs?: number): number;
 
 }
 
@@ -711,6 +1021,51 @@ interface SysAudio {
 
   /** Return the most recent audio error message. */
   getError(): string;
+
+  /** The device rate (frames per second) that stream callbacks run at. Decode to this rate to play. */
+  getSampleRate(): number;
+
+  /** Open an output stream: Budo calls `callback(buffer, info)` to fill each chunk, keeping a queue of audio: adaptive (as small as the device and app allow) unless `latencyMs` fixes it. Plays exactly the samples written (no master gain), mixed with oscillators and buffers. Returns a stream handle, or -1 (see getError). */
+  openOutput(optionsOrCallback: AudioStreamOptions | AudioStreamCallback, callback?: AudioStreamCallback): number;
+
+  /** Stop and close an output stream. */
+  closeOutput(stream: number): void;
+
+  /** Record from the microphone: Budo calls `callback(samples, info)` with each captured chunk. Android needs RECORD_AUDIO in app.json "permissions" and asks the user (open again once granted); the web needs https or localhost. Returns a stream handle, or -1 (see getError). */
+  openInput(optionsOrCallback: AudioStreamOptions | AudioStreamCallback, callback?: AudioStreamCallback): number;
+
+  /** Stop recording and close an input stream. */
+  closeInput(stream: number): void;
+
+  /** Open a WAV, MP3, Ogg Vorbis, or FLAC decoder on an assets/... or files/... path (read in blocks: any size, seekable) or on bytes in memory. Returns a decoder handle, or -1 (see getError). */
+  openDecoder(source: string | ArrayBuffer | ArrayBufferView, options?: AudioDecoderOptions): number;
+
+  /** Create a push decoder that decodes bytes the app feeds (from block reads, the network, ...). It reads straight through: no seeking, no duration. Returns a decoder handle. */
+  createDecoder(options?: AudioDecoderOptions): number;
+
+  /** Push decoders: append encoded bytes; pass `end` with (or after) the last ones. */
+  feedDecoder(decoder: number, bytes: ArrayBuffer | ArrayBufferView | null, end?: boolean): boolean;
+
+  /** Decode into `out` (interleaved, out.length / channels frames). Returns the frames decoded: 0 at the end, or when a push decoder needs more bytes; -1 on error. */
+  decode(decoder: number, out: Float32Array): number;
+
+  /** Rate, channels, duration, position, and state of a decoder. */
+  getDecoderInfo(decoder: number): AudioDecoderInfo;
+
+  /** Move a file or memory decoder to `seconds`. */
+  seekDecoder(decoder: number, seconds: number): boolean;
+
+  /** Close a decoder and the file it reads. */
+  closeDecoder(decoder: number): void;
+
+  /** In-place complex FFT of (re, im), whose lengths are the same power of two (2 to 2^20). The inverse is scaled by 1 / length, so forward then inverse gives the input back. Runs natively: much faster than an FFT in JS. */
+  fft(re: Float32Array, im: Float32Array, inverse?: boolean): boolean;
+
+  /** The Hann-windowed spectrum of `samples` (a power-of-two length, 4 to 2^20) in dB, written to `outDb` (samples.length / 2 values; bin k is k * sampleRate / samples.length Hz) and returned. A full-scale sine reads about 0 dB; silence -180. */
+  getSpectrum(samples: Float32Array, outDb: Float32Array): Float32Array;
+
+  /** The pitch of mono `samples` (16 or more; the lowest pitch found has a period of half of them: 2048 samples at 48 kHz reach 47 Hz), by the McLeod pitch method: finds the fundamental even when a harmonic is louder. `sampleRate` defaults to the device's. */
+  detectPitch(samples: Float32Array, sampleRate?: number, options?: PitchOptions): PitchResult;
 
 }
 
@@ -875,6 +1230,21 @@ interface SysFiles {
 
   /** Read an assets/... or files/... path as binary data. Returns an ArrayBuffer. Throws on error. */
   readBinary(path: string): ArrayBuffer;
+
+  /** Open an assets/... or files/... file for block reads (large files, a block at a time). Returns a handle, or null (see getError). */
+  openRead(path: string): number | null;
+
+  /** Read the next block (default 64 KiB, 16 MiB at most). Returns an empty ArrayBuffer at the end, or null on error. */
+  read(handle: number, maxBytes?: number): ArrayBuffer | null;
+
+  /** Move the next read to `byteOffset` (0 to the size). */
+  seek(handle: number, byteOffset: number): boolean;
+
+  /** Size of the file and where the next read starts. */
+  getReadInfo(handle: number): FileReadInfo;
+
+  /** Close a file opened with openRead. */
+  closeRead(handle: number): void;
 
   /** Write UTF-8 text to a files/... path, creating parents and replacing any existing file. assets/... is read-only. Returns the absolute saved path. On web this triggers a browser download. Throws on error. */
   writeText(path: string, text: string): string;
@@ -1100,8 +1470,8 @@ interface SysLlamaCpp {
 
 /** A datagram delivered to a `sys.net.udp.onMessage` callback. */
 interface UdpMessage {
-  /** The raw datagram bytes. */
-  data: Uint8Array;
+  /** The raw datagram bytes, as an array of byte values (0 to 255). */
+  data: number[];
   /** The remote host (numeric IP string). */
   host: string;
   /** The remote port. */
@@ -1120,10 +1490,10 @@ interface SysUDP {
   getPort(socketId: number): number;
 
   /**
-   * Send a datagram to `host:port`. `data` may be a string (UTF-8 encoded) or a
-   * TypedArray / ArrayBuffer. Returns the number of bytes sent, or `-1` on failure.
+   * Send a datagram to `host:port`. `data` is an array or typed array of byte
+   * values (0 to 255). Returns true when the datagram was sent.
    */
-  send(socketId: number, host: string, port: number, data: string | ArrayBuffer | ArrayBufferView): number;
+  send(socketId: number, host: string, port: number, data: ArrayLike<number>): boolean;
 
   /**
    * Register a callback invoked once per pending datagram during the per-frame
@@ -1141,6 +1511,8 @@ interface SysNetwork {
   /** Perform an HTTP request (synchronous). Requires network policy in app.json. */
   fetch(url: string, options?: RequestInit): Response;
 
+  /** UDP sockets. */
+  readonly udp: SysUDP;
 }
 
 // -- sys namespace ------------------------------------------------------------
@@ -1148,6 +1520,8 @@ interface SysNetwork {
 interface Sys {
   /** Outputs a message on stadard output*/
   log(message: string): void;
+  /** End the application with an exit status (default 0). Stops the script at once; an application that never draws also ends on its own once no timers, promises or pending requests remain. */
+  exit(code?: number): never;
   /** 2D drawing primitives and paint style settings. */
   readonly canvas: SysCanvas;
   /** Path creation and manipulation. */
@@ -1181,13 +1555,13 @@ interface Sys {
   /** Read-only convenience wrapper over the sys.files assets/ mount. */
   readonly assets: SysAssets;
   /** HTTP networking. */
-  readonly network: SysNetwork;
+  readonly net: SysNetwork;
   /** Accelerometer and compass sensors. */
-  readonly magneto: SysMagneto;
+  readonly sensors: SysMagneto;
   /** Device-level controls. */
   readonly device: SysDevice;
-  /** UDP datagram sockets. */
-  readonly udp: SysUDP;
+  /** Screen-reader access to what the app draws. */
+  readonly accessibility: SysAccessibility;
   /** Per-feature availability probes. */
   readonly capabilities: SysCapabilities;
   /** ONNX Runtime neural network inference (requires "neural": true in app.json). */

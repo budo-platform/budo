@@ -1,3 +1,4 @@
+#include "midi/midi_event_queue.h"
 #include "lua_midi_bindings.h"
 #include "midi_service.h"
 #include "midi_topology.h"
@@ -9,25 +10,12 @@
 #include "lua.h"
 #include "lauxlib.h"
 
-#define LUA_MIDI_MSG_QUEUE_SIZE 256
-#define LUA_MIDI_SYSEX_QUEUE_SIZE 16
+#define LUA_MIDI_MSG_QUEUE_SIZE 1024
+#define LUA_MIDI_SYSEX_QUEUE_SIZE 32
 #define LUA_RTPMIDI_MSG_QUEUE_SIZE 256
 #define LUA_MIDI_DEVICE_CHECK_FRAMES 60
 #define LUA_MAX_MIDI_CALLBACKS MIDI_MAX_DEVICES
 #define LUA_MAX_RTPMIDI_CALLBACKS RTPMIDI_MAX_SESSIONS
-
-typedef struct
-{
-    int device_handle;
-    MidiMessage message;
-} LuaMidiQueuedMessage;
-
-typedef struct
-{
-    int device_handle;
-    uint8_t data[MIDI_SYSEX_MAX_SIZE];
-    size_t length;
-} LuaMidiQueuedSysEx;
 
 typedef struct
 {
@@ -41,11 +29,9 @@ struct LuaMidiContext
     MidiContext *midi_ctx;
     RtpMidiContext *rtpmidi_ctx;
     bool midi_lazy_initialized;
-    SubsystemQueue midi_queue;
-    SubsystemQueue sysex_queue;
+    MidiEventQueue *events; 
+    uint8_t *sysex_buffer;  
     SubsystemQueue rtpmidi_queue;
-    LuaMidiQueuedMessage midi_storage[LUA_MIDI_MSG_QUEUE_SIZE];
-    LuaMidiQueuedSysEx sysex_storage[LUA_MIDI_SYSEX_QUEUE_SIZE];
     LuaRtpMidiQueuedMessage rtpmidi_storage[LUA_RTPMIDI_MSG_QUEUE_SIZE];
     int midi_callbacks[LUA_MAX_MIDI_CALLBACKS];
     bool midi_callbacks_active[LUA_MAX_MIDI_CALLBACKS];
@@ -78,39 +64,18 @@ static MidiContext *lua_midi_context(LuaMidiContext *state)
 #define LUA_MIDI_STATE() LuaMidiContext *state = lua_midi_binding_state(L)
 #define ensure_lua_midi_ctx() ((void)lua_midi_context(state))
 
-static void lua_midi_input_callback(int device_id, const MidiMessage *message, void *user_data)
+static void lua_midi_input_callback(int handle, const MidiMessage *message, void *user_data)
 {
     LuaMidiContext *state = (LuaMidiContext *)user_data;
-    LuaMidiQueuedMessage queued;
-    if (!state || !message)
-        return;
-    queued.device_handle = device_id;
-    queued.message = *message;
-    subsystem_queue_try_push(&state->midi_queue, &queued);
+    if (state && message)
+        midi_event_queue_push_message(state->events, handle, message);
 }
 
-static void lua_midi_sysex_callback(int device_id, const uint8_t *data, size_t length, void *user_data)
+static void lua_midi_sysex_callback(int handle, const uint8_t *data, size_t length, void *user_data)
 {
     LuaMidiContext *state = (LuaMidiContext *)user_data;
-    LuaMidiQueuedSysEx queued;
-    if (!state || !data || length > MIDI_SYSEX_MAX_SIZE)
-        return;
-    queued.device_handle = device_id;
-    memcpy(queued.data, data, length);
-    queued.length = length;
-    subsystem_queue_try_push(&state->sysex_queue, &queued);
-}
-
-static bool lua_midi_dequeue(LuaMidiContext *state,
-                             LuaMidiQueuedMessage *message)
-{
-    return state && subsystem_queue_try_pop(&state->midi_queue, message);
-}
-
-static bool lua_midi_sysex_dequeue(LuaMidiContext *state,
-                                   LuaMidiQueuedSysEx *message)
-{
-    return state && subsystem_queue_try_pop(&state->sysex_queue, message);
+    if (state && data)
+        midi_event_queue_push_sysex(state->events, handle, data, length, 0);
 }
 
 static void lua_rtpmidi_input_callback(int session_handle, const MidiMessage *message, void *user_data)
@@ -823,16 +788,15 @@ LuaMidiContext *lua_midi_init(void *L_void)
         return NULL;
     state->lua_state = L;
     state->devices_changed_callback = LUA_NOREF;
-    if (!subsystem_queue_init(&state->midi_queue, state->midi_storage,
-                              sizeof(state->midi_storage[0]), LUA_MIDI_MSG_QUEUE_SIZE) ||
-        !subsystem_queue_init(&state->sysex_queue, state->sysex_storage,
-                              sizeof(state->sysex_storage[0]), LUA_MIDI_SYSEX_QUEUE_SIZE) ||
+    state->events = midi_event_queue_create(LUA_MIDI_MSG_QUEUE_SIZE, LUA_MIDI_SYSEX_QUEUE_SIZE);
+    state->sysex_buffer = (uint8_t *)malloc(MIDI_SYSEX_MAX_SIZE);
+    if (!state->events || !state->sysex_buffer ||
         !subsystem_queue_init(&state->rtpmidi_queue, state->rtpmidi_storage,
                               sizeof(state->rtpmidi_storage[0]), LUA_RTPMIDI_MSG_QUEUE_SIZE))
     {
         subsystem_queue_destroy(&state->rtpmidi_queue);
-        subsystem_queue_destroy(&state->sysex_queue);
-        subsystem_queue_destroy(&state->midi_queue);
+        midi_event_queue_destroy(state->events);
+        free(state->sysex_buffer);
         free(state);
         return NULL;
     }
@@ -901,8 +865,6 @@ void lua_midi_cleanup(LuaMidiContext *state)
     if (!state)
         return;
 
-    subsystem_queue_close(&state->midi_queue);
-    subsystem_queue_close(&state->sysex_queue);
     subsystem_queue_close(&state->rtpmidi_queue);
 
     if (state->rtpmidi_ctx)
@@ -945,8 +907,10 @@ void lua_midi_cleanup(LuaMidiContext *state)
     state->lua_state = NULL;
     state->rtpmidi_ctx = NULL;
     subsystem_queue_destroy(&state->rtpmidi_queue);
-    subsystem_queue_destroy(&state->sysex_queue);
-    subsystem_queue_destroy(&state->midi_queue);
+    midi_event_queue_destroy(state->events);
+    state->events = NULL;
+    free(state->sysex_buffer);
+    state->sysex_buffer = NULL;
     free(state);
 }
 
@@ -1027,35 +991,15 @@ void lua_midi_poll(LuaMidiContext *state)
     if (state->rtpmidi_ctx)
         rtpmidi_poll(state->rtpmidi_ctx);
 
-    LuaMidiQueuedMessage queued_message;
-    while (lua_midi_dequeue(state, &queued_message))
+    MidiEvent event;
+    while (midi_event_queue_pop(state->events, &event, state->sysex_buffer))
     {
-        LuaMidiQueuedMessage *qm = &queued_message;
-        int handle = qm->device_handle;
-
-        if (handle >= 0 && handle < LUA_MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
+        int handle = event.handle;
+        if (handle < 0 || handle >= LUA_MAX_MIDI_CALLBACKS || !state->midi_callbacks_active[handle])
+            continue;
+        lua_rawgeti(state->lua_state, LUA_REGISTRYINDEX, state->midi_callbacks[handle]);
+        if (event.is_sysex)
         {
-            lua_rawgeti(state->lua_state, LUA_REGISTRYINDEX, state->midi_callbacks[handle]);
-            push_midi_message(state->lua_state, &qm->message);
-
-            if (lua_pcall(state->lua_state, 1, 0, 0) != LUA_OK)
-            {
-                fprintf(stderr, "Lua MIDI callback error: %s\n", lua_tostring(state->lua_state, -1));
-                lua_pop(state->lua_state, 1);
-            }
-        }
-    }
-
-    LuaMidiQueuedSysEx queued_sysex;
-    while (lua_midi_sysex_dequeue(state, &queued_sysex))
-    {
-        LuaMidiQueuedSysEx *sq = &queued_sysex;
-        int handle = sq->device_handle;
-
-        if (handle >= 0 && handle < LUA_MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
-        {
-            lua_rawgeti(state->lua_state, LUA_REGISTRYINDEX, state->midi_callbacks[handle]);
-
             lua_newtable(state->lua_state);
             lua_pushinteger(state->lua_state, 0xF0);
             lua_setfield(state->lua_state, -2, "status");
@@ -1063,24 +1007,28 @@ void lua_midi_poll(LuaMidiContext *state)
             lua_setfield(state->lua_state, -2, "data1");
             lua_pushinteger(state->lua_state, 0);
             lua_setfield(state->lua_state, -2, "data2");
+            lua_pushnumber(state->lua_state, (lua_Number)event.message.timestamp);
+            lua_setfield(state->lua_state, -2, "timestamp");
             lua_pushinteger(state->lua_state, 0xF0);
             lua_setfield(state->lua_state, -2, "type");
             lua_pushinteger(state->lua_state, -1);
             lua_setfield(state->lua_state, -2, "channel");
-
             lua_newtable(state->lua_state);
-            for (size_t i = 0; i < sq->length; i++)
+            for (size_t i = 0; i < event.sysex_length; i++)
             {
-                lua_pushinteger(state->lua_state, sq->data[i]);
+                lua_pushinteger(state->lua_state, state->sysex_buffer[i]);
                 lua_rawseti(state->lua_state, -2, (int)(i + 1));
             }
             lua_setfield(state->lua_state, -2, "data");
-
-            if (lua_pcall(state->lua_state, 1, 0, 0) != LUA_OK)
-            {
-                fprintf(stderr, "Lua MIDI SysEx callback error: %s\n", lua_tostring(state->lua_state, -1));
-                lua_pop(state->lua_state, 1);
-            }
+        }
+        else
+        {
+            push_midi_message(state->lua_state, &event.message);
+        }
+        if (lua_pcall(state->lua_state, 1, 0, 0) != LUA_OK)
+        {
+            fprintf(stderr, "Lua MIDI callback error: %s\n", lua_tostring(state->lua_state, -1));
+            lua_pop(state->lua_state, 1);
         }
     }
 
@@ -1108,12 +1056,12 @@ void lua_midi_poll(LuaMidiContext *state)
 
 size_t lua_midi_dropped_messages(LuaMidiContext *state)
 {
-    return state ? subsystem_queue_dropped(&state->midi_queue) : 0;
+    return state ? midi_event_queue_dropped_messages(state->events) : 0;
 }
 
 size_t lua_midi_dropped_sysex(LuaMidiContext *state)
 {
-    return state ? subsystem_queue_dropped(&state->sysex_queue) : 0;
+    return state ? midi_event_queue_dropped_sysex(state->events) : 0;
 }
 
 size_t lua_midi_dropped_rtpmidi(LuaMidiContext *state)

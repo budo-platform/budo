@@ -3,6 +3,7 @@
 #include "device_wrapper.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 static size_t active_screen_request_count;
 
@@ -87,4 +88,38 @@ bool device_service_keep_screen_on(bool enabled, ApiError *error)
                   "device.keep_screen_on_failed",
                   "The platform could not update the keep-screen-on request");
     return false;
+}
+
+static const char *const haptic_names[DEVICE_HAPTIC_COUNT] = {
+    "light", "medium", "heavy", "selection", "success", "warning", "error"};
+
+static const char *const cursor_names[DEVICE_CURSOR_COUNT] = {
+    "default", "text", "pointer", "grab", "grabbing", "move", "ew-resize", "ns-resize",
+    "nwse-resize", "nesw-resize", "not-allowed", "wait", "crosshair", "none"};
+
+bool device_haptic_from_name(const char *name, DeviceHaptic *out)
+{
+    for (int i = 0; name && i < DEVICE_HAPTIC_COUNT; i++)
+        if (strcmp(name, haptic_names[i]) == 0)
+        {
+            *out = (DeviceHaptic)i;
+            return true;
+        }
+    return false;
+}
+
+bool device_cursor_from_name(const char *name, DeviceCursor *out)
+{
+    for (int i = 0; name && i < DEVICE_CURSOR_COUNT; i++)
+        if (strcmp(name, cursor_names[i]) == 0)
+        {
+            *out = (DeviceCursor)i;
+            return true;
+        }
+    return false;
+}
+
+const char *device_cursor_name(DeviceCursor cursor)
+{
+    return (int)cursor >= 0 && cursor < DEVICE_CURSOR_COUNT ? cursor_names[cursor] : "default";
 }

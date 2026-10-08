@@ -2,8 +2,8 @@
 
 /** A datagram delivered to a `sys.net.udp.onMessage` callback. */
 interface UdpMessage {
-  /** The raw datagram bytes. */
-  data: Uint8Array;
+  /** The raw datagram bytes, as an array of byte values (0 to 255). */
+  data: number[];
   /** The remote host (numeric IP string). */
   host: string;
   /** The remote port. */
@@ -22,10 +22,10 @@ interface SysUDP {
   getPort(socketId: number): number;
 
   /**
-   * Send a datagram to `host:port`. `data` may be a string (UTF-8 encoded) or a
-   * TypedArray / ArrayBuffer. Returns the number of bytes sent, or `-1` on failure.
+   * Send a datagram to `host:port`. `data` is an array or typed array of byte
+   * values (0 to 255). Returns true when the datagram was sent.
    */
-  send(socketId: number, host: string, port: number, data: string | ArrayBuffer | ArrayBufferView): number;
+  send(socketId: number, host: string, port: number, data: ArrayLike<number>): boolean;
 
   /**
    * Register a callback invoked once per pending datagram during the per-frame

@@ -58,6 +58,7 @@ struct Window
     GLTextureSlot textures[MAX_GL_TEXTURES];
     GLVertexLayout vertex_layouts[MAX_GL_VERTEX_LAYOUTS];
     bool screen_rendered_this_frame;
+    uint32_t frame_serial; 
 
     char project_dir[PATH_MAX];
     char error_msg[512];
@@ -700,6 +701,7 @@ void window_begin_frame(Window *window, double time_seconds)
         return;
     window->frame_time = time_seconds;
     window->screen_rendered_this_frame = false;
+    window->frame_serial++;
     if (window->skia_gpu_canvas)
     {
         glBindFramebuffer(GL_FRAMEBUFFER, window->canvas_fbo);

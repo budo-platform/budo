@@ -114,6 +114,26 @@ doc = /** Attach a Skia image-filter to the default paint, or clear it. Forms: `
 sig = (name?: "matrix" | "blend" | "none" | null, ...args: (number | string | ArrayLike<number>)[]): boolean
 doc = /** Attach a Skia color-filter to the default paint, or clear it. Forms: `setColorFilter("matrix", m)` where `m` is an array-like of exactly 20 numbers (4x5 row-major matrix applied as `[Rout Gout Bout Aout]^T = M * [R G B A 1]^T`, channels in 0..1, last column is the bias term); `setColorFilter("blend", color, blendModeName)` composes the source with `color` (ARGB number or "#RRGGBBAA") using one of the names accepted by `setBlendMode`; `setColorFilter("none")` / `setColorFilter(null)` / `setColorFilter()` to clear. Throws TypeError on missing / wrong-typed arguments and RangeError on an unknown filter or blend mode name. */
 
+[canvas.setGradient]
+sig = (kind?: "linear" | "radial" | "sweep" | "none" | null, ...args: (number | Color[] | number[])[]): boolean
+doc = /** Fill and stroke with a gradient instead of the paint color. Forms: `setGradient("linear", x0, y0, x1, y1, colors, stops?)`; `setGradient("radial", cx, cy, radius, colors, stops?)`; `setGradient("sweep", cx, cy, colors, stops?)` (conic, starting at the positive x axis). `colors` holds 2 to 16 colors; `stops` (optional) holds one 0..1 position per color. Colors interpolate in OKLab. The gradient makes the paint opaque (`setAlpha` then fades it) and stays until `setGradient()` / `setGradient(null)` / `setGradient("none")` or until `setFillColor` / `setStrokeColor` is called. Throws TypeError on invalid arguments and RangeError on an unknown kind. */
+
+[canvas.drawParagraph]
+sig = (text: string, x: number, y: number, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics
+doc = /** Draw text wrapped to `width` (0 = no wrapping) with the active font. `y` is the TOP of the paragraph, not a baseline. Lines break at spaces and `\n`; words wider than a line break between characters. Returns the paragraph metrics. The default font size is 32. */
+
+[canvas.measureParagraph]
+sig = (text: string, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics
+doc = /** Measure text wrapped to `width` without drawing it; same layout as `drawParagraph`. */
+
+[canvas.drawRichText]
+sig = (spans: RichTextSpan[], x: number, y: number, width: number, options?: RichTextOptions): ParagraphMetrics
+doc = /** Draw a paragraph of styled spans (mixed sizes, colors, and fonts) wrapped to `width`, from the TOP at `y`. Each line is as tall as its largest span; baselines align. Same wrapping, alignment, and `maxLines` rules as `drawParagraph`. At most 64 spans. */
+
+[canvas.measureRichText]
+sig = (spans: RichTextSpan[], width: number, options?: RichTextOptions): ParagraphMetrics
+doc = /** Measure styled spans wrapped to `width` without drawing them; same layout as `drawRichText`. */
+
 [canvas.getError]
 sig = (): string
 doc = /** Return and clear the last `sys.canvas` error message. */
@@ -152,6 +172,18 @@ doc = /** Reset the transform to identity. */
 sig = (x: number, y: number, width: number, height: number): void
 doc = /** Clip drawing to a rectangle. */
 
+[canvas.clipRoundRect]
+sig = (x: number, y: number, width: number, height: number, radiusX: number, radiusY?: number): void
+doc = /** Clip drawing to an anti-aliased rounded rectangle. `radiusY` defaults to `radiusX`. Undo with `restore()` after a `save()`. */
+
+[canvas.clipPath]
+sig = (path: number): void
+doc = /** Clip drawing to an anti-aliased path from `sys.path.create()`. Throws RangeError on an unknown path. */
+
+[canvas.saveLayer]
+sig = (alpha?: number, x?: number, y?: number, width?: number, height?: number, backdropBlur?: number): void
+doc = /** Draw what follows into an offscreen layer; `restore()` composites it back. `alpha` (0–255, default 255) fades the whole group at once, so overlapping shapes do not show through each other. With a rectangle, the layer is clipped to it. `backdropBlur` (> 0) starts the layer with a blurred copy of what is already drawn below (frosted glass); combine with `clipRoundRect` for rounded panels. */
+
 # ── sys.path — path creation and manipulation ──────────────────────────────
 
 [path.create]
@@ -189,6 +221,10 @@ doc = /** Add a rectangle subpath. */
 [path.addCircle]
 sig = (pathId: number, cx: number, cy: number, radius: number): void
 doc = /** Add a circle subpath. */
+
+[path.addSvg]
+sig = (pathId: number, data: string): boolean
+doc = /** Append SVG path data (the `d` attribute of an SVG `<path>`: M, L, H, V, C, S, Q, T, A, Z, absolute or relative). Returns false, leaving the path unchanged, for an unknown path or data that does not parse. Draw it scaled with sys.canvas.translate/scale. */
 
 [path.draw]
 sig = (pathId: number): void
@@ -248,16 +284,12 @@ doc = /** Compile and link a vertex/fragment shader pair. Returns a positive pro
 sig = (vertexSource: ArrayBuffer | ArrayBufferView, fragmentSource: ArrayBuffer | ArrayBufferView): number
 doc = /** Compile and link a vertex/fragment shader pair from in-memory shader source buffers. Returns a positive program ID. Throws on failure. */
 
-[gl.createShaderProgram]
-sig = (paths: { vertex: string; fragment: string } | string, fragmentPath?: string): ShaderProgram
-doc = /** Compile and link a shader program and return an immediate object-style Program wrapper. */
-
 [gl.destroyProgram]
 sig = (programId: number): void
 doc = /** Destroy a previously created shader program. */
 
 [gl.useProgram]
-sig = (program: ShaderProgram | number): void
+sig = (program: number): void
 doc = /** Bind a shader program immediately as the current GL program. */
 
 [gl.bindScreen]
@@ -273,7 +305,7 @@ sig = (programId: number): void
 doc = /** Draw a fullscreen shader immediately using the given program. */
 
 [gl.drawFullscreenImmediate]
-sig = (program: ShaderProgram | number, sourceTexture?: number | CanvasTexture): void
+sig = (program: number, sourceTexture?: number | CanvasTexture): void
 doc = /** Draw a fullscreen shader immediately against the currently bound target. */
 
 [gl.setUniform1i]
@@ -304,10 +336,6 @@ doc = /** Return the last OpenGL/shader error string, or "". */
 sig = (): string
 doc = /** Return the loaded project directory path. */
 
-[gl.testAndDemo]
-sig = (): boolean
-doc = /** Shader-pipeline diagnostic helper. Returns true on success. */
-
 [gl.createRenderTarget]
 sig = (width: number, height: number, depth?: boolean): number
 doc = /** Create an offscreen render target. Returns a render target ID. */
@@ -325,7 +353,7 @@ sig = (programId: number, x: number, y: number, w: number, h: number, targetId?:
 doc = /** Draw a rectangular region immediately using a shader program. If targetId is given, draws into that render target. */
 
 [gl.drawRegionImmediate]
-sig = (program: ShaderProgram | number, x: number, y: number, w: number, h: number, targetId?: number): void
+sig = (program: number, x: number, y: number, w: number, h: number, targetId?: number): void
 doc = /** Draw a rectangular shader region immediately against the current or given render target. */
 
 [gl.bindTexture]
@@ -344,8 +372,16 @@ doc = /** Decode PNG/JPG image bytes from an ArrayBuffer or TypedArray and uploa
 sig = (faces: [ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView]): number
 doc = /** Decode six image buffers (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
 
+[gl.texture]
+sig = (programId: number, uniformName: string, texture: number | CanvasTexture, textureUnit: number): void
+doc = /** Bind a texture (a createTexture2D / loadTexture2D id, or a CanvasTexture) to a sampler uniform for the next immediate draw. */
+
+[gl.renderTargetTexture]
+sig = (programId: number, uniformName: string, renderTargetId: number, textureUnit: number): void
+doc = /** Bind a render target's color texture to a sampler uniform for the next immediate draw. */
+
 [gl.drawMeshImmediate]
-sig = (program: ShaderProgram | number, layoutId: number, options: GLDrawOptions): void
+sig = (program: number, layoutId: number, options: GLDrawOptions): void
 doc = /** Draw a mesh immediately using the current or explicitly selected render target. */
 
 # ── sys.graphics — texture-backed Skia surfaces ────────────────────────────
@@ -399,6 +435,10 @@ doc = /** Display density scaling factor. Returns 1.0 on desktop, device density
 [animation.requestFrame]
 sig = (callback: (timestamp: number) => void): number
 doc = /** Register a callback to be invoked on the next frame. Returns a handle. */
+
+[animation.waitForInput]
+sig = (callback: (timestamp: number) => void, timeoutMs?: number): number
+doc = /** Like `requestFrame`, but the callback runs only on the next input event, canvas resize, or after `timeoutMs` (default: no timeout). Until then the last frame stays on screen and Budo sleeps (desktop) or stops rendering (Android), saving battery. Call it instead of `requestFrame` when nothing is animating; call `requestFrame` again to resume continuous frames. */
 
 [animation.cancelFrame]
 sig = (handle: number): void
@@ -525,6 +565,66 @@ doc = /** Convert a MIDI note number to frequency in Hz (A4 = 440 Hz). */
 [audio.getError]
 sig = (): string
 doc = /** Return the most recent audio error message. */
+
+[audio.getSampleRate]
+sig = (): number
+doc = /** The device rate (frames per second) that stream callbacks run at. Decode to this rate to play. */
+
+[audio.openOutput]
+sig = (optionsOrCallback: AudioStreamOptions | AudioStreamCallback, callback?: AudioStreamCallback): number
+doc = /** Open an output stream: Budo calls `callback(buffer, info)` to fill each chunk, keeping a queue of audio: adaptive (as small as the device and app allow) unless `latencyMs` fixes it. Plays exactly the samples written (no master gain), mixed with oscillators and buffers. Returns a stream handle, or -1 (see getError). */
+
+[audio.closeOutput]
+sig = (stream: number): void
+doc = /** Stop and close an output stream. */
+
+[audio.openInput]
+sig = (optionsOrCallback: AudioStreamOptions | AudioStreamCallback, callback?: AudioStreamCallback): number
+doc = /** Record from the microphone: Budo calls `callback(samples, info)` with each captured chunk. Android needs RECORD_AUDIO in app.json "permissions" and asks the user (open again once granted); the web needs https or localhost. Returns a stream handle, or -1 (see getError). */
+
+[audio.closeInput]
+sig = (stream: number): void
+doc = /** Stop recording and close an input stream. */
+
+[audio.openDecoder]
+sig = (source: string | ArrayBuffer | ArrayBufferView, options?: AudioDecoderOptions): number
+doc = /** Open a WAV, MP3, Ogg Vorbis, or FLAC decoder on an assets/... or files/... path (read in blocks: any size, seekable) or on bytes in memory. Returns a decoder handle, or -1 (see getError). */
+
+[audio.createDecoder]
+sig = (options?: AudioDecoderOptions): number
+doc = /** Create a push decoder that decodes bytes the app feeds (from block reads, the network, ...). It reads straight through: no seeking, no duration. Returns a decoder handle. */
+
+[audio.feedDecoder]
+sig = (decoder: number, bytes: ArrayBuffer | ArrayBufferView | null, end?: boolean): boolean
+doc = /** Push decoders: append encoded bytes; pass `end` with (or after) the last ones. */
+
+[audio.decode]
+sig = (decoder: number, out: Float32Array): number
+doc = /** Decode into `out` (interleaved, out.length / channels frames). Returns the frames decoded: 0 at the end, or when a push decoder needs more bytes; -1 on error. */
+
+[audio.getDecoderInfo]
+sig = (decoder: number): AudioDecoderInfo
+doc = /** Rate, channels, duration, position, and state of a decoder. */
+
+[audio.seekDecoder]
+sig = (decoder: number, seconds: number): boolean
+doc = /** Move a file or memory decoder to `seconds`. */
+
+[audio.closeDecoder]
+sig = (decoder: number): void
+doc = /** Close a decoder and the file it reads. */
+
+[audio.fft]
+sig = (re: Float32Array, im: Float32Array, inverse?: boolean): boolean
+doc = /** In-place complex FFT of (re, im), whose lengths are the same power of two (2 to 2^20). The inverse is scaled by 1 / length, so forward then inverse gives the input back. Runs natively: much faster than an FFT in JS. */
+
+[audio.getSpectrum]
+sig = (samples: Float32Array, outDb: Float32Array): Float32Array
+doc = /** The Hann-windowed spectrum of `samples` (a power-of-two length, 4 to 2^20) in dB, written to `outDb` (samples.length / 2 values; bin k is k * sampleRate / samples.length Hz) and returned. A full-scale sine reads about 0 dB; silence -180. */
+
+[audio.detectPitch]
+sig = (samples: Float32Array, sampleRate?: number, options?: PitchOptions): PitchResult
+doc = /** The pitch of mono `samples` (16 or more; the lowest pitch found has a period of half of them: 2048 samples at 48 kHz reach 47 Hz), by the McLeod pitch method: finds the fundamental even when a harmonic is louder. `sampleRate` defaults to the device's. */
 
 # ── sys.audio constants ────────────────────────────────────────────────────
 
@@ -778,6 +878,26 @@ doc = /** Read an assets/... or files/... path as UTF-8 text. Throws on error. *
 [file.readBinary]
 sig = (path: string): ArrayBuffer
 doc = /** Read an assets/... or files/... path as binary data. Returns an ArrayBuffer. Throws on error. */
+
+[file.openRead]
+sig = (path: string): number | null
+doc = /** Open an assets/... or files/... file for block reads (large files, a block at a time). Returns a handle, or null (see getError). */
+
+[file.read]
+sig = (handle: number, maxBytes?: number): ArrayBuffer | null
+doc = /** Read the next block (default 64 KiB, 16 MiB at most). Returns an empty ArrayBuffer at the end, or null on error. */
+
+[file.seek]
+sig = (handle: number, byteOffset: number): boolean
+doc = /** Move the next read to `byteOffset` (0 to the size). */
+
+[file.getReadInfo]
+sig = (handle: number): FileReadInfo
+doc = /** Size of the file and where the next read starts. */
+
+[file.closeRead]
+sig = (handle: number): void
+doc = /** Close a file opened with openRead. */
 
 [file.writeText]
 sig = (path: string, text: string): string

@@ -20,6 +20,8 @@ extern "C"
         BUDO_CMD_NATIVE_CACHE_CLEAN,
         BUDO_CMD_NATIVE_SDK_CACHE_INSPECT,
         BUDO_CMD_NATIVE_SDK_CACHE_CLEAN,
+        BUDO_CMD_ANDROID_CACHE_INSPECT,
+        BUDO_CMD_ANDROID_CACHE_CLEAN,
         BUDO_CMD_INIT,
         BUDO_CMD_WEB_SERVE,
         BUDO_CMD_WEB_EXPORT,
@@ -52,6 +54,7 @@ extern "C"
         BudoInitOptions init;
         NativeCompileOptions compile;
         bool cache_json; 
+        const char *cache_android_package; 
         const char *web_export_output;
         const char *web_listen_host; 
         int web_listen_port;

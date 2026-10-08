@@ -1384,7 +1384,7 @@ static const GlRenderTargetConstants render_target_constants = {
     GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_LINEAR, GL_CLAMP_TO_EDGE,
     GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, GL_FRAMEBUFFER,
-    GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+    GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, GL_DEPTH_COMPONENT24,
     GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_COMPLETE};
 
 int window_gl_create_render_target(Window *window, int width, int height, bool depth)
@@ -1535,6 +1535,7 @@ static bool immediate_gl_bind_screen_target(Window *window, GLBoundRenderTarget 
         bound->width = window->width;
         bound->height = window->height;
         bound->has_depth = true;
+        bound->slot = NULL;
     }
     return true;
 }
@@ -1554,6 +1555,7 @@ static bool immediate_gl_bind_app_render_target(Window *window, int target_id, G
         bound->width = rt->width;
         bound->height = rt->height;
         bound->has_depth = rt->has_depth;
+        bound->slot = rt;
     }
     return true;
 }
@@ -1581,6 +1583,7 @@ static bool immediate_gl_get_bound_render_target(Window *window, GLBoundRenderTa
         bound->width = window->width;
         bound->height = window->height;
         bound->has_depth = true;
+        bound->slot = NULL;
         return true;
     }
 
@@ -1593,6 +1596,7 @@ static bool immediate_gl_get_bound_render_target(Window *window, GLBoundRenderTa
             bound->width = rt->width;
             bound->height = rt->height;
             bound->has_depth = rt->has_depth;
+            bound->slot = rt;
             return true;
         }
     }
@@ -1625,6 +1629,24 @@ static void immediate_gl_apply_depth_state(const GLBoundRenderTarget *bound,
         glDisable(GL_DEPTH_TEST);
     }
     glDepthMask(depth_write ? GL_TRUE : GL_FALSE);
+}
+
+/* Mesh draws clear an offscreen target's depth on the first depth-tested
+ * draw of each frame, as the screen's is cleared before its first mesh, so
+ * the draws of one frame occlude one another. */
+static bool immediate_gl_mesh_needs_depth_clear(Window *window, const GLBoundRenderTarget *bound)
+{
+    uint32_t stamp;
+
+    if (!bound || bound->is_screen || !bound->slot || !bound->has_depth)
+        return false;
+    stamp = window->frame_serial + 1u;
+    if (stamp == 0u)
+        stamp = 1u;
+    if (bound->slot->depth_frame == stamp)
+        return false;
+    bound->slot->depth_frame = stamp;
+    return true;
 }
 
 static void immediate_gl_clear_render_target_depth(const GLBoundRenderTarget *bound)
@@ -1684,7 +1706,7 @@ static bool immediate_gl_draw_mesh_now(Window *window, int program_id, int layou
 
     /* GL state for the mesh pass. */
     immediate_gl_apply_depth_state(&target, depth_test, depth_write,
-                                   depth_test && !target.is_screen);
+                                   depth_test && immediate_gl_mesh_needs_depth_clear(window, &target));
 
     if (cull != GL_NONE)
     {

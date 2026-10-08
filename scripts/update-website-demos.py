@@ -180,8 +180,18 @@ def is_image_file(path: Path) -> bool:
     return path.suffix.lower() in IMAGE_SUFFIXES
 
 
+# Build outputs and signing material: never listed on a demo page or zipped.
+EXCLUDED_DIRS = {"dist", "build", "keystore"}
+EXCLUDED_SUFFIXES = {".apk", ".aab", ".jks", ".keystore"}
+
+
 def is_generated_or_hidden_demo_file(relative_path: Path) -> bool:
-    return relative_path.as_posix() == GENERATED_PAGE or any(part.startswith(".") for part in relative_path.parts)
+    return (
+        relative_path.as_posix() == GENERATED_PAGE
+        or any(part.startswith(".") for part in relative_path.parts)
+        or any(part in EXCLUDED_DIRS for part in relative_path.parts[:-1])
+        or relative_path.suffix.lower() in EXCLUDED_SUFFIXES
+    )
 
 
 def list_demo_files(demo_dir: Path) -> list[dict]:

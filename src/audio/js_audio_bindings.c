@@ -1,5 +1,9 @@
 #include "js_audio_bindings.h"
+#include "audio_decoder.h"
+#include "audio_dsp.h"
 #include "audio_service.h"
+#include "file/file_wrapper.h"
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,11 +15,31 @@
 #define BUDO_JS_IS_ARRAY(ctx, val) JS_IsArray(ctx, val)
 #endif
 
+#define JS_AUDIO_MAX_DECODERS 32
+
+typedef struct JsAudioStream
+{
+    bool active;
+    bool failed; 
+    int channels;
+    JSValue callback;
+    JSValue buffer; 
+    JSValue info;
+    float *samples;   
+    uint64_t frames;  
+} JsAudioStream;
+
 struct JsAudioContext
 {
     AudioContext *audio_ctx;
     bool lazy_initialized;
     char asset_root[4096];
+    JSContext *js;
+    FileContext *const *files; 
+    JsAudioStream outputs[AUDIO_MAX_OUTPUT_STREAMS];
+    JsAudioStream inputs[AUDIO_MAX_INPUT_STREAMS];
+    AudioStreamDecoder *decoders[JS_AUDIO_MAX_DECODERS];
+    char error[512]; 
 };
 
 static JsAudioContext *js_audio_binding_state(JSContext *ctx,
@@ -341,6 +365,9 @@ JS_AUDIO_CALLBACK(js_audio_get_error)
     (void)argc;
     (void)argv;
     JS_AUDIO_CONTEXT();
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    if (state && state->error[0])
+        return JS_NewString(ctx, state->error);
     if (!g_audio_ctx)
         return JS_NewString(ctx, "Audio context unavailable");
     return JS_NewString(ctx, audio_get_error(g_audio_ctx));
@@ -448,12 +475,570 @@ JS_AUDIO_CALLBACK(js_audio_midi_to_freq)
     return JS_NewFloat64(ctx, audio_midi_to_freq(note));
 }
 
+static void js_audio_set_int(JSContext *ctx, JSValueConst object, const char *name, int value)
+{
+    JS_SetPropertyStr(ctx, object, name, JS_NewInt32(ctx, value));
+}
+
+static void js_audio_fail(JsAudioContext *state, const char *message)
+{
+    snprintf(state->error, sizeof(state->error), "%s", message);
+}
+
+static JSValue js_audio_new_float32(JSContext *ctx, size_t count, float **samples)
+{
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue constructor = JS_GetPropertyStr(ctx, global, "Float32Array");
+    JSValue length = JS_NewInt64(ctx, (int64_t)count);
+    JSValue array = JS_CallConstructor(ctx, constructor, 1, &length);
+    JS_FreeValue(ctx, length);
+    JS_FreeValue(ctx, constructor);
+    JS_FreeValue(ctx, global);
+    if (JS_IsException(array))
+        return array;
+    size_t offset = 0, bytes = 0, element = 0;
+    JSValue buffer = JS_GetTypedArrayBuffer(ctx, array, &offset, &bytes, &element);
+    size_t size = 0;
+    uint8_t *data = JS_IsException(buffer) ? NULL : JS_GetArrayBuffer(ctx, &size, buffer);
+    JS_FreeValue(ctx, buffer);
+    if (!data)
+    {
+        JS_FreeValue(ctx, array);
+        return JS_ThrowInternalError(ctx, "audio: could not allocate a sample buffer");
+    }
+    *samples = (float *)(data + offset);
+    return array;
+}
+
+static float *js_audio_float32_arg(JSContext *ctx, JSValueConst value, size_t *count)
+{
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue constructor = JS_GetPropertyStr(ctx, global, "Float32Array");
+    int is_float32 = JS_IsInstanceOf(ctx, value, constructor);
+    JS_FreeValue(ctx, constructor);
+    JS_FreeValue(ctx, global);
+    if (is_float32 != 1)
+        return NULL;
+    size_t offset = 0, bytes = 0, element = 0;
+    JSValue buffer = JS_GetTypedArrayBuffer(ctx, value, &offset, &bytes, &element);
+    if (JS_IsException(buffer))
+        return NULL;
+    size_t size = 0;
+    uint8_t *data = JS_GetArrayBuffer(ctx, &size, buffer);
+    JS_FreeValue(ctx, buffer);
+    if (!data)
+        return NULL;
+    *count = bytes / sizeof(float);
+    return (float *)(data + offset);
+}
+
+static const uint8_t *js_audio_bytes_arg(JSContext *ctx, JSValueConst value, size_t *size)
+{
+    uint8_t *data = JS_GetArrayBuffer(ctx, size, value);
+    if (data)
+        return data;
+    JS_FreeValue(ctx, JS_GetException(ctx));
+    size_t offset = 0, bytes = 0, element = 0;
+    JSValue buffer = JS_GetTypedArrayBuffer(ctx, value, &offset, &bytes, &element);
+    if (JS_IsException(buffer))
+    {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return NULL;
+    }
+    size_t total = 0;
+    data = JS_GetArrayBuffer(ctx, &total, buffer);
+    JS_FreeValue(ctx, buffer);
+    if (!data)
+        return NULL;
+    *size = bytes;
+    return data + offset;
+}
+
+static double js_audio_number_option(JSContext *ctx, JSValueConst options, const char *name, double fallback)
+{
+    if (!JS_IsObject(options))
+        return fallback;
+    JSValue value = JS_GetPropertyStr(ctx, options, name);
+    double number = fallback;
+    if (!JS_IsUndefined(value) && !JS_IsNull(value))
+        JS_ToFloat64(ctx, &number, value);
+    JS_FreeValue(ctx, value);
+    return number;
+}
+
+static void js_audio_stream_release(JSContext *ctx, JsAudioStream *stream)
+{
+    if (!stream->active)
+        return;
+    JS_FreeValue(ctx, stream->callback);
+    JS_FreeValue(ctx, stream->buffer);
+    JS_FreeValue(ctx, stream->info);
+    memset(stream, 0, sizeof(*stream));
+}
+
+static JSValue js_audio_open_stream(JSContext *ctx, int argc, JSValueConst *argv, JSValueConst *func_data,
+                                    bool input)
+{
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    AudioContext *audio = js_audio_context(ctx, func_data);
+    const char *name = input ? "audio.openInput" : "audio.openOutput";
+    JSValueConst options = argc >= 2 ? argv[0] : JS_UNDEFINED;
+    JSValueConst callback = argc >= 2 ? argv[1] : (argc >= 1 ? argv[0] : JS_UNDEFINED);
+    if (!JS_IsFunction(ctx, callback))
+        return JS_ThrowTypeError(ctx, "%s([options], callback): callback must be a function", name);
+    if (!JS_IsUndefined(options) && !JS_IsNull(options) && !JS_IsObject(options))
+        return JS_ThrowTypeError(ctx, "%s: options must be an object", name);
+    if (!state || !audio)
+        return JS_NewInt32(ctx, -1);
+    state->error[0] = '\0';
+    int channels = (int)js_audio_number_option(ctx, options, "channels", input ? 1 : 2);
+    
+    double latency = js_audio_number_option(ctx, options, "latencyMs", NAN);
+    if (channels != 1 && channels != 2)
+        return JS_ThrowRangeError(ctx, "%s: channels must be 1 or 2", name);
+    if (isnan(latency))
+        latency = 0.0;
+    else if (!(latency >= 1.0 && latency <= 2000.0))
+        return JS_ThrowRangeError(ctx, "%s: latencyMs must be between 1 and 2000", name);
+    int id = input ? audio_input_open(audio, channels, latency) : audio_output_open(audio, channels, latency);
+    if (id < 0)
+        return JS_NewInt32(ctx, -1);
+    JsAudioStream *stream = input ? &state->inputs[id] : &state->outputs[id];
+    js_audio_stream_release(ctx, stream);
+    float *samples = NULL;
+    JSValue buffer = js_audio_new_float32(ctx, (size_t)AUDIO_STREAM_CHUNK_FRAMES * (size_t)channels, &samples);
+    if (JS_IsException(buffer))
+    {
+        if (input)
+            audio_input_close(audio, id);
+        else
+            audio_output_close(audio, id);
+        return buffer;
+    }
+    stream->active = true;
+    stream->channels = channels;
+    stream->callback = JS_DupValue(ctx, callback);
+    stream->buffer = buffer;
+    stream->samples = samples;
+    stream->info = JS_NewObject(ctx);
+    return JS_NewInt32(ctx, id);
+}
+
+static JSValue js_audio_close_stream(JSContext *ctx, int argc, JSValueConst *argv, JSValueConst *func_data,
+                                     bool input)
+{
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    int id = -1;
+    if (argc < 1 || JS_ToInt32(ctx, &id, argv[0]) < 0)
+        return JS_EXCEPTION;
+    int count = input ? AUDIO_MAX_INPUT_STREAMS : AUDIO_MAX_OUTPUT_STREAMS;
+    if (!state || id < 0 || id >= count)
+        return JS_UNDEFINED;
+    JsAudioStream *stream = input ? &state->inputs[id] : &state->outputs[id];
+    if (!stream->active)
+        return JS_UNDEFINED;
+    if (input)
+        audio_input_close(state->audio_ctx, id);
+    else
+        audio_output_close(state->audio_ctx, id);
+    js_audio_stream_release(ctx, stream);
+    return JS_UNDEFINED;
+}
+
+JS_AUDIO_CALLBACK(js_audio_open_output)
+{
+    (void)this_val, (void)magic;
+    return js_audio_open_stream(ctx, argc, argv, func_data, false);
+}
+
+JS_AUDIO_CALLBACK(js_audio_close_output)
+{
+    (void)this_val, (void)magic;
+    return js_audio_close_stream(ctx, argc, argv, func_data, false);
+}
+
+JS_AUDIO_CALLBACK(js_audio_open_input)
+{
+    (void)this_val, (void)magic;
+    return js_audio_open_stream(ctx, argc, argv, func_data, true);
+}
+
+JS_AUDIO_CALLBACK(js_audio_close_input)
+{
+    (void)this_val, (void)magic;
+    return js_audio_close_stream(ctx, argc, argv, func_data, true);
+}
+
+JS_AUDIO_CALLBACK(js_audio_get_sample_rate)
+{
+    (void)this_val, (void)argc, (void)argv;
+    JS_AUDIO_CONTEXT();
+    return JS_NewInt32(ctx, g_audio_ctx ? audio_stream_sample_rate(g_audio_ctx) : 0);
+}
+
+static bool js_audio_call_stream(JsAudioContext *state, JsAudioStream *stream, bool input, int id)
+{
+    JSContext *ctx = state->js;
+    AudioStreamStats stats;
+    memset(&stats, 0, sizeof(stats));
+    audio_stream_get_stats(state->audio_ctx, input, id, &stats);
+    int rate = stats.sample_rate > 0 ? stats.sample_rate : audio_stream_sample_rate(state->audio_ctx);
+    js_audio_set_int(ctx, stream->info, "frames", AUDIO_STREAM_CHUNK_FRAMES);
+    js_audio_set_int(ctx, stream->info, "channels", stream->channels);
+    js_audio_set_int(ctx, stream->info, "sampleRate", rate);
+    JS_SetPropertyStr(ctx, stream->info, "time",
+                      JS_NewFloat64(ctx, rate > 0 ? (double)stream->frames / (double)rate : 0.0));
+    JS_SetPropertyStr(ctx, stream->info, "latency",
+                      JS_NewFloat64(ctx, rate > 0 ? (double)stats.latency_frames / (double)rate : 0.0));
+    JS_SetPropertyStr(ctx, stream->info, input ? "overruns" : "underruns",
+                      JS_NewFloat64(ctx, (double)stats.glitches));
+    JSValue args[2] = {JS_DupValue(ctx, stream->buffer), JS_DupValue(ctx, stream->info)};
+    JSValue result = JS_Call(ctx, stream->callback, JS_UNDEFINED, 2, args);
+    JS_FreeValue(ctx, args[0]);
+    JS_FreeValue(ctx, args[1]);
+    if (JS_IsException(result))
+    {
+        JSValue error = JS_GetException(ctx);
+        const char *text = JS_ToCString(ctx, error);
+        fprintf(stderr, "sys.audio %s callback threw: %s (no more calls)\n", input ? "input" : "output",
+                text ? text : "error");
+        snprintf(state->error, sizeof(state->error), "the %s callback threw: %s", input ? "input" : "output",
+                 text ? text : "error");
+        JS_FreeCString(ctx, text);
+        JS_FreeValue(ctx, error);
+        if (stream->active)
+            stream->failed = true;
+        return false;
+    }
+    JS_FreeValue(ctx, result);
+    stream->frames += AUDIO_STREAM_CHUNK_FRAMES;
+    return true;
+}
+
+void js_audio_poll(JsAudioContext *state)
+{
+    if (!state || !state->audio_ctx || !audio_streams_active(state->audio_ctx))
+        return;
+    AudioContext *audio = state->audio_ctx;
+    const size_t chunk = AUDIO_STREAM_CHUNK_FRAMES;
+    for (int id = 0; id < AUDIO_MAX_OUTPUT_STREAMS; id++)
+    {
+
+        for (int calls = 0; calls < 64; calls++)
+        {
+            JsAudioStream *stream = &state->outputs[id];
+            if (!stream->active || stream->failed || audio_output_wanted(audio, id) < (int)chunk)
+                break;
+            memset(stream->samples, 0, chunk * (size_t)stream->channels * sizeof(float));
+            if (!js_audio_call_stream(state, stream, false, id) || !stream->active)
+                break;
+            audio_output_write(audio, id, stream->samples, (int)chunk);
+        }
+    }
+    for (int id = 0; id < AUDIO_MAX_INPUT_STREAMS; id++)
+    {
+        for (int calls = 0; calls < 64; calls++)
+        {
+            JsAudioStream *stream = &state->inputs[id];
+            if (!stream->active || stream->failed || audio_input_available(audio, id) < (int)chunk)
+                break;
+            audio_input_read(audio, id, stream->samples, (int)chunk);
+            if (!js_audio_call_stream(state, stream, true, id))
+                break;
+        }
+    }
+    audio_streams_serviced(audio);
+}
+
+bool js_audio_has_pending_work(JsAudioContext *state)
+{
+    return state && state->audio_ctx && audio_streams_active(state->audio_ctx);
+}
+
+double js_audio_max_idle_ms(JsAudioContext *state)
+{
+
+    return js_audio_has_pending_work(state) ? 4.0 : -1.0;
+}
+
+static AudioStreamDecoder *js_audio_decoder_arg(JsAudioContext *state, JSContext *ctx, JSValueConst value,
+                                                int *slot)
+{
+    int handle = 0;
+    if (!state || JS_ToInt32(ctx, &handle, value) < 0 || handle < 1 || handle > JS_AUDIO_MAX_DECODERS)
+        return NULL;
+    if (slot)
+        *slot = handle - 1;
+    return state->decoders[handle - 1];
+}
+
+static JSValue js_audio_store_decoder(JsAudioContext *state, JSContext *ctx, AudioStreamDecoder *decoder)
+{
+    if (!decoder)
+        return JS_NewInt32(ctx, -1);
+    for (int i = 0; i < JS_AUDIO_MAX_DECODERS; i++)
+        if (!state->decoders[i])
+        {
+            state->decoders[i] = decoder;
+            return JS_NewInt32(ctx, i + 1);
+        }
+    audio_stream_decoder_close(decoder);
+    js_audio_fail(state, "too many open decoders");
+    return JS_NewInt32(ctx, -1);
+}
+
+JS_AUDIO_CALLBACK(js_audio_open_decoder)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    if (!state)
+        return JS_NewInt32(ctx, -1);
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "audio.openDecoder(source, [options]): source is a path or an ArrayBuffer");
+    state->error[0] = '\0';
+    JSValueConst options = argc >= 2 ? argv[1] : JS_UNDEFINED;
+    int rate = (int)js_audio_number_option(ctx, options, "sampleRate", 0);
+    int channels = (int)js_audio_number_option(ctx, options, "channels", 2);
+    if (channels != 1 && channels != 2)
+        return JS_ThrowRangeError(ctx, "audio.openDecoder: channels must be 1 or 2");
+    if (rate < 0 || rate > 384000)
+        return JS_ThrowRangeError(ctx, "audio.openDecoder: sampleRate must be 0 (the file's) to 384000");
+    char error[512] = "";
+    AudioStreamDecoder *decoder = NULL;
+    if (JS_IsString(argv[0]))
+    {
+        const char *path = JS_ToCString(ctx, argv[0]);
+        if (!path)
+            return JS_EXCEPTION;
+        FileContext *files = state->files ? *state->files : NULL;
+        FileNativeReference file;
+        if (!files)
+            snprintf(error, sizeof(error), "audio: no file access to open '%s'", path);
+        else if (!file_native_open(files, path, &file))
+            snprintf(error, sizeof(error), "audio: cannot open '%s': %s", path, file_get_error(files));
+        else
+            decoder = audio_stream_decoder_open_file(&file, rate, channels, error, sizeof(error));
+        JS_FreeCString(ctx, path);
+    }
+    else
+    {
+        size_t size = 0;
+        const uint8_t *bytes = js_audio_bytes_arg(ctx, argv[0], &size);
+        if (!bytes)
+            return JS_ThrowTypeError(ctx, "audio.openDecoder: source must be a path, an ArrayBuffer, or a typed array");
+        decoder = audio_stream_decoder_open_memory(bytes, size, rate, channels, error, sizeof(error));
+    }
+    if (!decoder)
+    {
+        js_audio_fail(state, error[0] ? error : "audio: cannot open the decoder");
+        return JS_NewInt32(ctx, -1);
+    }
+    return js_audio_store_decoder(state, ctx, decoder);
+}
+
+JS_AUDIO_CALLBACK(js_audio_create_decoder)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    if (!state)
+        return JS_NewInt32(ctx, -1);
+    state->error[0] = '\0';
+    JSValueConst options = argc >= 1 ? argv[0] : JS_UNDEFINED;
+    int rate = (int)js_audio_number_option(ctx, options, "sampleRate", 0);
+    int channels = (int)js_audio_number_option(ctx, options, "channels", 2);
+    if (channels != 1 && channels != 2)
+        return JS_ThrowRangeError(ctx, "audio.createDecoder: channels must be 1 or 2");
+    if (rate < 0 || rate > 384000)
+        return JS_ThrowRangeError(ctx, "audio.createDecoder: sampleRate must be 0 (the data's) to 384000");
+    return js_audio_store_decoder(state, ctx, audio_stream_decoder_create_push(rate, channels));
+}
+
+JS_AUDIO_CALLBACK(js_audio_feed_decoder)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    AudioStreamDecoder *decoder = argc >= 1 ? js_audio_decoder_arg(state, ctx, argv[0], NULL) : NULL;
+    if (!decoder)
+        return JS_ThrowTypeError(ctx, "audio.feedDecoder: not an open decoder");
+    size_t size = 0;
+    const uint8_t *bytes = NULL;
+    if (argc >= 2 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
+    {
+        bytes = js_audio_bytes_arg(ctx, argv[1], &size);
+        if (!bytes)
+            return JS_ThrowTypeError(ctx, "audio.feedDecoder: bytes must be an ArrayBuffer or a typed array");
+    }
+    bool end = argc >= 3 && JS_ToBool(ctx, argv[2]) > 0;
+    char error[512] = "";
+    state->error[0] = '\0';
+    bool ok = audio_stream_decoder_feed(decoder, bytes, size, end, error, sizeof(error));
+    if (!ok)
+        js_audio_fail(state, error);
+    return JS_NewBool(ctx, ok);
+}
+
+JS_AUDIO_CALLBACK(js_audio_decode)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    AudioStreamDecoder *decoder = argc >= 1 ? js_audio_decoder_arg(state, ctx, argv[0], NULL) : NULL;
+    if (!decoder)
+        return JS_ThrowTypeError(ctx, "audio.decode: not an open decoder");
+    size_t count = 0;
+    float *out = argc >= 2 ? js_audio_float32_arg(ctx, argv[1], &count) : NULL;
+    if (!out)
+        return JS_ThrowTypeError(ctx, "audio.decode(decoder, out): out must be a Float32Array");
+    AudioStreamDecoderInfo info;
+    audio_stream_decoder_info(decoder, &info);
+    int channels = info.channels > 0 ? info.channels : 2;
+    int frames = (int)(count / (size_t)channels);
+    char error[512] = "";
+    state->error[0] = '\0';
+    int decoded = audio_stream_decoder_read(decoder, out, frames, error, sizeof(error));
+    if (decoded < 0)
+    {
+        js_audio_fail(state, error[0] ? error : "audio: decoding failed");
+        return JS_NewInt32(ctx, -1);
+    }
+    return JS_NewInt32(ctx, decoded);
+}
+
+JS_AUDIO_CALLBACK(js_audio_get_decoder_info)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    AudioStreamDecoder *decoder = argc >= 1 ? js_audio_decoder_arg(state, ctx, argv[0], NULL) : NULL;
+    if (!decoder)
+        return JS_ThrowTypeError(ctx, "audio.getDecoderInfo: not an open decoder");
+    AudioStreamDecoderInfo info;
+    audio_stream_decoder_info(decoder, &info);
+    double rate = info.sample_rate > 0 ? (double)info.sample_rate : 0.0;
+    JSValue result = JS_NewObject(ctx);
+    js_audio_set_int(ctx, result, "sampleRate", info.sample_rate);
+    js_audio_set_int(ctx, result, "channels", info.channels);
+    js_audio_set_int(ctx, result, "sourceSampleRate", info.source_sample_rate);
+    js_audio_set_int(ctx, result, "sourceChannels", info.source_channels);
+    JS_SetPropertyStr(ctx, result, "duration",
+                      JS_NewFloat64(ctx, info.length_frames >= 0 && rate > 0 ? (double)info.length_frames / rate : -1));
+    JS_SetPropertyStr(ctx, result, "position",
+                      JS_NewFloat64(ctx, rate > 0 ? (double)info.position_frames / rate : 0));
+    JS_SetPropertyStr(ctx, result, "ready", JS_NewBool(ctx, info.ready));
+    JS_SetPropertyStr(ctx, result, "ended", JS_NewBool(ctx, info.ended));
+    JS_SetPropertyStr(ctx, result, "needsData", JS_NewBool(ctx, info.needs_data));
+    JS_SetPropertyStr(ctx, result, "seekable", JS_NewBool(ctx, info.seekable));
+    return result;
+}
+
+JS_AUDIO_CALLBACK(js_audio_seek_decoder)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    AudioStreamDecoder *decoder = argc >= 1 ? js_audio_decoder_arg(state, ctx, argv[0], NULL) : NULL;
+    if (!decoder)
+        return JS_ThrowTypeError(ctx, "audio.seekDecoder: not an open decoder");
+    double seconds = 0;
+    if (argc < 2 || JS_ToFloat64(ctx, &seconds, argv[1]) < 0)
+        return JS_EXCEPTION;
+    AudioStreamDecoderInfo info;
+    audio_stream_decoder_info(decoder, &info);
+    char error[512] = "";
+    state->error[0] = '\0';
+    bool ok = audio_stream_decoder_seek(decoder, (int64_t)(seconds > 0 ? seconds * info.sample_rate : 0), error,
+                                        sizeof(error));
+    if (!ok)
+        js_audio_fail(state, error);
+    return JS_NewBool(ctx, ok);
+}
+
+JS_AUDIO_CALLBACK(js_audio_close_decoder)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    int slot = -1;
+    AudioStreamDecoder *decoder = argc >= 1 ? js_audio_decoder_arg(state, ctx, argv[0], &slot) : NULL;
+    if (decoder)
+    {
+        audio_stream_decoder_close(decoder);
+        state->decoders[slot] = NULL;
+    }
+    return JS_UNDEFINED;
+}
+
 typedef struct JsAudioFunction
 {
     const char *name;
     uint8_t length;
     JSCFunctionData *callback;
 } JsAudioFunction;
+
+JS_AUDIO_CALLBACK(js_audio_fft)
+{
+    (void)this_val, (void)magic, (void)func_data;
+    size_t count = 0, im_count = 0;
+    float *re = argc >= 1 ? js_audio_float32_arg(ctx, argv[0], &count) : NULL;
+    float *im = argc >= 2 ? js_audio_float32_arg(ctx, argv[1], &im_count) : NULL;
+    if (!re || !im)
+        return JS_ThrowTypeError(ctx, "audio.fft(re, im, inverse): re and im must be Float32Arrays");
+    if (count != im_count || !audio_dsp_is_power_of_two(count) || count > AUDIO_DSP_MAX_SIZE)
+        return JS_ThrowRangeError(ctx, "audio.fft: re and im must have the same power-of-two length (2 to 2^20)");
+    bool inverse = argc >= 3 && JS_ToBool(ctx, argv[2]) > 0;
+    if (!audio_dsp_fft(re, im, count, inverse))
+        return JS_ThrowInternalError(ctx, "audio.fft: out of memory");
+    return JS_TRUE;
+}
+
+JS_AUDIO_CALLBACK(js_audio_get_spectrum)
+{
+    (void)this_val, (void)magic, (void)func_data;
+    size_t count = 0, out_count = 0;
+    float *samples = argc >= 1 ? js_audio_float32_arg(ctx, argv[0], &count) : NULL;
+    float *out = argc >= 2 ? js_audio_float32_arg(ctx, argv[1], &out_count) : NULL;
+    if (!samples || !out)
+        return JS_ThrowTypeError(ctx, "audio.getSpectrum(samples, outDb): both must be Float32Arrays");
+    if (count < 4 || !audio_dsp_is_power_of_two(count) || count > AUDIO_DSP_MAX_SIZE)
+        return JS_ThrowRangeError(ctx, "audio.getSpectrum: samples.length must be a power of two (4 to 2^20)");
+    if (out_count < count / 2)
+        return JS_ThrowRangeError(ctx, "audio.getSpectrum: outDb needs samples.length / 2 values");
+    if (!audio_dsp_spectrum_db(samples, count, out))
+        return JS_ThrowInternalError(ctx, "audio.getSpectrum: out of memory");
+    return JS_DupValue(ctx, argv[1]);
+}
+
+JS_AUDIO_CALLBACK(js_audio_detect_pitch)
+{
+    (void)this_val, (void)magic;
+    JsAudioContext *state = js_audio_binding_state(ctx, func_data);
+    size_t count = 0;
+    float *samples = argc >= 1 ? js_audio_float32_arg(ctx, argv[0], &count) : NULL;
+    if (!samples)
+        return JS_ThrowTypeError(ctx, "audio.detectPitch(samples, sampleRate, options): samples must be a Float32Array");
+    if (count < 16 || count > AUDIO_DSP_MAX_SIZE / 2)
+        return JS_ThrowRangeError(ctx, "audio.detectPitch: samples.length must be 16 to 2^19");
+    double rate = 0;
+    if (argc >= 2 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]) && JS_ToFloat64(ctx, &rate, argv[1]) < 0)
+        return JS_EXCEPTION;
+    if (!(rate > 0))
+        rate = state && state->audio_ctx ? audio_stream_sample_rate(state->audio_ctx) : 48000;
+    if (!(rate > 0))
+        rate = 48000;
+    AudioPitchOptions options;
+    audio_dsp_pitch_defaults(&options);
+    if (argc >= 3)
+    {
+        options.min_frequency = js_audio_number_option(ctx, argv[2], "minFrequency", options.min_frequency);
+        options.max_frequency = js_audio_number_option(ctx, argv[2], "maxFrequency", options.max_frequency);
+        options.min_clarity = js_audio_number_option(ctx, argv[2], "minClarity", options.min_clarity);
+        options.min_level_db = js_audio_number_option(ctx, argv[2], "minLevel", options.min_level_db);
+    }
+    AudioPitch pitch;
+    if (!audio_dsp_detect_pitch(samples, count, rate, &options, &pitch))
+        return JS_ThrowInternalError(ctx, "audio.detectPitch: out of memory");
+    JSValue result = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, result, "frequency", JS_NewFloat64(ctx, pitch.frequency));
+    JS_SetPropertyStr(ctx, result, "clarity", JS_NewFloat64(ctx, pitch.clarity));
+    JS_SetPropertyStr(ctx, result, "level", JS_NewFloat64(ctx, pitch.level_db));
+    return result;
+}
 
 static const JsAudioFunction js_audio_funcs[] = {
     
@@ -485,6 +1070,23 @@ static const JsAudioFunction js_audio_funcs[] = {
 
     {"midiToFreq", 1, js_audio_midi_to_freq},
     {"getError", 0, js_audio_get_error},
+
+    {"getSampleRate", 0, js_audio_get_sample_rate},
+    {"openOutput", 2, js_audio_open_output},
+    {"closeOutput", 1, js_audio_close_output},
+    {"openInput", 2, js_audio_open_input},
+    {"closeInput", 1, js_audio_close_input},
+    {"openDecoder", 2, js_audio_open_decoder},
+    {"createDecoder", 1, js_audio_create_decoder},
+    {"feedDecoder", 3, js_audio_feed_decoder},
+    {"decode", 2, js_audio_decode},
+    {"getDecoderInfo", 1, js_audio_get_decoder_info},
+    {"seekDecoder", 2, js_audio_seek_decoder},
+    {"closeDecoder", 1, js_audio_close_decoder},
+    
+    {"fft", 3, js_audio_fft},
+    {"getSpectrum", 2, js_audio_get_spectrum},
+    {"detectPitch", 3, js_audio_detect_pitch},
 };
 
 static int js_audio_add_function(JSContext *ctx, JSValue audio_obj,
@@ -522,6 +1124,7 @@ JsAudioContext *js_audio_init(JSContext *ctx, const char *asset_root)
         return NULL;
     snprintf(state->asset_root, sizeof(state->asset_root), "%s",
              asset_root ? asset_root : ".");
+    state->js = ctx;
 
     JSValue global = JS_GetGlobalObject(ctx);
     JSValue sys_obj = JS_GetPropertyStr(ctx, global, "sys");
@@ -548,10 +1151,22 @@ JsAudioContext *js_audio_init(JSContext *ctx, const char *asset_root)
     return state;
 }
 
+void js_audio_set_files(JsAudioContext *state, FileContext *const *files)
+{
+    if (state)
+        state->files = files;
+}
+
 void js_audio_cleanup(JsAudioContext *state)
 {
     if (!state)
         return;
+    for (int i = 0; i < AUDIO_MAX_OUTPUT_STREAMS; i++)
+        js_audio_stream_release(state->js, &state->outputs[i]);
+    for (int i = 0; i < AUDIO_MAX_INPUT_STREAMS; i++)
+        js_audio_stream_release(state->js, &state->inputs[i]);
+    for (int i = 0; i < JS_AUDIO_MAX_DECODERS; i++)
+        audio_stream_decoder_close(state->decoders[i]);
     audio_destroy(state->audio_ctx);
     free(state);
 }

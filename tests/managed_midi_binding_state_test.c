@@ -80,10 +80,12 @@ static void js_runtime_create(JsMidiRuntime *runtime, const char *session_name)
              "globalThis.lastLocal = -1;\n"
              "globalThis.lastSysex = -1;\n"
              "globalThis.lastRtp = -1;\n"
+             "globalThis.order = '';\n"
              "globalThis.inputHandle = sys.midi.openInput(0, message => {\n"
              "  if (message.status === sys.midi.SYSEX) {\n"
-             "    sysexCount++; lastSysex = message.data[1];\n"
-             "  } else { localCount++; lastLocal = message.data1; }\n"
+             "    sysexCount++; lastSysex = message.data[1]; order += 's';\n"
+             "  } else { localCount++; lastLocal = message.data1; order += 'm'; }\n"
+             "  order = order.slice(-8);\n"
              "});\n"
              "globalThis.sessionHandle = sys.midi.createSession('%s', 0);\n"
              "sys.midi.onSessionMessage(sessionHandle, message => {\n"
@@ -162,28 +164,43 @@ static void test_javascript(void)
     js_midi_poll(runtime_b.midi_state);
     js_assert_counts(&runtime_b, 1, 1, 1, 22, 42, 32);
 
-    for (int index = 0; index < 260; index++)
-    {
+    js_eval_or_fail(&runtime_a, "order = '';");
+    assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    assert(midi_mock_emit_sysex(runtime_a.midi, 0, sysex_a, sizeof(sysex_a)));
+    assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    assert(midi_mock_emit_sysex(runtime_a.midi, 0, sysex_a, sizeof(sysex_a)));
+    assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    js_midi_poll(runtime_a.midi_state);
+    js_eval_or_fail(&runtime_a, "if (order !== 'msmsm') throw Error('arrival order lost: ' + order);");
+    js_assert_counts(&runtime_a, 4, 3, 1, 11, 41, 31);
+
+    for (int index = 0; index < 1030; index++)
         assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    for (int index = 0; index < 260; index++)
         assert(rtpmidi_mock_emit(runtime_a.rtpmidi, 0, &rtp_a));
-    }
     for (int index = 0; index < 18; index++)
         assert(midi_mock_emit_sysex(runtime_a.midi, 0,
                                     sysex_a, sizeof(sysex_a)));
-    assert(js_midi_dropped_messages(runtime_a.midi_state) == 4);
-    assert(js_midi_dropped_sysex(runtime_a.midi_state) == 2);
+    assert(js_midi_dropped_messages(runtime_a.midi_state) == 6);
+    assert(js_midi_dropped_sysex(runtime_a.midi_state) == 18);
     assert(js_midi_dropped_rtpmidi(runtime_a.midi_state) == 4);
     assert(js_midi_dropped_messages(runtime_b.midi_state) == 0);
-
     js_midi_poll(runtime_a.midi_state);
-    js_assert_counts(&runtime_a, 257, 17, 257, 11, 41, 31);
+    js_assert_counts(&runtime_a, 1028, 3, 257, 11, 41, 31);
+
+    for (int index = 0; index < 34; index++)
+        assert(midi_mock_emit_sysex(runtime_a.midi, 0,
+                                    sysex_a, sizeof(sysex_a)));
+    assert(js_midi_dropped_sysex(runtime_a.midi_state) == 20);
+    js_midi_poll(runtime_a.midi_state);
+    js_assert_counts(&runtime_a, 1028, 35, 257, 11, 41, 31);
 
     js_runtime_destroy(&runtime_b);
     assert(midi_mock_live_count() == 1);
     assert(rtpmidi_mock_live_count() == 1);
     assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
     js_midi_poll(runtime_a.midi_state);
-    js_assert_counts(&runtime_a, 258, 17, 257, 11, 41, 31);
+    js_assert_counts(&runtime_a, 1029, 35, 257, 11, 41, 31);
     js_runtime_destroy(&runtime_a);
     assert(midi_mock_destroy_count() == 2);
     assert(rtpmidi_mock_destroy_count() == 2);
@@ -222,10 +239,12 @@ static void lua_runtime_create(LuaMidiRuntime *runtime,
     snprintf(script, sizeof(script),
              "localCount, sysexCount, rtpCount = 0, 0, 0\n"
              "lastLocal, lastSysex, lastRtp = -1, -1, -1\n"
+             "order = ''\n"
              "inputHandle = sys.midi.openInput(0, function(message)\n"
              "  if message.status == sys.midi.SYSEX then\n"
-             "    sysexCount = sysexCount + 1; lastSysex = message.data[2]\n"
-             "  else localCount = localCount + 1; lastLocal = message.data1 end\n"
+             "    sysexCount = sysexCount + 1; lastSysex = message.data[2]; order = order .. 's'\n"
+             "  else localCount = localCount + 1; lastLocal = message.data1; order = order .. 'm' end\n"
+             "  order = string.sub(order, -8)\n"
              "end)\n"
              "sessionHandle = sys.midi.createSession('%s', 0)\n"
              "sys.midi.onSessionMessage(sessionHandle, function(message)\n"
@@ -297,28 +316,43 @@ static void test_lua(void)
     lua_midi_poll(runtime_b.midi_state);
     lua_assert_counts(&runtime_b, 1, 1, 1, 52, 72, 62);
 
-    for (int index = 0; index < 260; index++)
-    {
+    lua_eval_or_fail(&runtime_a, "order = ''");
+    assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    assert(midi_mock_emit_sysex(runtime_a.midi, 0, sysex_a, sizeof(sysex_a)));
+    assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    assert(midi_mock_emit_sysex(runtime_a.midi, 0, sysex_a, sizeof(sysex_a)));
+    assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    lua_midi_poll(runtime_a.midi_state);
+    lua_eval_or_fail(&runtime_a, "assert(order == 'msmsm', 'arrival order lost: ' .. order)");
+    lua_assert_counts(&runtime_a, 4, 3, 1, 51, 71, 61);
+
+    for (int index = 0; index < 1030; index++)
         assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
+    for (int index = 0; index < 260; index++)
         assert(rtpmidi_mock_emit(runtime_a.rtpmidi, 0, &rtp_a));
-    }
     for (int index = 0; index < 18; index++)
         assert(midi_mock_emit_sysex(runtime_a.midi, 0,
                                     sysex_a, sizeof(sysex_a)));
-    assert(lua_midi_dropped_messages(runtime_a.midi_state) == 4);
-    assert(lua_midi_dropped_sysex(runtime_a.midi_state) == 2);
+    assert(lua_midi_dropped_messages(runtime_a.midi_state) == 6);
+    assert(lua_midi_dropped_sysex(runtime_a.midi_state) == 18);
     assert(lua_midi_dropped_rtpmidi(runtime_a.midi_state) == 4);
     assert(lua_midi_dropped_messages(runtime_b.midi_state) == 0);
-
     lua_midi_poll(runtime_a.midi_state);
-    lua_assert_counts(&runtime_a, 257, 17, 257, 51, 71, 61);
+    lua_assert_counts(&runtime_a, 1028, 3, 257, 51, 71, 61);
+
+    for (int index = 0; index < 34; index++)
+        assert(midi_mock_emit_sysex(runtime_a.midi, 0,
+                                    sysex_a, sizeof(sysex_a)));
+    assert(lua_midi_dropped_sysex(runtime_a.midi_state) == 20);
+    lua_midi_poll(runtime_a.midi_state);
+    lua_assert_counts(&runtime_a, 1028, 35, 257, 51, 71, 61);
 
     lua_runtime_destroy(&runtime_b);
     assert(midi_mock_live_count() == 1);
     assert(rtpmidi_mock_live_count() == 1);
     assert(midi_mock_emit(runtime_a.midi, 0, &message_a));
     lua_midi_poll(runtime_a.midi_state);
-    lua_assert_counts(&runtime_a, 258, 17, 257, 51, 71, 61);
+    lua_assert_counts(&runtime_a, 1029, 35, 257, 51, 71, 61);
     lua_runtime_destroy(&runtime_a);
     assert(midi_mock_destroy_count() == 2);
     assert(rtpmidi_mock_destroy_count() == 2);

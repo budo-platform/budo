@@ -1,6 +1,13 @@
 {
     "version": 1,
     "subsystems": {
+        "accessibility": {
+            "mode": "backend_sequence",
+            "tests": [
+                "canvas_features"
+            ],
+            "reason": "The accessibility tree is a process service whose observable behavior is the platform bridge (ARIA DOM, Android node provider); canvas_features checks the shared parser, queue, and JS/Lua bindings."
+        },
         "audio": {
             "mode": "normalized_trace",
             "test": "magneto_audio_runtime_conformance",

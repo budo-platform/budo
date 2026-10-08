@@ -146,6 +146,7 @@ static const InputTextPlatformCallbacks web_text_callbacks = {
     .start = web_text_start,
     .update = web_text_update,
     .stop = web_text_stop,
+    .native_editing = true,
 };
 
 #define SC_A 4
@@ -489,7 +490,7 @@ static EM_BOOL on_key_down(int type, const EmscriptenKeyboardEvent *e, void *ud)
     input_set_modifiers(input, e->shiftKey, e->ctrlKey, e->altKey, e->metaKey);
 
     if (input->text_session_active)
-        return EM_FALSE;
+        return sc == 43 && !e->ctrlKey && !e->metaKey && !e->altKey ? EM_TRUE : EM_FALSE;
 
     if (!e->ctrlKey && !e->metaKey)
         return EM_TRUE; 

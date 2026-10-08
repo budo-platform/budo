@@ -1285,6 +1285,51 @@ void file_native_close(FileNativeReference *ref)
     ref->identity_low = 0;
 }
 
+int64_t file_native_read(const FileNativeReference *ref, uint64_t offset, void *buffer, size_t size)
+{
+    if (!ref || !buffer)
+        return -1;
+    if (offset >= ref->size || size == 0)
+        return 0;
+    if (size > ref->size - offset)
+        size = (size_t)(ref->size - offset);
+    size_t total = 0;
+#ifdef _WIN32
+    if (!ref->handle || ref->handle == INVALID_HANDLE_VALUE)
+        return -1;
+    while (total < size)
+    {
+        OVERLAPPED at;
+        memset(&at, 0, sizeof(at));
+        uint64_t position = offset + total;
+        at.Offset = (DWORD)(position & 0xffffffffu);
+        at.OffsetHigh = (DWORD)(position >> 32);
+        DWORD chunk = size - total > MAXDWORD ? MAXDWORD : (DWORD)(size - total);
+        DWORD got = 0;
+        if (!ReadFile((HANDLE)ref->handle, (char *)buffer + total, chunk, &got, &at))
+            return total ? (int64_t)total : -1;
+        if (got == 0)
+            break;
+        total += got;
+    }
+#else
+    if (ref->fd < 0)
+        return -1;
+    while (total < size)
+    {
+        ssize_t got = pread(ref->fd, (char *)buffer + total, size - total, (off_t)(offset + total));
+        if (got < 0 && errno == EINTR)
+            continue;
+        if (got < 0)
+            return total ? (int64_t)total : -1;
+        if (got == 0)
+            break;
+        total += (size_t)got;
+    }
+#endif
+    return (int64_t)total;
+}
+
 void file_set_write_root(FileContext *ctx, const char *write_root)
 {
     if (!ctx)

@@ -163,6 +163,22 @@ extern "C"
     BudoStatus budo_paint_set_stroke_join(BudoPaint *paint, BudoStrokeJoin join);
     BudoStatus budo_paint_set_alpha(BudoPaint *paint, uint8_t alpha);
 
+#define BUDO_GRADIENT_MAX_STOPS 16
+    BudoStatus budo_paint_set_linear_gradient(BudoPaint *paint, float x0, float y0,
+                                              float x1, float y1,
+                                              const BudoColor *colors,
+                                              const float *stops, size_t count);
+    BudoStatus budo_paint_set_radial_gradient(BudoPaint *paint, float center_x,
+                                              float center_y, float radius,
+                                              const BudoColor *colors,
+                                              const float *stops, size_t count);
+    
+    BudoStatus budo_paint_set_sweep_gradient(BudoPaint *paint, float center_x,
+                                             float center_y,
+                                             const BudoColor *colors,
+                                             const float *stops, size_t count);
+    BudoStatus budo_paint_clear_gradient(BudoPaint *paint);
+
     BudoPath *budo_path_create(BudoHost *host);
     void budo_path_destroy(BudoPath *path);
     BudoStatus budo_path_reset(BudoPath *path);
@@ -201,6 +217,16 @@ extern "C"
     BudoStatus budo_canvas_rotate(BudoCanvas *canvas, float degrees);
     BudoStatus budo_canvas_clip_rect(BudoCanvas *canvas, float x, float y,
                                      float width, float height);
+    
+    BudoStatus budo_canvas_clip_round_rect(BudoCanvas *canvas, float x, float y,
+                                           float width, float height,
+                                           float radius_x, float radius_y);
+    BudoStatus budo_canvas_clip_path(BudoCanvas *canvas, BudoPath *path);
+
+    BudoStatus budo_canvas_save_layer(BudoCanvas *canvas, uint8_t alpha);
+    BudoStatus budo_canvas_save_layer_bounds(BudoCanvas *canvas, float x, float y,
+                                             float width, float height,
+                                             uint8_t alpha, float backdrop_blur);
 
     BudoShaderProgram *budo_shader_program_create(
         BudoHost *host, const char *vertex_source, size_t vertex_length,

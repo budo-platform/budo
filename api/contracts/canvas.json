@@ -26,7 +26,8 @@
         "javascript": {
             "source": "src/graphics/js_core_bindings.c",
             "export_sources": [
-                "src/graphics/js_canvas_bindings.c"
+                "src/graphics/js_canvas_bindings.c",
+                "src/graphics/js_canvas_effects_bindings.c"
             ],
             "registration_symbol": "js_runtime_create",
             "namespace": [
@@ -39,13 +40,15 @@
             ],
             "export_extractor": "quickjs_cfunc",
             "export_scopes": [
-                "js_sys_canvas_funcs"
+                "js_sys_canvas_funcs",
+                "js_canvas_effect_funcs"
             ]
         },
         "lua": {
             "source": "src/graphics/lua_canvas_bindings.c",
             "export_sources": [
-                "src/graphics/lua_transform_bindings.c"
+                "src/graphics/lua_transform_bindings.c",
+                "src/graphics/lua_canvas_effects_bindings.c"
             ],
             "registration_symbol": "lua_canvas_create",
             "namespace": [
@@ -58,13 +61,15 @@
             ],
             "export_extractor": "lua_reg",
             "export_scopes": [
-                "canvas_funcs"
+                "canvas_funcs",
+                "canvas_effect_funcs"
             ]
         },
         "wasmtime": {
             "source": "src/graphics/wasm_canvas_bindings.c",
             "export_sources": [
-                "src/graphics/wasm_transform_bindings.c"
+                "src/graphics/wasm_transform_bindings.c",
+                "src/graphics/wasm_canvas_effects_bindings.c"
             ],
             "registration_symbol": "wasm_canvas_create",
             "namespace": "env",
@@ -752,7 +757,227 @@
                     "name": "clipRect",
                     "namespace": "sys.canvas"
                 },
-                "wasmtime": "canvas_clip_rect"
+                "wasmtime": "canvas_clip_rect",
+                "browser_wasm": "canvas_clip_rect"
+            }
+        },
+        {
+            "name": "set_gradient",
+            "signature": "set or clear a linear/radial/sweep gradient on the default paint",
+            "binding_symbols": {
+                "javascript": "js_set_gradient",
+                "lua": "l_set_gradient"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setGradient",
+                    "namespace": "sys.canvas",
+                    "signature": "(kind:'linear'|'radial'|'sweep'|'none'|null, ...coordinates:number, colors:Color[], stops?:number[]) -> boolean"
+                },
+                "lua": {
+                    "name": "setGradient",
+                    "namespace": "sys.canvas",
+                    "signature": "(kind, ...coordinates, colors:table, stops?:table) -> boolean"
+                }
+            }
+        },
+        {
+            "name": "set_linear_gradient",
+            "wrapper_symbol": "skia_paint_set_linear_gradient",
+            "signature": "(x0:f32, y0:f32, x1:f32, y1:f32, colors_ptr:i32, stops_ptr:i32, count:i32) -> void; stops_ptr < 0 spaces colors evenly",
+            "exports": {
+                "wasmtime": "canvas_set_linear_gradient",
+                "browser_wasm": "canvas_set_linear_gradient"
+            }
+        },
+        {
+            "name": "set_radial_gradient",
+            "wrapper_symbol": "skia_paint_set_radial_gradient",
+            "signature": "(cx:f32, cy:f32, radius:f32, colors_ptr:i32, stops_ptr:i32, count:i32) -> void",
+            "exports": {
+                "wasmtime": "canvas_set_radial_gradient",
+                "browser_wasm": "canvas_set_radial_gradient"
+            }
+        },
+        {
+            "name": "set_sweep_gradient",
+            "wrapper_symbol": "skia_paint_set_sweep_gradient",
+            "signature": "(cx:f32, cy:f32, colors_ptr:i32, stops_ptr:i32, count:i32) -> void",
+            "exports": {
+                "wasmtime": "canvas_set_sweep_gradient",
+                "browser_wasm": "canvas_set_sweep_gradient"
+            }
+        },
+        {
+            "name": "clear_gradient",
+            "wrapper_symbol": "skia_paint_clear_shader",
+            "signature": "() -> void",
+            "exports": {
+                "wasmtime": "canvas_clear_gradient",
+                "browser_wasm": "canvas_clear_gradient"
+            }
+        },
+        {
+            "name": "clip_round_rect",
+            "wrapper_symbol": "skia_canvas_clip_round_rect",
+            "signature": "(x:f32, y:f32, width:f32, height:f32, rx:f32, ry:f32) -> void; managed bindings default ry to rx",
+            "exports": {
+                "javascript": {
+                    "name": "clipRoundRect",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "clipRoundRect",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_clip_round_rect",
+                "browser_wasm": "canvas_clip_round_rect"
+            }
+        },
+        {
+            "name": "clip_path",
+            "wrapper_symbol": "skia_canvas_clip_path",
+            "signature": "(path) -> void; unknown paths throw in managed bindings",
+            "exports": {
+                "javascript": {
+                    "name": "clipPath",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "clipPath",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_clip_path",
+                "browser_wasm": "canvas_clip_path"
+            }
+        },
+        {
+            "name": "save_layer",
+            "wrapper_symbol": "skia_canvas_save_layer",
+            "signature": "(alpha?:0..255, x?, y?, width?, height?, backdropBlur?) -> void; restore() composites the layer",
+            "exports": {
+                "javascript": {
+                    "name": "saveLayer",
+                    "namespace": "sys.canvas"
+                },
+                "lua": {
+                    "name": "saveLayer",
+                    "namespace": "sys.canvas"
+                },
+                "wasmtime": "canvas_save_layer",
+                "browser_wasm": "canvas_save_layer"
+            }
+        },
+        {
+            "name": "save_layer_bounds",
+            "signature": "(x:f32, y:f32, width:f32, height:f32, alpha:i32, backdrop_blur:f32) -> void; clips the layer to its bounds",
+            "exports": {
+                "wasmtime": "canvas_save_layer_bounds",
+                "browser_wasm": "canvas_save_layer_bounds"
+            },
+            "binding_symbols": {
+                "wasmtime": "transform_save_layer_bounds",
+                "browser_wasm": "budo_web_wasm_canvas_save_layer"
+            }
+        },
+        {
+            "name": "draw_paragraph",
+            "wrapper_symbol": "skia_canvas_draw_paragraph",
+            "signature": "draw wrapped UTF-8 text in a box and return its metrics",
+            "exports": {
+                "javascript": {
+                    "name": "drawParagraph",
+                    "namespace": "sys.canvas",
+                    "signature": "(text:string, x:number, y:number, width:number, fontSize?:number, options?:{align, lineHeight, maxLines}) -> {width, height, lines}"
+                },
+                "lua": {
+                    "name": "drawParagraph",
+                    "namespace": "sys.canvas",
+                    "signature": "(text, x, y, width, fontSize?, options?) -> {width, height, lines}"
+                },
+                "wasmtime": {
+                    "name": "canvas_draw_paragraph",
+                    "signature": "(text_ptr:i32, text_len:i32, x:f32, y:f32, width:f32, font_size:f32, align:i32, line_height:f32, max_lines:i32) -> f32 height"
+                },
+                "browser_wasm": {
+                    "name": "canvas_draw_paragraph",
+                    "signature": "(text_ptr:i32, text_len:i32, x:f32, y:f32, width:f32, font_size:f32, align:i32, line_height:f32, max_lines:i32) -> f32 height"
+                }
+            }
+        },
+        {
+            "name": "measure_paragraph",
+            "wrapper_symbol": "skia_measure_paragraph",
+            "signature": "measure wrapped UTF-8 text",
+            "exports": {
+                "javascript": {
+                    "name": "measureParagraph",
+                    "namespace": "sys.canvas",
+                    "signature": "(text:string, width:number, fontSize?:number, options?:{lineHeight, maxLines}) -> {width, height, lines}"
+                },
+                "lua": {
+                    "name": "measureParagraph",
+                    "namespace": "sys.canvas",
+                    "signature": "(text, width, fontSize?, options?) -> {width, height, lines}"
+                },
+                "wasmtime": {
+                    "name": "canvas_measure_paragraph",
+                    "signature": "(text_ptr:i32, text_len:i32, width:f32, font_size:f32, line_height:f32, max_lines:i32, out_ptr:i32) -> f32 height; out_ptr >= 0 receives {f32 width, f32 height, i32 lines}"
+                },
+                "browser_wasm": {
+                    "name": "canvas_measure_paragraph",
+                    "signature": "(text_ptr:i32, text_len:i32, width:f32, font_size:f32, line_height:f32, max_lines:i32, out_ptr:i32) -> f32 height"
+                }
+            }
+        },
+        {
+            "name": "draw_rich_text",
+            "wrapper_symbol": "skia_canvas_draw_rich_text",
+            "signature": "draw wrapped text made of styled spans and return its metrics",
+            "exports": {
+                "javascript": {
+                    "name": "drawRichText",
+                    "namespace": "sys.canvas",
+                    "signature": "(spans:(string|{text, size?, color?, font?})[], x:number, y:number, width:number, options?:{align, lineHeight, maxLines, size}) -> {width, height, lines}"
+                },
+                "lua": {
+                    "name": "drawRichText",
+                    "namespace": "sys.canvas",
+                    "signature": "(spans, x, y, width, options?) -> {width, height, lines}"
+                },
+                "wasmtime": {
+                    "name": "canvas_draw_rich_text",
+                    "signature": "(spans_ptr:i32, count:i32, x:f32, y:f32, width:f32, align:i32, line_height:f32, max_lines:i32) -> f32 height; spans are 16-byte {i32 text_ptr, i32 text_len, f32 size, u32 argb (0: paint)}"
+                },
+                "browser_wasm": {
+                    "name": "canvas_draw_rich_text",
+                    "signature": "(spans_ptr:i32, count:i32, x:f32, y:f32, width:f32, align:i32, line_height:f32, max_lines:i32) -> f32 height"
+                }
+            }
+        },
+        {
+            "name": "measure_rich_text",
+            "wrapper_symbol": "skia_measure_rich_text",
+            "signature": "measure wrapped styled spans",
+            "exports": {
+                "javascript": {
+                    "name": "measureRichText",
+                    "namespace": "sys.canvas",
+                    "signature": "(spans, width:number, options?) -> {width, height, lines}"
+                },
+                "lua": {
+                    "name": "measureRichText",
+                    "namespace": "sys.canvas",
+                    "signature": "(spans, width, options?) -> {width, height, lines}"
+                },
+                "wasmtime": {
+                    "name": "canvas_measure_rich_text",
+                    "signature": "(spans_ptr:i32, count:i32, width:f32, line_height:f32, max_lines:i32, out_ptr:i32) -> f32 height"
+                },
+                "browser_wasm": {
+                    "name": "canvas_measure_rich_text",
+                    "signature": "(spans_ptr:i32, count:i32, width:f32, line_height:f32, max_lines:i32, out_ptr:i32) -> f32 height"
+                }
             }
         }
     ]

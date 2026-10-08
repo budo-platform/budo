@@ -24,6 +24,9 @@
 #define FILE_BRIDGE_GENERATION_MAX 0x00ffffffu
 #define FILE_COMPLETION_CAPACITY 8
 #define FILE_COMPLETION_MAX_ERROR 4096
+#define FILE_READER_CAPACITY 32
+
+#define FILE_READ_MAX_BLOCK (16 * 1024 * 1024)
 
 typedef enum JsFileCompletionType
 {
@@ -51,6 +54,13 @@ struct JsFileContext
     bool shutting_down;
     SubsystemQueue completions;
     JsFileCompletion completion_storage[FILE_COMPLETION_CAPACITY];
+    
+    struct
+    {
+        bool open;
+        FileNativeReference file;
+        uint64_t position;
+    } readers[FILE_READER_CAPACITY];
 };
 
 typedef struct JsFileBridgeSlot
@@ -760,6 +770,125 @@ JS_FILE_CALLBACK(js_file_read_binary)
     return ab;
 }
 
+static int reader_slot(JsFileContext *state, JSContext *ctx, JSValueConst value)
+{
+    int handle = 0;
+    if (!state || JS_ToInt32(ctx, &handle, value) < 0 || handle < 1 || handle > FILE_READER_CAPACITY ||
+        !state->readers[handle - 1].open)
+        return -1;
+    return handle - 1;
+}
+
+JS_FILE_CALLBACK(js_file_open_read)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    const char *rel_path;
+    JSValue err = check_path(ctx, "openRead", argc, argv, 1, false, &rel_path);
+    if (JS_IsException(err))
+        return err;
+    int slot = -1;
+    for (int i = 0; i < FILE_READER_CAPACITY && state; i++)
+        if (!state->readers[i].open)
+        {
+            slot = i;
+            break;
+        }
+    if (slot < 0)
+    {
+        JS_FreeCString(ctx, rel_path);
+        return JS_ThrowRangeError(ctx, "file.openRead: too many files open (%d at most)", FILE_READER_CAPACITY);
+    }
+    FileNativeReference file;
+    bool opened = file_native_open(file_ctx, rel_path, &file);
+    JS_FreeCString(ctx, rel_path);
+    if (!opened)
+        return JS_NULL;
+    state->readers[slot].open = true;
+    state->readers[slot].file = file;
+    state->readers[slot].position = 0;
+    return JS_NewInt32(ctx, slot + 1);
+}
+
+JS_FILE_CALLBACK(js_file_read_block)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    (void)file_ctx;
+    int slot = argc >= 1 ? reader_slot(state, ctx, argv[0]) : -1;
+    if (slot < 0)
+        return JS_ThrowTypeError(ctx, "file.read(handle, maxBytes): not a file opened with openRead");
+    double wanted = 65536;
+    if (argc >= 2 && !JS_IsUndefined(argv[1]) && JS_ToFloat64(ctx, &wanted, argv[1]) < 0)
+        return JS_EXCEPTION;
+    if (!(wanted >= 1))
+        return JS_ThrowRangeError(ctx, "file.read: maxBytes must be at least 1");
+    size_t size = wanted > FILE_READ_MAX_BLOCK ? FILE_READ_MAX_BLOCK : (size_t)wanted;
+    uint64_t remaining = state->readers[slot].file.size > state->readers[slot].position
+                             ? state->readers[slot].file.size - state->readers[slot].position
+                             : 0;
+    if (size > remaining)
+        size = (size_t)remaining;
+    uint8_t *data = (uint8_t *)malloc(size ? size : 1);
+    if (!data)
+        return JS_ThrowOutOfMemory(ctx);
+    int64_t got = file_native_read(&state->readers[slot].file, state->readers[slot].position, data, size);
+    if (got < 0)
+    {
+        free(data);
+        return JS_NULL;
+    }
+    state->readers[slot].position += (uint64_t)got;
+    JSValue result = JS_NewArrayBufferCopy(ctx, data, (size_t)got);
+    free(data);
+    return result;
+}
+
+JS_FILE_CALLBACK(js_file_seek)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    (void)file_ctx;
+    int slot = argc >= 1 ? reader_slot(state, ctx, argv[0]) : -1;
+    if (slot < 0)
+        return JS_ThrowTypeError(ctx, "file.seek(handle, offset): not a file opened with openRead");
+    double offset = 0;
+    if (argc < 2 || JS_ToFloat64(ctx, &offset, argv[1]) < 0)
+        return JS_EXCEPTION;
+    if (!(offset >= 0) || offset > (double)state->readers[slot].file.size)
+        return JS_NewBool(ctx, false);
+    state->readers[slot].position = (uint64_t)offset;
+    return JS_NewBool(ctx, true);
+}
+
+JS_FILE_CALLBACK(js_file_get_read_info)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    (void)file_ctx;
+    int slot = argc >= 1 ? reader_slot(state, ctx, argv[0]) : -1;
+    if (slot < 0)
+        return JS_ThrowTypeError(ctx, "file.getReadInfo(handle): not a file opened with openRead");
+    JSValue info = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, info, "size", JS_NewFloat64(ctx, (double)state->readers[slot].file.size));
+    JS_SetPropertyStr(ctx, info, "position", JS_NewFloat64(ctx, (double)state->readers[slot].position));
+    return info;
+}
+
+JS_FILE_CALLBACK(js_file_close_read)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    (void)file_ctx;
+    int slot = argc >= 1 ? reader_slot(state, ctx, argv[0]) : -1;
+    if (slot >= 0)
+    {
+        file_native_close(&state->readers[slot].file);
+        state->readers[slot].open = false;
+    }
+    return JS_UNDEFINED;
+}
+
 JS_FILE_CALLBACK(js_file_exists)
 {
     (void)this_val;
@@ -1058,6 +1187,11 @@ static const JsFileFunction js_file_funcs[] = {
     {"list", 0, js_file_list},
     {"readText", 1, js_file_read_text},
     {"readBinary", 1, js_file_read_binary},
+    {"openRead", 1, js_file_open_read},
+    {"read", 2, js_file_read_block},
+    {"seek", 2, js_file_seek},
+    {"getReadInfo", 1, js_file_get_read_info},
+    {"closeRead", 1, js_file_close_read},
     {"writeText", 2, js_file_write_text},
     {"writeBinary", 2, js_file_write_binary},
     {"appendBinary", 2, js_file_append_binary},
@@ -1262,6 +1396,12 @@ void js_file_cleanup(JsFileContext *state)
     state->save_callback = JS_UNDEFINED;
     state->function_data = JS_UNDEFINED;
     state->js_ctx = NULL;
+    for (int i = 0; i < FILE_READER_CAPACITY; i++)
+        if (state->readers[i].open)
+        {
+            file_native_close(&state->readers[i].file);
+            state->readers[i].open = false;
+        }
     file_destroy(state->file_ctx);
     state->file_ctx = NULL;
 

@@ -1,4 +1,5 @@
 #include "graphics/js_canvas_bindings.h"
+#include "graphics/js_canvas_effects_bindings.h"
 #include "graphics/js_gl_bindings.h"
 #include "graphics/js_tools.h"
 #include "graphics/color_util.h"
@@ -245,6 +246,12 @@ static CanvasTexture *js_get_canvas_texture_from_this(JSContext *ctx, JSGraphicC
     if (!canvas_texture)
         JS_ThrowReferenceError(ctx, "Invalid or destroyed CanvasTexture");
     return canvas_texture;
+}
+
+SkiaDrawingDesk *js_canvas_texture_drawing_desk(JSContext *ctx, JSGraphicContext *graphic_ctx, JSValueConst this_val)
+{
+    CanvasTexture *canvas_texture = js_get_canvas_texture_from_this(ctx, graphic_ctx, this_val);
+    return canvas_texture ? window_canvas_texture_get_drawingdesk(canvas_texture) : NULL;
 }
 
 static void js_canvas_texture_set_id(JSContext *ctx, JSValue obj, int id)
@@ -1613,6 +1620,7 @@ static JSValue js_graphics_create_canvas_texture(JSContext *ctx, JSValue this_va
     {
         js_graphic_register_function(ctx, canvas_obj, &js_canvas_texture_canvas_funcs[i], graphic_ctx);
     }
+    js_canvas_texture_effects_register(ctx, canvas_obj, graphic_ctx);
 
     obj = JS_NewObject(ctx);
     js_canvas_texture_set_id(ctx, obj, id);
@@ -2191,9 +2199,24 @@ static JSValue js_request_animation_frame(JSContext *ctx, JSValue this_val, int 
 
         graphic_ctx->animation_callback = JS_DupValue(ctx, argv[0]);
         graphic_ctx->has_animation_callback = true;
+        if (magic)
+        {
+            double timeout = 0.0;
+            if (argc >= 2 && !JS_IsUndefined(argv[1]) && JS_ToFloat64(ctx, &timeout, argv[1]) < 0)
+                return JS_EXCEPTION;
+            budo_animation_wait_start(&graphic_ctx->animation_wait, timeout, graphic_ctx->width, graphic_ctx->height);
+        }
+        else
+            budo_animation_wait_stop(&graphic_ctx->animation_wait);
     }
 
     return JS_NewInt32(ctx, 1); 
+}
+
+static JSValue js_wait_for_input(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
+{
+    (void)magic;
+    return js_request_animation_frame(ctx, this_val, argc, argv, 1, func_data);
 }
 
 static JSValue js_cancel_animation_frame(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
@@ -2367,6 +2390,8 @@ static JSValue js_get_input(JSContext *ctx, JSValue this_val, int argc, JSValue 
     JS_SetPropertyStr(ctx, obj, "composition", composition);
     JS_SetPropertyStr(ctx, obj, "textInputActive",
                       JS_NewBool(ctx, input->text_session_active));
+    JS_SetPropertyStr(ctx, obj, "nativeTextEditing",
+                      JS_NewBool(ctx, input->text_platform.native_editing));
 
     JS_SetPropertyStr(ctx, obj, "deltaTime", JS_NewFloat64(ctx, input->delta_time));
     JS_SetPropertyStr(ctx, obj, "totalTime", JS_NewFloat64(ctx, input->total_time));
@@ -2575,12 +2600,12 @@ static JSValue transform_rotate(JSContext *ctx, JSValueConst this_value,
     if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
         return JS_ThrowInternalError(ctx, "No active canvas");
 
-    if (argument_count < 3)
+    if (argument_count < 1)
         return JS_UNDEFINED;
 
     double degrees;
     JS_ToFloat64(ctx, &degrees, arguments[0]);
-    if (argument_count >= 3)
+    if (argument_count >= 3 && !JS_IsUndefined(arguments[1]) && !JS_IsUndefined(arguments[2]))
     {
         double px, py;
         JS_ToFloat64(ctx, &px, arguments[1]);
@@ -2739,6 +2764,7 @@ static const JsGraphicFunction js_sys_window_funcs[] = {
 static const JsGraphicFunction js_sys_animation_funcs[] = {
     {"requestFrame", 1, js_request_animation_frame},
     {"cancelFrame", 1, js_cancel_animation_frame},
+    {"waitForInput", 2, js_wait_for_input},
 };
 
 JSValue addSysObjectMember(JSContext *context, JSGraphicContext *graphic_ctx, JSValue sys_obj, char *name, int size, JsGraphicFunction *functions)
@@ -2779,6 +2805,7 @@ JSGraphicContext *js_graphic_init(JSRuntimeContext *ctx)
 
     ADD_SYS_OBJECT_MEMBER(sys_obj, "canvas", js_sys_canvas_funcs);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "path", js_sys_path_funcs);
+    js_canvas_effects_register(ctx->context, sys_obj, graphic_ctx);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "svg", js_sys_svg_funcs);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "font", js_sys_font_funcs);
     ADD_SYS_OBJECT_MEMBER(sys_obj, "graphics", js_sys_graphics_funcs);
@@ -2898,4 +2925,9 @@ bool js_graphic_call_animation(JSGraphicContext *graphic_ctx, double timestamp)
 bool js_graphic_has_animation(JSGraphicContext *graphic_ctx)
 {
     return graphic_ctx->has_animation_callback;
+}
+
+BudoAnimationWait *js_graphic_animation_wait(JSGraphicContext *graphic_ctx)
+{
+    return graphic_ctx ? &graphic_ctx->animation_wait : NULL;
 }

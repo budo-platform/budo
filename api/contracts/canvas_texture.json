@@ -15,7 +15,8 @@
         "javascript": {
             "source": "src/graphics/js_core_bindings.c",
             "export_sources": [
-                "src/graphics/js_canvas_bindings.c"
+                "src/graphics/js_canvas_bindings.c",
+                "src/graphics/js_canvas_effects_bindings.c"
             ],
             "registration_symbol": "js_runtime_create",
             "namespace": [
@@ -32,7 +33,8 @@
             "export_scopes": [
                 "js_sys_graphics_funcs",
                 "js_canvas_texture_funcs",
-                "js_canvas_texture_canvas_funcs"
+                "js_canvas_texture_canvas_funcs",
+                "js_canvas_texture_effect_funcs"
             ]
         }
     },
@@ -410,6 +412,45 @@
             "exports": {
                 "javascript": {
                     "name": "setFont",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "set_gradient",
+            "signature": "set or clear a linear/radial/sweep gradient on the owner default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_set_gradient"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "setGradient",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_draw_paragraph",
+            "signature": "(text:string, x:f32, y:f32, width:f32, font_size?:f32, options?) -> { width, height, lines } using the owner active font and default paint",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_draw_paragraph"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "drawParagraph",
+                    "namespace": "CanvasTexture.canvas"
+                }
+            }
+        },
+        {
+            "name": "canvas_measure_paragraph",
+            "signature": "(text:string, width:f32, font_size?:f32, options?) -> { width, height, lines } using the owner active font",
+            "binding_symbols": {
+                "javascript": "js_canvas_texture_canvas_measure_paragraph"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "measureParagraph",
                     "namespace": "CanvasTexture.canvas"
                 }
             }

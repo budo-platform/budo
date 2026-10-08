@@ -1,6 +1,40 @@
 {
   "registrations": [
     {
+      "namespace": "sys.accessibility",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "javascript",
+      "source": "src/accessibility/js_accessibility_bindings.c",
+      "subsystem": "accessibility",
+      "symbol": "js_accessibility_init"
+    },
+    {
+      "namespace": "sys.accessibility",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ],
+      "runtime": "lua",
+      "source": "src/accessibility/lua_accessibility_bindings.c",
+      "subsystem": "accessibility",
+      "symbol": "lua_accessibility_init"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "wasmtime",
+      "source": "src/accessibility/wasm_accessibility_bindings.c",
+      "subsystem": "accessibility",
+      "symbol": "wasm_accessibility_register"
+    },
+    {
       "namespace": "sys.audio",
       "platforms": [
         "desktop",
@@ -165,6 +199,16 @@
       "source": "src/graphics/wasm_canvas_bindings.c",
       "subsystem": "console",
       "symbol": "wasm_canvas_create"
+    },
+    {
+      "namespace": "env",
+      "platforms": [
+        "web"
+      ],
+      "runtime": "browser_wasm",
+      "source": "src/web/web_main.c",
+      "subsystem": "device",
+      "symbol": "js_web_wasm_start"
     },
     {
       "namespace": "sys.device",

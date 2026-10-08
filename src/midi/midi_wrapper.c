@@ -1,5 +1,6 @@
 #include "midi_wrapper.h"
 #include "midi_topology.h"
+#include "midi_stream_parser.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,11 +32,13 @@
 typedef struct
 {
     bool active;
-    int device_index;
+    int handle;       
+    int device_index; 
     MidiCallback callback;
     void *user_data;
     MidiSysExCallback sysex_callback;
     void *sysex_user_data;
+    MidiStreamParser *parser; 
 
 #if MIDI_PLATFORM_COREMIDI
     MIDIEndpointRef endpoint;
@@ -46,6 +49,10 @@ typedef struct
     pthread_t thread;
 #elif MIDI_PLATFORM_WINMM
     HMIDIIN handle;
+    
+    MIDIHDR sysex_headers[4];
+    char sysex_buffers[4][4096];
+    volatile LONG closing;
 #elif MIDI_PLATFORM_ANDROID
     int android_handle;
 #endif
@@ -122,73 +129,68 @@ static uint64_t coremidi_timestamp_us(MIDITimeStamp timestamp)
 }
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define MIDI_MAYBE_UNUSED __attribute__((unused))
+#else
+#define MIDI_MAYBE_UNUSED
+#endif
+
+#if !MIDI_PLATFORM_STUB
+MIDI_MAYBE_UNUSED static void deliver_message(const MidiMessage *message, void *user_data)
+{
+    MidiInputDevice *dev = (MidiInputDevice *)user_data;
+    if (dev->active && dev->callback)
+        dev->callback(dev->handle, message, dev->user_data);
+}
+
+MIDI_MAYBE_UNUSED static void deliver_sysex(const uint8_t *data, size_t length, uint64_t timestamp_us, void *user_data)
+{
+    MidiInputDevice *dev = (MidiInputDevice *)user_data;
+    (void)timestamp_us;
+    if (dev->active && dev->sysex_callback)
+        dev->sysex_callback(dev->handle, data, length, dev->sysex_user_data);
+}
+
+MIDI_MAYBE_UNUSED static bool prepare_input(MidiInputDevice *dev, int handle)
+{
+    if (!dev->parser)
+        dev->parser = (MidiStreamParser *)calloc(1, sizeof(MidiStreamParser));
+    if (!dev->parser)
+        return false;
+    midi_stream_parser_reset(dev->parser);
+    dev->handle = handle;
+    return true;
+}
+
+MIDI_MAYBE_UNUSED static void feed_input(MidiInputDevice *dev, const uint8_t *bytes, size_t length, uint64_t timestamp_us)
+{
+    if (dev->parser)
+        midi_stream_parser_feed(dev->parser, bytes, length, timestamp_us, deliver_message, deliver_sysex, dev);
+}
+
+MIDI_MAYBE_UNUSED static void free_input_parsers(MidiContext *ctx)
+{
+    for (int i = 0; i < MIDI_MAX_DEVICES; i++)
+    {
+        free(ctx->inputs[i].parser);
+        ctx->inputs[i].parser = NULL;
+    }
+}
+#endif
+
 #if MIDI_PLATFORM_COREMIDI
 
 static void coremidi_read_proc(const MIDIPacketList *pktlist, void *readProcRefCon, void *srcConnRefCon)
 {
+    (void)srcConnRefCon;
     MidiInputDevice *dev = (MidiInputDevice *)readProcRefCon;
-    if (!dev || !dev->active || !dev->callback)
+    if (!dev || !dev->active)
         return;
 
     const MIDIPacket *packet = &pktlist->packet[0];
     for (UInt32 i = 0; i < pktlist->numPackets; i++)
     {
-        for (UInt16 j = 0; j < packet->length;)
-        {
-            MidiMessage msg = {0};
-            uint8_t status = packet->data[j];
-
-            if (status >= 0xF8)
-            {
-                j++;
-                continue;
-            }
-
-            msg.status = status;
-            msg.timestamp = coremidi_timestamp_us(packet->timeStamp);
-
-            int msg_len = 0;
-            if (status >= 0xC0 && status < 0xE0)
-            {
-                msg_len = 2; 
-            }
-            else if (status >= 0x80 && status < 0xF0)
-            {
-                msg_len = 3; 
-            }
-            else if (status == 0xF0)
-            {
-                
-                UInt16 start = j;
-                while (j < packet->length && packet->data[j] != 0xF7)
-                    j++;
-                if (j < packet->length)
-                    j++; 
-
-                if (dev->sysex_callback)
-                {
-                    size_t sysex_len = j - start;
-                    dev->sysex_callback(dev->device_index, &packet->data[start], sysex_len, dev->sysex_user_data);
-                }
-                continue;
-            }
-            else
-            {
-                j++;
-                continue;
-            }
-
-            if (j + msg_len <= packet->length)
-            {
-                if (msg_len >= 2)
-                    msg.data1 = packet->data[j + 1];
-                if (msg_len >= 3)
-                    msg.data2 = packet->data[j + 2];
-
-                dev->callback(dev->device_index, &msg, dev->user_data);
-            }
-            j += msg_len;
-        }
+        feed_input(dev, packet->data, packet->length, coremidi_timestamp_us(packet->timeStamp));
         packet = MIDIPacketNext(packet);
     }
 }
@@ -233,6 +235,7 @@ void midi_destroy(MidiContext *ctx)
     }
 
     MIDIClientDispose(ctx->client);
+    free_input_parsers(ctx);
     free(ctx);
 }
 
@@ -333,6 +336,11 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
     }
 
     MidiInputDevice *dev = &ctx->inputs[handle];
+    if (!prepare_input(dev, handle))
+    {
+        set_error(ctx, "Out of memory");
+        return -1;
+    }
     dev->device_index = index;
     dev->callback = callback;
     dev->user_data = user_data;
@@ -474,18 +482,30 @@ bool midi_send_raw(MidiContext *ctx, int handle, const uint8_t *data, size_t len
     if (!dev->active)
         return false;
 
-    Byte buffer[1024];
-    MIDIPacketList *pktlist = (MIDIPacketList *)buffer;
+    const size_t chunk = 4096;
+    size_t packets = length / chunk + 1;
+    size_t capacity = sizeof(MIDIPacketList) + length + packets * sizeof(MIDIPacket);
+    MIDIPacketList *pktlist = (MIDIPacketList *)malloc(capacity);
+    if (!pktlist)
+    {
+        set_error(ctx, "Out of memory");
+        return false;
+    }
     MIDIPacket *packet = MIDIPacketListInit(pktlist);
-
-    packet = MIDIPacketListAdd(pktlist, sizeof(buffer), packet, 0, length, data);
+    for (size_t offset = 0; offset < length && packet; offset += chunk)
+    {
+        size_t part = length - offset < chunk ? length - offset : chunk;
+        packet = MIDIPacketListAdd(pktlist, capacity, packet, 0, part, data + offset);
+    }
     if (!packet)
     {
+        free(pktlist);
         set_error(ctx, "Failed to create MIDI packet");
         return false;
     }
 
     OSStatus err = MIDISend(dev->port, dev->endpoint, pktlist);
+    free(pktlist);
     return err == noErr;
 }
 
@@ -496,27 +516,16 @@ bool midi_send_raw(MidiContext *ctx, int handle, const uint8_t *data, size_t len
 static void *alsa_input_thread(void *arg)
 {
     MidiInputDevice *dev = (MidiInputDevice *)arg;
-    unsigned char buffer[3];
+    unsigned char buffer[256];
 
     while (dev->thread_running)
     {
-        int err = snd_rawmidi_read(dev->rawmidi, buffer, sizeof(buffer));
-        if (err > 0 && dev->callback)
-        {
-            MidiMessage msg = {0};
-            msg.status = buffer[0];
-            if (err >= 2)
-                msg.data1 = buffer[1];
-            if (err >= 3)
-                msg.data2 = buffer[2];
-            msg.timestamp = midi_now_us();
 
-            dev->callback(dev->device_index, &msg, dev->user_data);
-        }
-        else if (err == -EAGAIN)
-        {
+        ssize_t count = snd_rawmidi_read(dev->rawmidi, buffer, sizeof(buffer));
+        if (count > 0)
+            feed_input(dev, buffer, (size_t)count, midi_now_us());
+        else if (count == -EAGAIN || count == 0)
             usleep(1000); 
-        }
     }
     return NULL;
 }
@@ -540,6 +549,7 @@ void midi_destroy(MidiContext *ctx)
             midi_close_output(ctx, i);
     }
 
+    free_input_parsers(ctx);
     free(ctx);
 }
 
@@ -798,6 +808,11 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
     }
 
     MidiInputDevice *dev = &ctx->inputs[handle];
+    if (!prepare_input(dev, handle))
+    {
+        set_error(ctx, "Out of memory");
+        return -1;
+    }
     int err = snd_rawmidi_open(&dev->rawmidi, NULL, device_name, SND_RAWMIDI_NONBLOCK);
     if (err < 0)
     {
@@ -938,13 +953,25 @@ static void CALLBACK winmm_midi_in_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PT
 
     if (wMsg == MIM_DATA)
     {
+
         MidiMessage msg = {0};
         msg.status = (uint8_t)(dwParam1 & 0xFF);
+        if (msg.status < 0x80 || msg.status >= 0xF0)
+            return;
         msg.data1 = (uint8_t)((dwParam1 >> 8) & 0xFF);
         msg.data2 = (uint8_t)((dwParam1 >> 16) & 0xFF);
         msg.timestamp = (uint64_t)dwParam2 * 1000;
 
-        dev->callback(dev->device_index, &msg, dev->user_data);
+        dev->callback(dev->handle, &msg, dev->user_data);
+    }
+    else if (wMsg == MIM_LONGDATA)
+    {
+
+        MIDIHDR *header = (MIDIHDR *)dwParam1;
+        if (header->dwBytesRecorded > 0)
+            feed_input(dev, (const uint8_t *)header->lpData, header->dwBytesRecorded, (uint64_t)dwParam2 * 1000);
+        if (!InterlockedCompareExchange(&dev->closing, 0, 0))
+            midiInAddBuffer(hMidiIn, header, sizeof(MIDIHDR));
     }
 }
 
@@ -966,6 +993,7 @@ void midi_destroy(MidiContext *ctx)
             midi_close_output(ctx, i);
     }
 
+    free_input_parsers(ctx);
     free(ctx);
 }
 
@@ -1044,9 +1072,15 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
         return -1;
 
     MidiInputDevice *dev = &ctx->inputs[handle];
+    if (!prepare_input(dev, handle))
+    {
+        set_error(ctx, "Out of memory");
+        return -1;
+    }
     dev->device_index = index;
     dev->callback = callback;
     dev->user_data = user_data;
+    InterlockedExchange(&dev->closing, 0);
 
     MMRESULT result = midiInOpen(&dev->handle, index, (DWORD_PTR)winmm_midi_in_callback,
                                  (DWORD_PTR)dev, CALLBACK_FUNCTION);
@@ -1056,8 +1090,18 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
         return -1;
     }
 
-    midiInStart(dev->handle);
+    for (int i = 0; i < 4; i++)
+    {
+        MIDIHDR *header = &dev->sysex_headers[i];
+        memset(header, 0, sizeof(*header));
+        header->lpData = dev->sysex_buffers[i];
+        header->dwBufferLength = sizeof(dev->sysex_buffers[i]);
+        if (midiInPrepareHeader(dev->handle, header, sizeof(*header)) == MMSYSERR_NOERROR)
+            midiInAddBuffer(dev->handle, header, sizeof(*header));
+    }
+
     dev->active = true;
+    midiInStart(dev->handle);
     return handle;
 }
 
@@ -1070,7 +1114,11 @@ void midi_close_input(MidiContext *ctx, int handle)
     if (!dev->active)
         return;
 
+    InterlockedExchange(&dev->closing, 1);
     midiInStop(dev->handle);
+    midiInReset(dev->handle);
+    for (int i = 0; i < 4; i++)
+        midiInUnprepareHeader(dev->handle, &dev->sysex_headers[i], sizeof(dev->sysex_headers[i]));
     midiInClose(dev->handle);
     dev->active = false;
 }
@@ -1181,7 +1229,7 @@ static void android_midi_callback_adapter(int device_id, uint8_t status, uint8_t
         msg.data1 = data1;
         msg.data2 = data2;
         msg.timestamp = timestamp > 0 ? timestamp : midi_now_us();
-        dev->callback(dev->device_index, &msg, dev->user_data);
+        dev->callback(dev->handle, &msg, dev->user_data);
     }
 }
 
@@ -1220,6 +1268,7 @@ void midi_destroy(MidiContext *ctx)
         }
     }
 
+    free_input_parsers(ctx);
     free(ctx);
 }
 
@@ -1302,6 +1351,8 @@ int midi_open_input(MidiContext *ctx, int index, MidiCallback callback, void *us
     }
 
     MidiInputDevice *dev = &ctx->inputs[handle];
+    
+    dev->handle = handle;
     dev->device_index = index;
     dev->callback = callback;
     dev->user_data = user_data;
@@ -1410,7 +1461,7 @@ static void android_sysex_callback_adapter(int device_id, const uint8_t *data, i
     MidiInputDevice *dev = (MidiInputDevice *)user_data;
     if (dev && dev->active && dev->sysex_callback)
     {
-        dev->sysex_callback(dev->device_index, data, (size_t)length, dev->sysex_user_data);
+        dev->sysex_callback(dev->handle, data, (size_t)length, dev->sysex_user_data);
     }
 }
 

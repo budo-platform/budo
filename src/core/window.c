@@ -55,6 +55,7 @@ struct Window
     GLTextureSlot textures[MAX_GL_TEXTURES];
     GLVertexLayout vertex_layouts[MAX_GL_VERTEX_LAYOUTS];
     bool screen_rendered_this_frame;
+    uint32_t frame_serial; 
 
     char project_dir[PATH_MAX];
     char error_msg[512];
@@ -611,6 +612,13 @@ static const InputTextPlatformCallbacks desktop_text_callbacks = {
     .stop = desktop_text_stop,
 };
 
+void window_wait_events(Window *window, int timeout_ms)
+{
+    (void)window;
+    if (timeout_ms > 0)
+        SDL_WaitEventTimeout(NULL, timeout_ms);
+}
+
 bool window_poll_events(Window *window, InputState *input)
 {
     SDL_Event event;
@@ -758,6 +766,7 @@ void window_begin_frame(Window *window, double time_seconds)
 
     window->frame_time = time_seconds;
     window->screen_rendered_this_frame = false;
+    window->frame_serial++;
 
     if (window->skia_gpu_canvas)
         skia_canvas_reset_gl_context(window->skia_gpu_canvas);
@@ -1196,6 +1205,7 @@ bool window_gl_draw_region_pass_immediate(Window *window, int program_id,
         destination.width = destination_slot->width;
         destination.height = destination_slot->height;
         destination.has_depth = destination_slot->has_depth;
+        destination.slot = destination_slot;
     }
     else
     {
@@ -1203,6 +1213,7 @@ bool window_gl_draw_region_pass_immediate(Window *window, int program_id,
         destination.width = window->width;
         destination.height = window->height;
         destination.has_depth = true;
+        destination.slot = NULL;
     }
     if (source_target_id > 0 && source_target_id == destination_target_id)
     {
@@ -1342,17 +1353,25 @@ static GLenum gl_tex_internal_format(WindowGLTexFormat f)
     switch (f)
     {
     case WINDOW_GL_TEX_RGB8:
-        return GL_RGB;
+        return GL_RGB8;
     case WINDOW_GL_TEX_R8:
-        return GL_LUMINANCE; 
+        return GL_R8;
     default:
-        return GL_RGBA;
+        return GL_RGBA8;
     }
 }
 
 static GLenum gl_tex_upload_format(WindowGLTexFormat f)
 {
-    return gl_tex_internal_format(f);
+    switch (f)
+    {
+    case WINDOW_GL_TEX_RGB8:
+        return GL_RGB;
+    case WINDOW_GL_TEX_R8:
+        return GL_RED;
+    default:
+        return GL_RGBA;
+    }
 }
 
 bool window_gl_get_texture_size(Window *window, int texture_id,

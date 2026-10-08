@@ -808,6 +808,7 @@ void js_runtime_process_timers(JSRuntimeContext *ctx, double timestamp_ms)
             continue;
 
         JSValue cb = JS_DupValue(ctx->context, entry->callback);
+        int id = entry->id;
 
         JSValue global = JS_GetGlobalObject(ctx->context);
         JSValue result = JS_Call(ctx->context, cb, global, 0, NULL);
@@ -817,6 +818,12 @@ void js_runtime_process_timers(JSRuntimeContext *ctx, double timestamp_ms)
             js_dump_error(ctx->context);
         JS_FreeValue(ctx->context, result);
         JS_FreeValue(ctx->context, cb);
+
+        if (i >= ctx->timer_count)
+            continue;
+        entry = &ctx->timers[i];
+        if (entry->id != id)
+            continue;
 
         if (entry->interval_ms > 0 && entry->active)
         {

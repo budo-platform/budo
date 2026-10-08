@@ -1,5 +1,6 @@
 #include "audio_wrapper.h"
 #include "audio_decoder.h"
+#include "audio_mix.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -372,6 +373,69 @@ const char *audio_get_error(AudioContext *ctx)
     return ctx && ctx->android_ctx ? android_audio_get_error(ctx->android_ctx) : "Invalid context";
 }
 
+int audio_stream_sample_rate(AudioContext *ctx)
+{
+    return ctx ? android_audio_stream_sample_rate(ctx->android_ctx) : 0;
+}
+
+int audio_output_open(AudioContext *ctx, int channels, double latency_ms)
+{
+    return ctx ? android_audio_output_open(ctx->android_ctx, channels, latency_ms) : -1;
+}
+
+void audio_output_close(AudioContext *ctx, int id)
+{
+    if (ctx)
+        android_audio_output_close(ctx->android_ctx, id);
+}
+
+int audio_output_wanted(AudioContext *ctx, int id)
+{
+    return ctx ? android_audio_output_wanted(ctx->android_ctx, id) : 0;
+}
+
+int audio_output_write(AudioContext *ctx, int id, const float *frames, int count)
+{
+    return ctx ? android_audio_output_write(ctx->android_ctx, id, frames, count) : 0;
+}
+
+int audio_input_open(AudioContext *ctx, int channels, double latency_ms)
+{
+    return ctx ? android_audio_input_open(ctx->android_ctx, channels, latency_ms) : -1;
+}
+
+void audio_input_close(AudioContext *ctx, int id)
+{
+    if (ctx)
+        android_audio_input_close(ctx->android_ctx, id);
+}
+
+int audio_input_available(AudioContext *ctx, int id)
+{
+    return ctx ? android_audio_input_available(ctx->android_ctx, id) : 0;
+}
+
+int audio_input_read(AudioContext *ctx, int id, float *frames, int count)
+{
+    return ctx ? android_audio_input_read(ctx->android_ctx, id, frames, count) : 0;
+}
+
+bool audio_stream_get_stats(AudioContext *ctx, bool input, int id, AudioStreamStats *out)
+{
+    return ctx && android_audio_stream_stats(ctx->android_ctx, input, id, out);
+}
+
+bool audio_streams_active(AudioContext *ctx)
+{
+    return ctx && android_audio_streams_active(ctx->android_ctx);
+}
+
+void audio_streams_serviced(AudioContext *ctx)
+{
+    if (ctx)
+        android_audio_streams_serviced(ctx->android_ctx);
+}
+
 #else 
 
 typedef enum
@@ -417,7 +481,7 @@ typedef struct
 {
     bool active;
     int buffer_id;
-    float position;
+    double position; 
     bool loop;
     float gain;
 } BufferPlayback;
@@ -435,6 +499,13 @@ struct AudioContext
     Oscillator oscillators[AUDIO_MAX_OSCILLATORS];
     AudioBuffer buffers[AUDIO_MAX_BUFFERS];
     BufferPlayback playbacks[MAX_BUFFER_PLAYBACKS];
+
+    AudioStreams streams;
+    float *stream_mix; 
+    int stream_mix_frames;
+    SDL_AudioDeviceID capture_device;
+    SDL_AudioSpec capture_spec;
+    Uint32 wake_event; 
 
     char error_msg[256];
 };
@@ -552,6 +623,8 @@ static float generate_oscillator_sample(Oscillator *osc, float sample_rate)
     return sample * osc->gain * osc->env_level;
 }
 
+static void audio_wake_app(AudioContext *ctx);
+
 static void audio_callback(void *userdata, Uint8 *stream, int len)
 {
     AudioContext *ctx = (AudioContext *)userdata;
@@ -559,6 +632,14 @@ static void audio_callback(void *userdata, Uint8 *stream, int len)
     int num_samples = len / sizeof(float) / ctx->spec.channels;
 
     memset(stream, 0, len);
+
+    int stream_frames = num_samples < ctx->stream_mix_frames ? num_samples : ctx->stream_mix_frames;
+    bool streaming = audio_streams_any_open(&ctx->streams) && stream_frames > 0;
+    if (streaming)
+    {
+        memset(ctx->stream_mix, 0, (size_t)stream_frames * 2 * sizeof(float));
+        audio_streams_mix(&ctx->streams, ctx->stream_mix, stream_frames, 2);
+    }
 
     for (int s = 0; s < num_samples; s++)
     {
@@ -588,38 +669,22 @@ static void audio_callback(void *userdata, Uint8 *stream, int len)
                 continue;
             }
 
-            int sample_index = (int)pb->position;
-            if (sample_index >= buf->num_samples)
+            if (!audio_mix_buffer_frame(buf->data, buf->num_samples, buf->channels, pb->loop, pb->gain,
+                                        &pb->position, (double)buf->sample_rate / (double)ctx->spec.freq,
+                                        &left, &right))
             {
-                if (pb->loop)
-                {
-                    pb->position = 0.0f;
-                    sample_index = 0;
-                }
-                else
-                {
-                    pb->active = false;
-                    continue;
-                }
+                pb->active = false;
+                continue;
             }
-
-            if (buf->channels == 1)
-            {
-                float sample = buf->data[sample_index] * pb->gain;
-                left += sample;
-                right += sample;
-            }
-            else
-            {
-                left += buf->data[sample_index * 2] * pb->gain;
-                right += buf->data[sample_index * 2 + 1] * pb->gain;
-            }
-
-            pb->position += (float)buf->sample_rate / (float)ctx->spec.freq;
         }
 
         left *= ctx->master_gain;
         right *= ctx->master_gain;
+        if (streaming && s < stream_frames)
+        {
+            left += ctx->stream_mix[s * 2];
+            right += ctx->stream_mix[s * 2 + 1];
+        }
         left = fmaxf(-1.0f, fminf(1.0f, left));
         right = fmaxf(-1.0f, fminf(1.0f, right));
 
@@ -633,6 +698,28 @@ static void audio_callback(void *userdata, Uint8 *stream, int len)
             output[s] = (left + right) * 0.5f;
         }
     }
+
+    if (streaming)
+        audio_wake_app(ctx);
+}
+
+static void audio_wake_app(AudioContext *ctx)
+{
+    if (ctx->wake_event != (Uint32)-1 && audio_streams_take_wake(&ctx->streams))
+    {
+        SDL_Event event;
+        memset(&event, 0, sizeof(event));
+        event.type = ctx->wake_event;
+        SDL_PushEvent(&event);
+    }
+}
+
+static void audio_capture_callback(void *userdata, Uint8 *stream, int len)
+{
+    AudioContext *ctx = (AudioContext *)userdata;
+    int channels = ctx->capture_spec.channels;
+    audio_streams_capture(&ctx->streams, (const float *)stream, len / (int)sizeof(float) / channels, channels);
+    audio_wake_app(ctx);
 }
 
 AudioContext *audio_create(void)
@@ -669,6 +756,16 @@ AudioContext *audio_create(void)
         return NULL;
     }
 
+    ctx->stream_mix_frames = 8192;
+    ctx->stream_mix = (float *)calloc((size_t)ctx->stream_mix_frames * 2, sizeof(float));
+    if (!ctx->stream_mix || !audio_streams_init(&ctx->streams, ctx->spec.freq))
+    {
+        SDL_CloseAudioDevice(ctx->device);
+        free(ctx->stream_mix);
+        free(ctx);
+        return NULL;
+    }
+    ctx->wake_event = SDL_RegisterEvents(1);
     return ctx;
 }
 
@@ -677,7 +774,11 @@ void audio_destroy(AudioContext *ctx)
     if (!ctx)
         return;
 
+    if (ctx->capture_device)
+        SDL_CloseAudioDevice(ctx->capture_device);
     SDL_CloseAudioDevice(ctx->device);
+    audio_streams_destroy(&ctx->streams);
+    free(ctx->stream_mix);
 
     for (int i = 0; i < AUDIO_MAX_BUFFERS; i++)
     {
@@ -850,6 +951,9 @@ int audio_create_buffer(AudioContext *ctx, int sample_rate, int channels, int nu
     if (!ctx || sample_rate <= 0 || channels < 1 || channels > 2 || num_samples <= 0)
         return -1;
 
+    float *data = (float *)calloc((size_t)num_samples * (size_t)channels, sizeof(float));
+    if (!data)
+        return -1;
     SDL_LockAudioDevice(ctx->device);
     for (int i = 0; i < AUDIO_MAX_BUFFERS; i++)
     {
@@ -858,18 +962,14 @@ int audio_create_buffer(AudioContext *ctx, int sample_rate, int channels, int nu
             ctx->buffers[i].sample_rate = sample_rate;
             ctx->buffers[i].channels = channels;
             ctx->buffers[i].num_samples = num_samples;
-            ctx->buffers[i].data = (float *)calloc(num_samples * channels, sizeof(float));
-            if (!ctx->buffers[i].data)
-            {
-                SDL_UnlockAudioDevice(ctx->device);
-                return -1;
-            }
+            ctx->buffers[i].data = data;
             ctx->buffers[i].active = true;
             SDL_UnlockAudioDevice(ctx->device);
             return i;
         }
     }
     SDL_UnlockAudioDevice(ctx->device);
+    free(data);
     return -1;
 }
 
@@ -887,9 +987,14 @@ void audio_buffer_set_data(AudioContext *ctx, int buffer_id, const float *sample
     if (offset + count > total)
         count = total - offset;
 
-    SDL_LockAudioDevice(ctx->device);
-    memcpy(buf->data + offset, samples, count * sizeof(float));
-    SDL_UnlockAudioDevice(ctx->device);
+    for (int done = 0; done < count;)
+    {
+        int piece = count - done < 65536 ? count - done : 65536;
+        SDL_LockAudioDevice(ctx->device);
+        memcpy(buf->data + offset + done, samples + done, (size_t)piece * sizeof(float));
+        SDL_UnlockAudioDevice(ctx->device);
+        done += piece;
+    }
 }
 
 void audio_destroy_buffer(AudioContext *ctx, int buffer_id)
@@ -907,14 +1012,12 @@ void audio_destroy_buffer(AudioContext *ctx, int buffer_id)
         }
     }
 
-    if (ctx->buffers[buffer_id].data)
-    {
-        free(ctx->buffers[buffer_id].data);
-        ctx->buffers[buffer_id].data = NULL;
-    }
+    float *data = ctx->buffers[buffer_id].data;
+    ctx->buffers[buffer_id].data = NULL;
     ctx->buffers[buffer_id].active = false;
 
     SDL_UnlockAudioDevice(ctx->device);
+    free(data); 
 }
 
 int audio_play_buffer(AudioContext *ctx, int buffer_id, bool loop, float gain)
@@ -934,7 +1037,7 @@ int audio_play_buffer(AudioContext *ctx, int buffer_id, bool loop, float gain)
         {
             ctx->playbacks[i].active = true;
             ctx->playbacks[i].buffer_id = buffer_id;
-            ctx->playbacks[i].position = 0.0f;
+            ctx->playbacks[i].position = 0.0;
             ctx->playbacks[i].loop = loop;
             ctx->playbacks[i].gain = fmaxf(0.0f, fminf(1.0f, gain));
             SDL_UnlockAudioDevice(ctx->device);
@@ -1040,6 +1143,151 @@ float audio_midi_to_freq(int note)
 const char *audio_get_error(AudioContext *ctx)
 {
     return ctx ? ctx->error_msg : "Invalid context";
+}
+
+int audio_stream_sample_rate(AudioContext *ctx)
+{
+    return ctx ? ctx->spec.freq : 0;
+}
+
+int audio_output_open(AudioContext *ctx, int channels, double latency_ms)
+{
+    if (!ctx)
+        return -1;
+    SDL_LockAudioDevice(ctx->device);
+    int id = audio_streams_open(&ctx->streams, false, channels, latency_ms);
+    SDL_UnlockAudioDevice(ctx->device);
+    if (id < 0)
+    {
+        snprintf(ctx->error_msg, sizeof(ctx->error_msg), "Could not open an output stream (%d at most, 1 or 2 channels)",
+                 AUDIO_MAX_OUTPUT_STREAMS);
+        return -1;
+    }
+    if (!ctx->playing)
+        audio_start(ctx);
+    return id;
+}
+
+void audio_output_close(AudioContext *ctx, int id)
+{
+    if (!ctx)
+        return;
+    SDL_LockAudioDevice(ctx->device);
+    audio_streams_close(&ctx->streams, false, id);
+    SDL_UnlockAudioDevice(ctx->device);
+}
+
+int audio_output_wanted(AudioContext *ctx, int id)
+{
+    return ctx ? audio_streams_output_wanted(&ctx->streams, id) : 0;
+}
+
+int audio_output_write(AudioContext *ctx, int id, const float *frames, int count)
+{
+    return ctx ? audio_streams_output_write(&ctx->streams, id, frames, count) : 0;
+}
+
+static bool any_input_open(AudioContext *ctx)
+{
+    for (int i = 0; i < AUDIO_MAX_INPUT_STREAMS; i++)
+        if (audio_streams_is_open(&ctx->streams, true, i))
+            return true;
+    return false;
+}
+
+static void lock_streams(AudioContext *ctx)
+{
+    SDL_LockAudioDevice(ctx->device);
+    if (ctx->capture_device)
+        SDL_LockAudioDevice(ctx->capture_device);
+}
+
+static void unlock_streams(AudioContext *ctx)
+{
+    if (ctx->capture_device)
+        SDL_UnlockAudioDevice(ctx->capture_device);
+    SDL_UnlockAudioDevice(ctx->device);
+}
+
+int audio_input_open(AudioContext *ctx, int channels, double latency_ms)
+{
+    if (!ctx)
+        return -1;
+    if (!ctx->capture_device)
+    {
+        SDL_AudioSpec wanted;
+        memset(&wanted, 0, sizeof(wanted));
+        wanted.freq = ctx->spec.freq; 
+        wanted.format = AUDIO_F32SYS;
+        wanted.channels = 2;
+        wanted.samples = 256;
+        wanted.callback = audio_capture_callback;
+        wanted.userdata = ctx;
+        ctx->capture_device = SDL_OpenAudioDevice(NULL, 1, &wanted, &ctx->capture_spec, 0);
+        if (!ctx->capture_device)
+        {
+            snprintf(ctx->error_msg, sizeof(ctx->error_msg), "Could not open the microphone: %s", SDL_GetError());
+            return -1;
+        }
+    }
+    lock_streams(ctx);
+    int id = audio_streams_open(&ctx->streams, true, channels, latency_ms);
+    unlock_streams(ctx);
+    if (id < 0)
+    {
+        snprintf(ctx->error_msg, sizeof(ctx->error_msg), "Could not open an input stream (%d at most, 1 or 2 channels)",
+                 AUDIO_MAX_INPUT_STREAMS);
+        if (!any_input_open(ctx))
+        {
+            SDL_CloseAudioDevice(ctx->capture_device);
+            ctx->capture_device = 0;
+        }
+        return -1;
+    }
+    SDL_PauseAudioDevice(ctx->capture_device, 0);
+    if (!ctx->playing)
+        audio_start(ctx); 
+    return id;
+}
+
+void audio_input_close(AudioContext *ctx, int id)
+{
+    if (!ctx)
+        return;
+    lock_streams(ctx);
+    audio_streams_close(&ctx->streams, true, id);
+    unlock_streams(ctx);
+    if (ctx->capture_device && !any_input_open(ctx))
+    {
+        SDL_CloseAudioDevice(ctx->capture_device);
+        ctx->capture_device = 0;
+    }
+}
+
+int audio_input_available(AudioContext *ctx, int id)
+{
+    return ctx ? audio_streams_input_available(&ctx->streams, id) : 0;
+}
+
+int audio_input_read(AudioContext *ctx, int id, float *frames, int count)
+{
+    return ctx ? audio_streams_input_read(&ctx->streams, id, frames, count) : 0;
+}
+
+bool audio_stream_get_stats(AudioContext *ctx, bool input, int id, AudioStreamStats *out)
+{
+    return ctx && audio_streams_stats(&ctx->streams, input, id, out);
+}
+
+bool audio_streams_active(AudioContext *ctx)
+{
+    return ctx && audio_streams_any_open(&ctx->streams);
+}
+
+void audio_streams_serviced(AudioContext *ctx)
+{
+    if (ctx)
+        audio_streams_clear_wake(&ctx->streams);
 }
 
 #endif

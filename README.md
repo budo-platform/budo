@@ -89,15 +89,17 @@ make build
 
 ```bash
 ./build/budo init MY-APPLICATION-DIRECTORY
+./build/budo init MY-APPLICATION-DIRECTORY --template ui   # with the budo-ui widgets
 ```
 
 ### Android application packaging
 
 Note: Android SDK and NDK need to be installed on your system for the Android features to work.
 
-> **Budo Pro:** Android APK/AAB packaging is a paid feature. But during a limited period 
-> of time, the public build of Budo includes the Android
-> feature for free! This will last only during Budo's public launch.
+> **Budo Pro:** Android APK/AAB packaging is a Budo Pro feature. During Budo's
+> public launch, the released Budo binaries include it for free; a later release
+> will make it a paid feature. Budo built from source without the private Android
+> feature pack keeps the commands, which then report that packaging is unavailable.
 
 Those commands will compile any Budo application into an Android application.
 

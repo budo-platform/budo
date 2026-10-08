@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "subsystem": "accessibility",
+  "error_convention": "transient_returns_false",
+  "wrapper_headers": [
+    "src/accessibility/accessibility_service.h"
+  ],
+  "state_ownership": {
+    "javascript": "Stateless bindings over the process accessibility service, which owns the published tree and a mutex-protected action queue filled by the platform UI thread.",
+    "lua": "Stateless bindings over the process accessibility service, which owns the published tree and a mutex-protected action queue filled by the platform UI thread.",
+    "wasmtime": "Stateless host imports over the process accessibility service; trees and actions cross the boundary as JSON in guest memory."
+  },
+  "platform_differences": {
+    "desktop": {
+      "source": "src/accessibility/accessibility_macos.m",
+      "details": [
+        "Nodes become NSAccessibilityElement children of the window's content view for VoiceOver.",
+        "isActive() follows VoiceOver and Switch Control; BUDO_ACCESSIBILITY=1 forces it (for Accessibility Inspector).",
+        "Windows and Linux (src/accessibility/accessibility_desktop.c) report isAvailable() == false until UI Automation and AT-SPI bridges exist; update() still succeeds."
+      ]
+    },
+    "web": {
+      "source": "src/web/web_accessibility.c",
+      "details": [
+        "Nodes are mirrored as invisible ARIA elements over the canvas.",
+        "isActive() is always true because browsers do not report screen readers."
+      ]
+    }
+  },
+  "typescript": {
+    "interface": "SysAccessibility",
+    "kind": "methods",
+    "description": "Expose what the app draws to screen readers: publish a flat list of nodes every frame they change, and apply the actions users perform through assistive technology."
+  },
+  "runtimes": {
+    "javascript": {
+      "source": "src/accessibility/js_accessibility_bindings.c",
+      "registration_symbol": "js_accessibility_init",
+      "namespace": "sys.accessibility",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "lua": {
+      "source": "src/accessibility/lua_accessibility_bindings.c",
+      "registration_symbol": "lua_accessibility_init",
+      "namespace": "sys.accessibility",
+      "platforms": [
+        "desktop",
+        "android",
+        "web"
+      ]
+    },
+    "wasmtime": {
+      "source": "src/accessibility/wasm_accessibility_bindings.c",
+      "registration_symbol": "wasm_accessibility_register",
+      "namespace": "env",
+      "platforms": [
+        "desktop"
+      ]
+    }
+  },
+  "operations": [
+    {
+      "name": "is_available",
+      "wrapper_symbol": "accessibility_available",
+      "signature": "() -> bool",
+      "typescript_description": "Whether this platform exposes accessibility nodes to assistive technology (web, Android, and macOS; not Windows or Linux yet).",
+      "exports": {
+        "javascript": "isAvailable",
+        "lua": "isAvailable",
+        "wasmtime": "accessibility_is_available"
+      }
+    },
+    {
+      "name": "is_active",
+      "wrapper_symbol": "accessibility_active",
+      "signature": "() -> bool",
+      "typescript_description": "Whether a screen reader or other assistive service probably runs (always true on the web, where browsers do not tell). Apps may skip building the tree when false.",
+      "exports": {
+        "javascript": "isActive",
+        "lua": "isActive",
+        "wasmtime": "accessibility_is_active"
+      }
+    },
+    {
+      "name": "update",
+      "wrapper_symbol": "accessibility_update",
+      "signature": "(nodes: nodes) -> bool",
+      "typescript_description": "Replace the published tree (at most 512 nodes, in reading order; bounds in physical canvas pixels). Cheap when nothing changed. WebAssembly passes a JSON array of the same objects.",
+      "exports": {
+        "javascript": "update",
+        "lua": "update",
+        "wasmtime": "accessibility_update"
+      }
+    },
+    {
+      "name": "take_actions",
+      "wrapper_symbol": "accessibility_take_actions",
+      "signature": "() -> actions",
+      "typescript_description": "Return and clear the actions requested through assistive technology since the last call: press, focus, increment, decrement, or setValue (with `value`). WebAssembly receives them as a JSON array.",
+      "exports": {
+        "javascript": "takeActions",
+        "lua": "takeActions",
+        "wasmtime": "accessibility_take_actions"
+      }
+    }
+  ]
+}

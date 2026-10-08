@@ -5,14 +5,16 @@ interface GLDrawOptions {
   first?: number;
   /** Vertex / index count. Required. */
   count: number;
-  /** Optional render target id (default: backbuffer). */
+  /** Render target id. Default: the target bound with `bindRenderTarget`, else the screen; `-1` forces the screen. */
   target?: number;
-  /** Enable depth testing. Default: false. */
+  /** Instances to draw, with per-instance attributes (setAttribute divisor 1). Default: 1. */
+  instanceCount?: number;
+  /** Enable depth testing. Default: true. */
   depthTest?: boolean;
-  /** Write to the depth buffer. Default: true when depthTest is true. */
+  /** Write to the depth buffer. Default: true. */
   depthWrite?: boolean;
   /** Cull-face mode. Default: "none". */
   cull?: "none" | "back" | "front";
-  /** Blend mode. Default: "none". */
-  blend?: "none" | "alpha" | "add" | "premultiplied";
+  /** Blend mode: "alpha" (straight alpha), "premult" (premultiplied colors), "add", or "none". Default: "alpha". */
+  blend?: "none" | "alpha" | "add" | "premult";
 }

@@ -44,7 +44,7 @@ extern "C"
 
     typedef struct MidiContext MidiContext;
 
-#define MIDI_SYSEX_MAX_SIZE 4096
+#define MIDI_SYSEX_MAX_SIZE 65535
 
     typedef struct
     {

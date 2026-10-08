@@ -15,4 +15,7 @@ typedef struct
 
 int android_package(const char *app_dir, const AndroidPackageOptions *opts);
 
+int android_build_cache_inspect(bool json);
+int android_build_cache_clean(const char *package_name);
+
 #endif

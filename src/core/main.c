@@ -68,6 +68,12 @@ int budo_cli_main(int argc, char **argv)
     case BUDO_CMD_NATIVE_SDK_CACHE_CLEAN:
         return native_compile_sdk_cache_clean_all();
 
+    case BUDO_CMD_ANDROID_CACHE_INSPECT:
+        return android_build_cache_inspect(options.cache_json);
+
+    case BUDO_CMD_ANDROID_CACHE_CLEAN:
+        return android_build_cache_clean(options.cache_android_package);
+
     case BUDO_CMD_WEB_EXPORT:
         return web_export(options.project_dir, options.web_export_output);
 

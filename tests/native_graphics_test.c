@@ -51,6 +51,35 @@ static void frame(BudoHost *host, void *state, const BudoFrameInfo *info)
     assert(budo_canvas_draw_circle(canvas, 64, 32, 12, paint) ==
            BUDO_STATUS_OK);
     assert(budo_canvas_draw_path(canvas, path, paint) == BUDO_STATUS_OK);
+
+    const BudoColor colors[] = {BUDO_COLOR_RED, BUDO_COLOR_BLACK};
+    const float stops[] = {0.0f, 1.0f};
+    assert(budo_paint_set_linear_gradient(paint, 0, 0, 96, 0, colors, NULL, 2) ==
+           BUDO_STATUS_OK);
+    assert(budo_paint_set_radial_gradient(paint, 48, 32, 20, colors, stops, 2) ==
+           BUDO_STATUS_OK);
+    assert(budo_paint_set_sweep_gradient(paint, 48, 32, colors, NULL, 2) ==
+           BUDO_STATUS_OK);
+    assert(budo_paint_set_linear_gradient(paint, 0, 0, 1, 0, colors, NULL, 1) ==
+           BUDO_STATUS_INVALID_ARGUMENT);
+    assert(budo_paint_set_radial_gradient(paint, 0, 0, 0, colors, NULL, 2) ==
+           BUDO_STATUS_INVALID_ARGUMENT);
+    assert(budo_canvas_save(canvas) == BUDO_STATUS_OK);
+    assert(budo_canvas_clip_round_rect(canvas, 50, 40, 40, 20, 6, 6) ==
+           BUDO_STATUS_OK);
+    assert(budo_canvas_clip_round_rect(canvas, 0, 0, -1, 4, 0, 0) ==
+           BUDO_STATUS_INVALID_ARGUMENT);
+    assert(budo_canvas_clip_path(canvas, path) == BUDO_STATUS_OK);
+    assert(budo_canvas_clip_path(canvas, NULL) != BUDO_STATUS_OK);
+    assert(budo_canvas_save_layer(canvas, 128) == BUDO_STATUS_OK);
+    assert(budo_canvas_draw_rect(canvas, 0, 0, 96, 64, paint) == BUDO_STATUS_OK);
+    assert(budo_canvas_restore(canvas) == BUDO_STATUS_OK);
+    assert(budo_canvas_save_layer_bounds(canvas, 0, 0, 10, 10, 255, 3) ==
+           BUDO_STATUS_OK);
+    assert(budo_canvas_restore(canvas) == BUDO_STATUS_OK);
+    assert(budo_canvas_restore(canvas) == BUDO_STATUS_OK);
+    assert(budo_paint_clear_gradient(paint) == BUDO_STATUS_OK);
+    assert(budo_paint_set_color(paint, BUDO_COLOR_RED) == BUDO_STATUS_OK);
     frame_count++;
 }
 

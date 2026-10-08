@@ -12,6 +12,19 @@ uniform vec3 u_light_color;
 uniform float u_ambient;
 uniform float u_fog_start;
 uniform float u_fog_end;
+uniform vec3 u_sky_glow;
+uniform vec3 u_sun_dir;
+uniform vec3 u_sun_color;
+
+// The sky's horizon color in this direction (see sky.frag), so distant
+// geometry fades into the sunset glow instead of a flat fog band.
+vec3 fogColorToward(vec3 dir) {
+    vec2 sunXY = normalize(u_sun_dir.xy + vec2(1e-5));
+    vec2 dirXY = normalize(dir.xy + vec2(1e-5));
+    float toward = dot(dirXY, sunXY) * 0.5 + 0.5;
+    float mu = max(dot(dir, u_sun_dir), 0.0);
+    return u_fog_color + u_sky_glow * pow(toward, 3.0) + u_sun_color * pow(mu, 10.0) * 0.22;
+}
 
 void main() {
     vec3 n = normalize(v_normal);
@@ -29,7 +42,7 @@ void main() {
 
     float dist = distance(v_world_pos, u_eye);
     float fog = smoothstep(u_fog_start, u_fog_end, dist);
-    lit = mix(lit, u_fog_color, fog);
+    lit = mix(lit, fogColorToward(normalize(v_world_pos - u_eye)), fog);
 
     fragColor = vec4(lit, 1.0);
 }

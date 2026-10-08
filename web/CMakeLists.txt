@@ -79,9 +79,10 @@ if(NOT EXISTS "${miniaudio_SOURCE_DIR}/miniaudio.h")
         miniaudio
         GIT_REPOSITORY ${BUDO_MINIAUDIO_GIT_REPOSITORY}
         GIT_TAG        ${BUDO_MINIAUDIO_GIT_TAG}
+        SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
     )
     message(STATUS "Downloading miniaudio...")
-    FetchContent_Populate(miniaudio)
+    FetchContent_MakeAvailable(miniaudio)
 endif()
 
 set(BUDO_QUICKJS_IMPL "${BUDO_QUICKJS_IMPL_DEFAULT}" CACHE STRING "QuickJS implementation: bellard or ng")
@@ -94,9 +95,10 @@ if(BUDO_QUICKJS_IMPL STREQUAL "ng")
             quickjs_ng
             GIT_REPOSITORY ${BUDO_QUICKJS_NG_GIT_REPOSITORY}
             GIT_TAG        ${BUDO_QUICKJS_NG_GIT_TAG}
+            SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
         )
         message(STATUS "Downloading QuickJS-NG (${BUDO_QUICKJS_NG_GIT_TAG})...")
-        FetchContent_Populate(quickjs_ng)
+        FetchContent_MakeAvailable(quickjs_ng)
         set(quickjs_SOURCE_DIR ${quickjs_ng_SOURCE_DIR})
     endif()
     set(QUICKJS_VERSION_DEF "quickjs-ng")
@@ -113,12 +115,14 @@ elseif(BUDO_QUICKJS_IMPL STREQUAL "bellard")
         quickjs_fallback
         URL      ${BUDO_QUICKJS_BELLARD_URL}
         URL_HASH ${BUDO_QUICKJS_BELLARD_URL_HASH}
+        SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     FetchContent_GetProperties(quickjs_fallback)
     if(NOT quickjs_fallback_POPULATED)
         message(STATUS "Downloading QuickJS...")
-        FetchContent_Populate(quickjs_fallback)
+        FetchContent_MakeAvailable(quickjs_fallback)
     endif()
     set(quickjs_SOURCE_DIR ${quickjs_fallback_SOURCE_DIR})
     set(QUICKJS_VERSION_DEF "${BUDO_QUICKJS_BELLARD_VERSION}")
@@ -172,12 +176,14 @@ FetchContent_Declare(
     lua
     URL      "${BUDO_LUA_URL}"
     URL_HASH "${BUDO_LUA_URL_HASH}"
+    SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_GetProperties(lua)
 if(NOT lua_POPULATED)
     message(STATUS "Downloading Lua ${LUA_VERSION}...")
-    FetchContent_Populate(lua)
+    FetchContent_MakeAvailable(lua)
 
     set(LUA_CORE_SOURCES
         ${lua_SOURCE_DIR}/src/lapi.c
@@ -319,6 +325,10 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/web/web_magneto.c
     ${BUDO_ROOT}/src/web/web_device.c
     ${BUDO_ROOT}/src/device/device_service.c
+    ${BUDO_ROOT}/src/accessibility/accessibility_service.c
+    ${BUDO_ROOT}/src/accessibility/js_accessibility_bindings.c
+    ${BUDO_ROOT}/src/accessibility/lua_accessibility_bindings.c
+    ${BUDO_ROOT}/src/web/web_accessibility.c
     ${BUDO_ROOT}/src/core/input.c
     ${BUDO_ROOT}/src/core/path_util.c
     ${BUDO_ROOT}/src/core/app_entrypoint.c
@@ -340,11 +350,13 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/core/subsystem_composition.c
     ${BUDO_ROOT}/src/graphics/skia_wrapper.cpp
     ${BUDO_ROOT}/src/graphics/js_canvas_bindings.c
+    ${BUDO_ROOT}/src/graphics/js_canvas_effects_bindings.c
     ${BUDO_ROOT}/src/graphics/js_core_bindings.c
     ${BUDO_ROOT}/src/graphics/js_gl_bindings.c
     ${BUDO_ROOT}/src/graphics/lua_canvas_bindings.c
     ${BUDO_ROOT}/src/graphics/lua_gl_bindings.c
     ${BUDO_ROOT}/src/graphics/lua_transform_bindings.c
+    ${BUDO_ROOT}/src/graphics/lua_canvas_effects_bindings.c
     ${BUDO_ROOT}/src/graphics/image_loader.c
     ${BUDO_ROOT}/src/graphics/gl_state_guard.c
     ${BUDO_ROOT}/src/graphics/gpu_resource_state.c
@@ -354,11 +366,13 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/math/lua_math_bindings.c
     ${BUDO_ROOT}/src/audio/audio_service.c
     ${BUDO_ROOT}/src/audio/js_audio_bindings.c
+    ${BUDO_ROOT}/src/audio/audio_dsp.c
     ${BUDO_ROOT}/src/audio/lua_audio_bindings.c
     ${BUDO_ROOT}/src/audio/audio_decoder.c
     ${BUDO_ROOT}/src/midi/js_midi_bindings.c
     ${BUDO_ROOT}/src/midi/lua_midi_bindings.c
     ${BUDO_ROOT}/src/midi/midi_service.c
+    ${BUDO_ROOT}/src/midi/midi_event_queue.c
     ${BUDO_ROOT}/src/midi/midi_topology.c
     ${BUDO_ROOT}/src/network/network_wrapper.c
     ${BUDO_ROOT}/src/network/network_policy.c

@@ -134,15 +134,23 @@ function applyFriction(value, decel) {
     return value - Math.sign(value) * decel;
 }
 
-function sampleSupport(car, terrain, fwdX, fwdY, rightX, rightY) {
-    const halfWheelbase = WHEELBASE * 0.5;
-    const halfTrack = TRACK * 0.5;
-    const wheelOffsets = [
-        [halfWheelbase, halfTrack],
-        [halfWheelbase, -halfTrack],
-        [-halfWheelbase, halfTrack],
-        [-halfWheelbase, -halfTrack],
-    ];
+// Wheel contact points (forward, right) as a flat list.
+const WHEEL_OFFSETS = [
+    WHEELBASE * 0.5, TRACK * 0.5,
+    WHEELBASE * 0.5, -TRACK * 0.5,
+    -WHEELBASE * 0.5, TRACK * 0.5,
+    -WHEELBASE * 0.5, -TRACK * 0.5,
+];
+
+// Physics runs every frame for every car: the support samples and the force
+// report reuse records instead of allocating new objects each step.
+function makeSupport() {
+    return { contactCount: 0, supportZ: 0, compression: 0, normal: { x: 0, y: 0, z: 1 } };
+}
+const supportBefore = makeSupport();
+const supportAfter = makeSupport();
+
+function sampleSupport(out, car, terrain, fwdX, fwdY, rightX, rightY) {
 
     let contactCount = 0;
     let weightSum = 0;
@@ -151,7 +159,8 @@ function sampleSupport(car, terrain, fwdX, fwdY, rightX, rightY) {
     let nx = 0, ny = 0, nz = 0;
     let compressionSum = 0;
 
-    for (const [ox, oy] of wheelOffsets) {
+    for (let wheel = 0; wheel < 8; wheel += 2) {
+        const ox = WHEEL_OFFSETS[wheel], oy = WHEEL_OFFSETS[wheel + 1];
         const wx = car.x + fwdX * ox + rightX * oy;
         const wy = car.y + fwdY * ox + rightY * oy;
         const h = terrain.getHeight(wx, wy);
@@ -183,12 +192,30 @@ function sampleSupport(car, terrain, fwdX, fwdY, rightX, rightY) {
         nx = n.x; ny = n.y; nz = n.z;
     }
 
-    return {
-        contactCount,
-        supportZ: Math.max(supportZ, maxZ - 0.28),
-        compression: contactCount ? compressionSum / contactCount : 0,
-        normal: { x: nx, y: ny, z: nz },
-    };
+    out.contactCount = contactCount;
+    out.supportZ = Math.max(supportZ, maxZ - 0.28);
+    out.compression = contactCount ? compressionSum / contactCount : 0;
+    out.normal.x = nx; out.normal.y = ny; out.normal.z = nz;
+    return out;
+}
+
+function forcesOf(car) {
+    if (!car.forces) {
+        car.forces = {
+            gravityForce: { x: 0, y: 0, z: 0 },
+            reactionForce: { x: 0, y: 0, z: 0 },
+            gravityTangent: { x: 0, y: 0, z: 0 },
+            resultantForce: { x: 0, y: 0, z: 0 },
+            grounded: true,
+            rawThrottle: 0,
+        };
+    }
+    return car.forces;
+}
+
+function setVector(v, x, y, z) {
+    v.x = x; v.y = y; v.z = z;
+    return v;
 }
 
 function vehicleCollisionRadius() {
@@ -311,7 +338,7 @@ export function updatePhysics(car, dt, controls, terrain) {
     let fwdX = cosH, fwdY = sinH;
     let rightX = sinH, rightY = -cosH;
 
-    const support = sampleSupport(car, terrain, fwdX, fwdY, rightX, rightY);
+    const support = sampleSupport(supportBefore, car, terrain, fwdX, fwdY, rightX, rightY);
     const speed = Math.hypot(car.vx, car.vy);
     const heightAboveGround = car.z - support.supportZ;
     const canMaintainContact = support.contactCount > 0
@@ -344,21 +371,21 @@ export function updatePhysics(car, dt, controls, terrain) {
     const absFwdSpeed = Math.abs(fwdSpeed);
 
     // ----- Tire forces: longitudinal drive + lateral slip correction -----
-    const gravityForce = { x: 0, y: 0, z: -physics.gravity * physics.mass };
-    let reactionForce = { x: 0, y: 0, z: 0 };
-    let gravityTangent = { x: 0, y: 0, z: 0 };
+    const forces = forcesOf(car);
+    const gravityForce = setVector(forces.gravityForce, 0, 0, -physics.gravity * physics.mass);
+    const reactionForce = setVector(forces.reactionForce, 0, 0, 0);
+    const gravityTangent = setVector(forces.gravityTangent, 0, 0, 0);
     let tireFx = 0, tireFy = 0;
     let activeThrottle = 0;
 
     if (car.grounded) {
         const normal = support.normal;
         const dotGN = gravityForce.x * normal.x + gravityForce.y * normal.y + gravityForce.z * normal.z;
-        reactionForce = { x: -dotGN * normal.x, y: -dotGN * normal.y, z: -dotGN * normal.z };
-        gravityTangent = {
-            x: gravityForce.x + reactionForce.x,
-            y: gravityForce.y + reactionForce.y,
-            z: gravityForce.z + reactionForce.z,
-        };
+        setVector(reactionForce, -dotGN * normal.x, -dotGN * normal.y, -dotGN * normal.z);
+        setVector(gravityTangent,
+            gravityForce.x + reactionForce.x,
+            gravityForce.y + reactionForce.y,
+            gravityForce.z + reactionForce.z);
 
         activeThrottle = throttle;
         const loadScale = clamp(0.35 + support.compression * 0.95, 0.35, 1.3);
@@ -426,7 +453,7 @@ export function updatePhysics(car, dt, controls, terrain) {
     car.y += car.vy * dt;
 
     if (car.grounded) {
-        const post = sampleSupport(car, terrain, fwdX, fwdY, rightX, rightY);
+        const post = sampleSupport(supportAfter, car, terrain, fwdX, fwdY, rightX, rightY);
         const normal = post.normal;
         car.z = approach(car.z, post.supportZ, SUSPENSION_FOLLOW_RATE, dt);
         if (Math.abs(car.z - post.supportZ) < 0.018) car.z = post.supportZ;
@@ -475,13 +502,11 @@ export function updatePhysics(car, dt, controls, terrain) {
         }
     }
 
-    const resultantForce = {
-        x: fwdX * activeThrottle * physics.moveForce + (car.grounded ? rightX * -sideSpeed * LATERAL_STIFFNESS * physics.mass : 0),
-        y: fwdY * activeThrottle * physics.moveForce + (car.grounded ? rightY * -sideSpeed * LATERAL_STIFFNESS * physics.mass : 0),
-        z: 0,
-    };
-    return {
-        gravityForce, reactionForce, resultantForce, gravityTangent,
-        grounded: car.grounded, rawThrottle
-    };
+    setVector(forces.resultantForce,
+        fwdX * activeThrottle * physics.moveForce + (car.grounded ? rightX * -sideSpeed * LATERAL_STIFFNESS * physics.mass : 0),
+        fwdY * activeThrottle * physics.moveForce + (car.grounded ? rightY * -sideSpeed * LATERAL_STIFFNESS * physics.mass : 0),
+        0);
+    forces.grounded = car.grounded;
+    forces.rawThrottle = rawThrottle;
+    return forces;
 }

@@ -135,6 +135,8 @@ static void *init_js_audio(void *opaque)
     ManagedSubsystemHost *host = opaque;
     ManagedRuntimeCommon *c = host->contexts;
     c->js_audio_ctx = js_audio_init(c->js_ctx->context, host->config->project_dir);
+    
+    js_audio_set_files(c->js_audio_ctx, &c->file_ctx);
     return c->js_audio_ctx;
 }
 
@@ -225,7 +227,7 @@ static void *init_js_neural(void *opaque)
 static const ManagedSubsystemEntry js_subsystems[] = {
     MANAGED_SUBSYSTEM("JavaScript core", SUBSYSTEM_ROLE_CORE, MANAGED_FEATURE_NONE, init_js_core, NULL, managed_js_core_cleanup, false),
     MANAGED_SUBSYSTEM("JavaScript canvas", SUBSYSTEM_ROLE_CANVAS, MANAGED_FEATURE_NONE, init_js_canvas, NULL, managed_js_canvas_cleanup, false),
-    MANAGED_SUBSYSTEM("JavaScript audio", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_AUDIO, init_js_audio, NULL, managed_js_audio_cleanup, true),
+    MANAGED_SUBSYSTEM_BUSY("JavaScript audio", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_AUDIO, init_js_audio, managed_js_audio_poll, managed_js_audio_cleanup, managed_js_audio_pending, true),
     MANAGED_SUBSYSTEM("JavaScript SQLite", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_NONE, init_js_sqlite, NULL, managed_js_sqlite_cleanup, true),
     MANAGED_SUBSYSTEM_BUSY("JavaScript file", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_NONE, init_js_file, managed_js_file_poll, managed_js_file_cleanup, managed_js_file_pending, true),
 #ifdef BUDO_LLAMACPP

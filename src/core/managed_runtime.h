@@ -110,6 +110,10 @@ extern "C"
                                const ManagedFrameContext *frame,
                                double timestamp_ms);
 
+    double managed_runtime_idle_ms(ManagedRuntimeKind kind,
+                                   const ManagedRuntimeCommon *contexts,
+                                   double timestamp_ms);
+
     void managed_runtime_shutdown(SubsystemRegistry *subsystems);
 
     void managed_runtime_set_graphics_activation(ManagedRuntimeKind kind,

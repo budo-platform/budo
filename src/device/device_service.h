@@ -2,6 +2,7 @@
 #define BUDO_DEVICE_SERVICE_H
 
 #include "core/api_error.h"
+#include "device/device_wrapper.h"
 
 #include <stdbool.h>
 
@@ -21,6 +22,10 @@ extern "C"
         const DeviceContext *state);
 
     bool device_service_keep_screen_on(bool enabled, ApiError *error);
+
+    bool device_haptic_from_name(const char *name, DeviceHaptic *out);
+    bool device_cursor_from_name(const char *name, DeviceCursor *out);
+    const char *device_cursor_name(DeviceCursor cursor);
 
 #ifdef __cplusplus
 }

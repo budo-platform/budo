@@ -4,7 +4,7 @@
     "error_convention": {
         "javascript": {
             "kind": "throws_on_invalid_arguments_or_operation_failure",
-            "details": "Path calls ignore invalid handles, while failed path/SVG/font allocation or loading and invalid managed buffer arguments can throw or return -1 according to the binding. Runtime-owned handles are released when the canvas context is destroyed."
+            "details": "Path calls ignore invalid handles (addSvg returns false for them and for data that does not parse), while failed path/SVG/font allocation or loading and invalid managed buffer arguments can throw or return -1 according to the binding. Runtime-owned handles are released when the canvas context is destroyed."
         },
         "lua": {
             "kind": "throws_on_invalid_arguments_or_operation_failure",
@@ -16,7 +16,7 @@
         },
         "browser_wasm": {
             "kind": "documented_sentinel_on_failure",
-            "details": "The browser bridge exposes only path create, move, line, close, and draw. Creation returns -1 after the fixed registry is full or allocation fails; invalid handles are ignored."
+            "details": "The browser bridge exposes only path create, move, line, close, addSvg, and draw. Creation returns -1 after the fixed registry is full or allocation fails; invalid handles are ignored."
         }
     },
     "wrapper_header": "src/graphics/skia_wrapper.h",
@@ -24,7 +24,8 @@
         "javascript": {
             "source": "src/graphics/js_core_bindings.c",
             "export_sources": [
-                "src/graphics/js_canvas_bindings.c"
+                "src/graphics/js_canvas_bindings.c",
+                "src/graphics/js_canvas_effects_bindings.c"
             ],
             "registration_symbol": "js_runtime_create",
             "namespace": [
@@ -41,7 +42,8 @@
             "export_scopes": [
                 "js_sys_path_funcs",
                 "js_sys_svg_funcs",
-                "js_sys_font_funcs"
+                "js_sys_font_funcs",
+                "js_path_effect_funcs"
             ]
         },
         "lua": {
@@ -61,7 +63,11 @@
             "export_scopes": [
                 "path_funcs",
                 "svg_funcs",
-                "font_funcs"
+                "font_funcs",
+                "path_effect_funcs"
+            ],
+            "export_sources": [
+                "src/graphics/lua_canvas_effects_bindings.c"
             ]
         },
         "wasmtime": {
@@ -75,6 +81,9 @@
             "export_prefixes": [
                 "path_",
                 "svg_"
+            ],
+            "export_sources": [
+                "src/graphics/wasm_canvas_effects_bindings.c"
             ]
         },
         "browser_wasm": {
@@ -254,6 +263,23 @@
                     "namespace": "sys.path"
                 },
                 "wasmtime": "path_add_circle"
+            }
+        },
+        {
+            "name": "path_add_svg",
+            "wrapper_symbol": "skia_path_add_svg",
+            "signature": "(path, data:string) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "addSvg",
+                    "namespace": "sys.path"
+                },
+                "lua": {
+                    "name": "addSvg",
+                    "namespace": "sys.path"
+                },
+                "wasmtime": "path_add_svg",
+                "browser_wasm": "path_add_svg"
             }
         },
         {

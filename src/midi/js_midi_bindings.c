@@ -1,3 +1,4 @@
+#include "midi/midi_event_queue.h"
 #include "js_midi_bindings.h"
 #include "midi_service.h"
 #include "midi_topology.h"
@@ -6,25 +7,12 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define MIDI_MSG_QUEUE_SIZE 256
-#define MIDI_SYSEX_QUEUE_SIZE 16
+#define MIDI_MSG_QUEUE_SIZE 1024
+#define MIDI_SYSEX_QUEUE_SIZE 32
 #define RTPMIDI_MSG_QUEUE_SIZE 256
 #define MIDI_DEVICE_CHECK_FRAMES 60
 #define MAX_MIDI_CALLBACKS MIDI_MAX_DEVICES
 #define MAX_RTPMIDI_CALLBACKS RTPMIDI_MAX_SESSIONS
-
-typedef struct
-{
-    int device_handle;
-    MidiMessage message;
-} MidiQueuedMessage;
-
-typedef struct
-{
-    int device_handle;
-    uint8_t data[MIDI_SYSEX_MAX_SIZE];
-    size_t length;
-} MidiQueuedSysEx;
 
 typedef struct
 {
@@ -38,11 +26,9 @@ struct JsMidiContext
     MidiContext *midi_ctx;
     RtpMidiContext *rtpmidi_ctx;
     bool midi_lazy_initialized;
-    SubsystemQueue midi_queue;
-    SubsystemQueue sysex_queue;
+    MidiEventQueue *events; 
+    uint8_t *sysex_buffer;  
     SubsystemQueue rtpmidi_queue;
-    MidiQueuedMessage midi_storage[MIDI_MSG_QUEUE_SIZE];
-    MidiQueuedSysEx sysex_storage[MIDI_SYSEX_QUEUE_SIZE];
     RtpMidiQueuedMessage rtpmidi_storage[RTPMIDI_MSG_QUEUE_SIZE];
     JSValue midi_callbacks[MAX_MIDI_CALLBACKS];
     bool midi_callbacks_active[MAX_MIDI_CALLBACKS];
@@ -111,40 +97,18 @@ static JSValue js_midi_device_array(JSContext *ctx, MidiContext *midi_ctx, bool 
     return arr;
 }
 
-static void midi_input_callback(int device_id, const MidiMessage *message, void *user_data)
+static void midi_input_callback(int handle, const MidiMessage *message, void *user_data)
 {
     JsMidiContext *state = (JsMidiContext *)user_data;
-    MidiQueuedMessage queued;
-
-    if (!state || !message)
-        return;
-    queued.device_handle = device_id;
-    queued.message = *message;
-    subsystem_queue_try_push(&state->midi_queue, &queued);
+    if (state && message)
+        midi_event_queue_push_message(state->events, handle, message);
 }
 
-static void midi_sysex_callback(int device_id, const uint8_t *data, size_t length, void *user_data)
+static void midi_sysex_callback(int handle, const uint8_t *data, size_t length, void *user_data)
 {
     JsMidiContext *state = (JsMidiContext *)user_data;
-    MidiQueuedSysEx queued;
-
-    if (!state || !data || length > MIDI_SYSEX_MAX_SIZE)
-        return;
-    queued.device_handle = device_id;
-    memcpy(queued.data, data, length);
-    queued.length = length;
-    subsystem_queue_try_push(&state->sysex_queue, &queued);
-}
-
-static bool midi_dequeue(JsMidiContext *state, MidiQueuedMessage *message)
-{
-    return state && subsystem_queue_try_pop(&state->midi_queue, message);
-}
-
-static bool midi_sysex_dequeue(JsMidiContext *state,
-                               MidiQueuedSysEx *message)
-{
-    return state && subsystem_queue_try_pop(&state->sysex_queue, message);
+    if (state && data)
+        midi_event_queue_push_sysex(state->events, handle, data, length, 0);
 }
 
 JS_MIDI_CALLBACK(js_midi_get_input_count)
@@ -881,16 +845,15 @@ JsMidiContext *js_midi_init(JSContext *ctx)
         return NULL;
     state->js_ctx = ctx;
     state->devices_changed_callback = JS_UNDEFINED;
-    if (!subsystem_queue_init(&state->midi_queue, state->midi_storage,
-                              sizeof(state->midi_storage[0]), MIDI_MSG_QUEUE_SIZE) ||
-        !subsystem_queue_init(&state->sysex_queue, state->sysex_storage,
-                              sizeof(state->sysex_storage[0]), MIDI_SYSEX_QUEUE_SIZE) ||
+    state->events = midi_event_queue_create(MIDI_MSG_QUEUE_SIZE, MIDI_SYSEX_QUEUE_SIZE);
+    state->sysex_buffer = (uint8_t *)malloc(MIDI_SYSEX_MAX_SIZE);
+    if (!state->events || !state->sysex_buffer ||
         !subsystem_queue_init(&state->rtpmidi_queue, state->rtpmidi_storage,
                               sizeof(state->rtpmidi_storage[0]), RTPMIDI_MSG_QUEUE_SIZE))
     {
         subsystem_queue_destroy(&state->rtpmidi_queue);
-        subsystem_queue_destroy(&state->sysex_queue);
-        subsystem_queue_destroy(&state->midi_queue);
+        midi_event_queue_destroy(state->events);
+        free(state->sysex_buffer);
         free(state);
         return NULL;
     }
@@ -936,8 +899,6 @@ void js_midi_cleanup(JsMidiContext *state)
     if (!state)
         return;
 
-    subsystem_queue_close(&state->midi_queue);
-    subsystem_queue_close(&state->sysex_queue);
     subsystem_queue_close(&state->rtpmidi_queue);
 
     if (state->rtpmidi_ctx)
@@ -981,8 +942,10 @@ void js_midi_cleanup(JsMidiContext *state)
     state->js_ctx = NULL;
     state->rtpmidi_ctx = NULL;
     subsystem_queue_destroy(&state->rtpmidi_queue);
-    subsystem_queue_destroy(&state->sysex_queue);
-    subsystem_queue_destroy(&state->midi_queue);
+    midi_event_queue_destroy(state->events);
+    state->events = NULL;
+    free(state->sysex_buffer);
+    state->sysex_buffer = NULL;
     free(state);
 }
 
@@ -1073,61 +1036,41 @@ void js_midi_poll(JsMidiContext *state)
         rtpmidi_poll(state->rtpmidi_ctx);
     }
 
-    MidiQueuedMessage queued_message;
-    while (midi_dequeue(state, &queued_message))
+    MidiEvent event;
+    while (midi_event_queue_pop(state->events, &event, state->sysex_buffer))
     {
-        MidiQueuedMessage *qm = &queued_message;
-
-        int handle = qm->device_handle;
-        if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
+        int handle = event.handle;
+        if (handle < 0 || handle >= MAX_MIDI_CALLBACKS || !state->midi_callbacks_active[handle])
+            continue;
+        JSValue callback = state->midi_callbacks[handle];
+        JSValue msg_obj = JS_NewObject(state->js_ctx);
+        if (event.is_sysex)
         {
-            JSValue callback = state->midi_callbacks[handle];
-
-            JSValue msg_obj = JS_NewObject(state->js_ctx);
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "status", JS_NewInt32(state->js_ctx, qm->message.status));
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "data1", JS_NewInt32(state->js_ctx, qm->message.data1));
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "data2", JS_NewInt32(state->js_ctx, qm->message.data2));
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, (double)qm->message.timestamp));
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "type", JS_NewInt32(state->js_ctx, midi_get_type(qm->message.status)));
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "channel", JS_NewInt32(state->js_ctx, midi_get_channel(qm->message.status)));
-
-            JSValue args[1] = {msg_obj};
-            JSValue ret = JS_Call(state->js_ctx, callback, JS_UNDEFINED, 1, args);
-            JS_FreeValue(state->js_ctx, ret);
-            JS_FreeValue(state->js_ctx, msg_obj);
-        }
-    }
-
-    MidiQueuedSysEx queued_sysex;
-    while (midi_sysex_dequeue(state, &queued_sysex))
-    {
-        MidiQueuedSysEx *sq = &queued_sysex;
-
-        int handle = sq->device_handle;
-        if (handle >= 0 && handle < MAX_MIDI_CALLBACKS && state->midi_callbacks_active[handle])
-        {
-            JSValue callback = state->midi_callbacks[handle];
-
-            JSValue msg_obj = JS_NewObject(state->js_ctx);
             JS_SetPropertyStr(state->js_ctx, msg_obj, "status", JS_NewInt32(state->js_ctx, 0xF0));
             JS_SetPropertyStr(state->js_ctx, msg_obj, "data1", JS_NewInt32(state->js_ctx, 0));
             JS_SetPropertyStr(state->js_ctx, msg_obj, "data2", JS_NewInt32(state->js_ctx, 0));
-            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, 0));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, (double)event.message.timestamp));
             JS_SetPropertyStr(state->js_ctx, msg_obj, "type", JS_NewInt32(state->js_ctx, 0xF0));
             JS_SetPropertyStr(state->js_ctx, msg_obj, "channel", JS_NewInt32(state->js_ctx, -1));
-
             JSValue data_arr = JS_NewArray(state->js_ctx);
-            for (size_t i = 0; i < sq->length; i++)
-            {
-                JS_SetPropertyUint32(state->js_ctx, data_arr, i, JS_NewInt32(state->js_ctx, sq->data[i]));
-            }
+            for (size_t i = 0; i < event.sysex_length; i++)
+                JS_SetPropertyUint32(state->js_ctx, data_arr, (uint32_t)i, JS_NewInt32(state->js_ctx, state->sysex_buffer[i]));
             JS_SetPropertyStr(state->js_ctx, msg_obj, "data", data_arr);
-
-            JSValue args[1] = {msg_obj};
-            JSValue ret = JS_Call(state->js_ctx, callback, JS_UNDEFINED, 1, args);
-            JS_FreeValue(state->js_ctx, ret);
-            JS_FreeValue(state->js_ctx, msg_obj);
         }
+        else
+        {
+            const MidiMessage *message = &event.message;
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "status", JS_NewInt32(state->js_ctx, message->status));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data1", JS_NewInt32(state->js_ctx, message->data1));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "data2", JS_NewInt32(state->js_ctx, message->data2));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "timestamp", JS_NewFloat64(state->js_ctx, (double)message->timestamp));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "type", JS_NewInt32(state->js_ctx, midi_get_type(message->status)));
+            JS_SetPropertyStr(state->js_ctx, msg_obj, "channel", JS_NewInt32(state->js_ctx, midi_get_channel(message->status)));
+        }
+        JSValue args[1] = {msg_obj};
+        JSValue ret = JS_Call(state->js_ctx, callback, JS_UNDEFINED, 1, args);
+        JS_FreeValue(state->js_ctx, ret);
+        JS_FreeValue(state->js_ctx, msg_obj);
     }
 
     RtpMidiQueuedMessage queued_rtpmidi;
@@ -1159,12 +1102,12 @@ void js_midi_poll(JsMidiContext *state)
 
 size_t js_midi_dropped_messages(JsMidiContext *state)
 {
-    return state ? subsystem_queue_dropped(&state->midi_queue) : 0;
+    return state ? midi_event_queue_dropped_messages(state->events) : 0;
 }
 
 size_t js_midi_dropped_sysex(JsMidiContext *state)
 {
-    return state ? subsystem_queue_dropped(&state->sysex_queue) : 0;
+    return state ? midi_event_queue_dropped_sysex(state->events) : 0;
 }
 
 size_t js_midi_dropped_rtpmidi(JsMidiContext *state)

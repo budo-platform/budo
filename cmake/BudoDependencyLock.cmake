@@ -68,8 +68,8 @@ set(BUDO_GITHUB_REPOSITORY "")
 # build Android packaging into the GitHub binaries. Its URL is the GitHub
 # secret BUDO_ANDROID_PACK_URL; this hash pins its contents. Updated by
 # `make android-pack` (see export-to-public/android-ci-build.md).
-set(BUDO_ANDROID_PACK_COMMIT "789e385c181998c6ec9d8289179786effba1c7fb")
-set(BUDO_ANDROID_PACK_SHA256 "069afd6069f20f2bdc2a7a90e1d6aabe044d162ed99a2ae8af220c14b22d8249")
+set(BUDO_ANDROID_PACK_COMMIT "14e5b90ea0d1ea20ba9cfc8743218d5b97a8908b")
+set(BUDO_ANDROID_PACK_SHA256 "609e9178c80771c90966c388b55586523c570d20b2ca823b7e390705d36f0064")
 
 set(BUDO_STB_GIT_REPOSITORY "https://github.com/nothings/stb.git")
 set(BUDO_STB_GIT_TAG "f0569113c93ad095470c54bf34a17b36646bbbb5")

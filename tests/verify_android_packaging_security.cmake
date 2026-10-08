@@ -1,7 +1,33 @@
-if(NOT DEFINED BUDO_EXECUTABLE OR NOT DEFINED STAGING_ROOT OR
+if(NOT DEFINED BUDO_EXECUTABLE OR NOT DEFINED STAGING_ROOT OR NOT DEFINED BUILD_CACHE OR
    NOT DEFINED PYTHON_EXECUTABLE OR NOT DEFINED BUDO_SOURCE_DIR)
-    message(FATAL_ERROR "BUDO_EXECUTABLE, STAGING_ROOT, PYTHON_EXECUTABLE, and BUDO_SOURCE_DIR are required")
+    message(FATAL_ERROR "BUDO_EXECUTABLE, STAGING_ROOT, BUILD_CACHE, PYTHON_EXECUTABLE, and BUDO_SOURCE_DIR are required")
 endif()
+
+# The packager keeps one build directory per app in a cache (the user cache by
+# default). Point it at a test-owned directory; clear_android_build_cache()
+# before a run makes staged_android_app_root() find the one it produced.
+set(ENV{BUDO_ANDROID_BUILD_CACHE_DIR} "${BUILD_CACHE}")
+get_filename_component(android_build_cache_parent "${BUILD_CACHE}" DIRECTORY)
+file(MAKE_DIRECTORY "${android_build_cache_parent}")
+
+function(clear_android_build_cache)
+    file(REMOVE_RECURSE "${BUILD_CACHE}")
+endfunction()
+
+function(staged_android_app_root out)
+    file(GLOB entries LIST_DIRECTORIES true RELATIVE "${BUILD_CACHE}" "${BUILD_CACHE}/*")
+    set(found "")
+    foreach(entry IN LISTS entries)
+        if(IS_DIRECTORY "${BUILD_CACHE}/${entry}" AND NOT entry MATCHES "^\\.")
+            list(APPEND found "${BUILD_CACHE}/${entry}")
+        endif()
+    endforeach()
+    list(LENGTH found count)
+    if(NOT count EQUAL 1)
+        message(FATAL_ERROR "Expected one Android build directory in ${BUILD_CACHE}, found: ${found}")
+    endif()
+    set(${out} "${found}" PARENT_SCOPE)
+endfunction()
 
 set(fixture_root "${STAGING_ROOT}-security-fixtures")
 file(REMOVE_RECURSE "${fixture_root}")
@@ -43,6 +69,7 @@ write_managed_fixture(valid_escaping [=[{
   "target_sdk": 35
 }
 ]=])
+clear_android_build_cache()
 execute_process(
     COMMAND "${BUDO_EXECUTABLE}" android-apk "${fixture_root}/valid_escaping" --no-build
     RESULT_VARIABLE valid_result
@@ -52,9 +79,10 @@ if(NOT valid_result EQUAL 0)
     message(FATAL_ERROR "Escaped Android metadata staging failed:\n${valid_output}\n${valid_error}")
 endif()
 
-set(strings_path "${STAGING_ROOT}/android/app/src/main/res/values/strings.xml")
-set(manifest_path "${STAGING_ROOT}/android/app/src/main/AndroidManifest.xml")
-set(gradle_path "${STAGING_ROOT}/android/app/build.gradle")
+staged_android_app_root(app_root)
+set(strings_path "${app_root}/android/app/src/main/res/values/strings.xml")
+set(manifest_path "${app_root}/android/app/src/main/AndroidManifest.xml")
+set(gradle_path "${app_root}/android/app/build.gradle")
 file(READ "${strings_path}" strings)
 file(READ "${manifest_path}" manifest)
 file(READ "${gradle_path}" gradle)
@@ -83,6 +111,7 @@ write_managed_fixture(inferred_package [=[{
   "name": "Terrain Physics"
 }
 ]=])
+clear_android_build_cache()
 execute_process(
     COMMAND "${BUDO_EXECUTABLE}" android-apk "${fixture_root}/inferred_package/" --no-build
     RESULT_VARIABLE inferred_package_result
@@ -92,7 +121,8 @@ if(NOT inferred_package_result EQUAL 0)
     message(FATAL_ERROR
         "Display-name package inference failed:\n${inferred_package_output}\n${inferred_package_error}")
 endif()
-file(READ "${gradle_path}" inferred_package_gradle)
+staged_android_app_root(app_root)
+file(READ "${app_root}/android/app/build.gradle" inferred_package_gradle)
 foreach(check IN ITEMS
         [=[namespace = 'com.budo.terrain_physics']=]
         [=[applicationId = "com.budo.terrain_physics"]=])
@@ -105,6 +135,7 @@ endforeach()
 set(folder_fallback_dir "${fixture_root}/folder_fallback")
 file(MAKE_DIRECTORY "${folder_fallback_dir}")
 file(WRITE "${folder_fallback_dir}/main.js" "console.log('folder fallback');\n")
+clear_android_build_cache()
 execute_process(
     COMMAND "${BUDO_EXECUTABLE}" android-apk "${folder_fallback_dir}/" --no-build
     RESULT_VARIABLE folder_fallback_result
@@ -114,7 +145,8 @@ if(NOT folder_fallback_result EQUAL 0)
     message(FATAL_ERROR
         "Trailing-slash folder package inference failed:\n${folder_fallback_output}\n${folder_fallback_error}")
 endif()
-file(READ "${gradle_path}" folder_fallback_gradle)
+staged_android_app_root(app_root)
+file(READ "${app_root}/android/app/build.gradle" folder_fallback_gradle)
 foreach(check IN ITEMS
         [=[namespace = 'com.budo.folder_fallback']=]
         [=[applicationId = "com.budo.folder_fallback"]=])
@@ -134,6 +166,7 @@ file(MAKE_DIRECTORY "${fixture_root}/package_ignore/source/maps")
 file(WRITE "${fixture_root}/package_ignore/source/maps/level.json" "ignored directory asset\n")
 file(MAKE_DIRECTORY "${fixture_root}/package_ignore/source/maps-old")
 file(WRITE "${fixture_root}/package_ignore/source/maps-old/level.json" "kept directory asset\n")
+clear_android_build_cache()
 execute_process(
     COMMAND "${BUDO_EXECUTABLE}" android-apk "${fixture_root}/package_ignore" --no-build
     RESULT_VARIABLE package_ignore_result
@@ -143,7 +176,8 @@ if(NOT package_ignore_result EQUAL 0)
     message(FATAL_ERROR
         "package_ignore staging failed:\n${package_ignore_output}\n${package_ignore_error}")
 endif()
-set(staged_assets "${STAGING_ROOT}/android/app/src/main/assets/app")
+staged_android_app_root(app_root)
+set(staged_assets "${app_root}/android/app/src/main/assets/app")
 if(EXISTS "${staged_assets}/dev-notes.txt" OR EXISTS "${staged_assets}/source/maps")
     message(FATAL_ERROR "package_ignore entries were staged")
 endif()
@@ -222,7 +256,8 @@ write_managed_fixture(locale_traversal [=[{
     "store_listing":{"short_description":"fixture","default_language":"../../escaped"}
 }]=])
 expect_staging_failure(locale_traversal "store_listing.default_language must be a locale")
-if(EXISTS "${fixture_root}/escaped" OR EXISTS "${STAGING_ROOT}/escaped")
+if(EXISTS "${fixture_root}/escaped" OR EXISTS "${STAGING_ROOT}/escaped" OR
+   EXISTS "${BUILD_CACHE}/escaped")
         message(FATAL_ERROR "Locale traversal fixture escaped the store listing directory")
 endif()
 

@@ -49,7 +49,12 @@ void budo_cli_print_usage(const char *program_name)
             "  cache native clean --all      Remove native executable cache entries.\n"
             "  cache sdk inspect [--json]     Inspect verified downloaded SDKs.\n"
             "  cache sdk clean --all         Remove downloaded SDKs only.\n"
-            "  init <DIRECTORY> [opts]         Bootstrap a JavaScript project, or use\n"
+            "  cache android inspect [--json] Inspect the per-app Android build\n"
+            "                                  directories (Budo Pro).\n"
+            "  cache android clean --all|<package>\n"
+            "                                  Remove all of them, or one app's.\n"
+            "  init <DIRECTORY> [opts]         Bootstrap a JavaScript project (--template ui\n"
+            "                                  adds the budo-ui toolkit), or use\n"
             "                                  --language c [--template canvas|gpu]\n"
             "                                  for a trusted native C starter. Creates the\n"
             "                                  directory if missing, then writes\n"
@@ -99,7 +104,9 @@ void budo_cli_print_usage(const char *program_name)
             "\n"
             "Options for `init`:\n"
             "  --language js|c  Project language (default: js)\n"
-            "  --template <t>   Native C starter: canvas (default) or gpu\n"
+            "  --template <t>   JavaScript: ui (budo-ui widgets under ui/; JavaScript only,\n"
+            "                   not Lua or WebAssembly)\n"
+            "                   Native C: canvas (default) or gpu\n"
             "\n"
             "Options for `web-serve`:\n"
             "  -l, --listen <[HOST:]PORT>\n"
@@ -114,7 +121,7 @@ void budo_cli_print_usage(const char *program_name)
             "                   Copy the final APK/AAB to <DIR> instead of dist/\n"
             "  --install        Install the produced APK on all adb devices (APK only)\n"
             "  --no-build       Stage the project but skip the gradle build\n"
-            "  --clean          Wipe the staging directory before staging\n"
+            "  --clean          Discard this app's previous build (full rebuild)\n"
             "\n"
             "Examples:\n"
             "  %s init my-app\n"
@@ -288,7 +295,7 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
         if (argc < 3 || argv[2][0] == '-')
         {
             fprintf(stderr, "Error: `init` requires a directory argument.\n");
-            fprintf(stderr, "Usage: %s init <DIRECTORY> [--language js|c] [--template canvas|gpu]\n", argv[0]);
+            fprintf(stderr, "Usage: %s init <DIRECTORY> [--template ui] | [--language c [--template canvas|gpu]]\n", argv[0]);
             return false;
         }
         config->project_dir = argv[2];
@@ -324,9 +331,12 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
                 const char *template_name = argv[++i];
                 if (strcmp(template_name, "gpu") == 0)
                     config->init.template_kind = BUDO_INIT_TEMPLATE_GPU;
+                else if (strcmp(template_name, "ui") == 0)
+                    config->init.template_kind = BUDO_INIT_TEMPLATE_UI;
                 else if (strcmp(template_name, "canvas") != 0)
                 {
-                    fprintf(stderr, "Error: unsupported native template '%s'; use canvas or gpu.\n", template_name);
+                    fprintf(stderr, "Error: unsupported template '%s'; use ui (JavaScript), or canvas or gpu (native C).\n",
+                            template_name);
                     return false;
                 }
             }
@@ -336,9 +346,15 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
                 return false;
             }
         }
-        if (template_seen && config->init.language != BUDO_INIT_NATIVE_C)
+        if (config->init.template_kind == BUDO_INIT_TEMPLATE_UI && config->init.language == BUDO_INIT_NATIVE_C)
         {
-            fprintf(stderr, "Error: --template is only valid with --language c.\n");
+            fprintf(stderr, "Error: --template ui is a JavaScript template (budo-ui); omit --language c.\n");
+            return false;
+        }
+        if (template_seen && config->init.template_kind != BUDO_INIT_TEMPLATE_UI &&
+            config->init.language != BUDO_INIT_NATIVE_C)
+        {
+            fprintf(stderr, "Error: --template canvas|gpu is only valid with --language c.\n");
             return false;
         }
         return true;
@@ -478,12 +494,34 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
             config->command = BUDO_CMD_NATIVE_SDK_CACHE_CLEAN;
             return true;
         }
+        if (argc >= 4 && strcmp(argv[2], "android") == 0 &&
+            strcmp(argv[3], "inspect") == 0)
+        {
+            config->command = BUDO_CMD_ANDROID_CACHE_INSPECT;
+            if (argc == 5 && strcmp(argv[4], "--json") == 0)
+                config->cache_json = true;
+            else if (argc != 4)
+            {
+                fprintf(stderr, "Usage: %s cache android inspect [--json]\n", argv[0]);
+                return false;
+            }
+            return true;
+        }
+        if (argc == 5 && strcmp(argv[2], "android") == 0 &&
+            strcmp(argv[3], "clean") == 0)
+        {
+            config->command = BUDO_CMD_ANDROID_CACHE_CLEAN;
+            config->cache_android_package = strcmp(argv[4], "--all") == 0 ? NULL : argv[4];
+            return true;
+        }
         fprintf(stderr,
                 "Usage: %s cache native inspect [--json]\n"
                 "       %s cache native clean --all\n"
                 "       %s cache sdk inspect [--json]\n"
-                "       %s cache sdk clean --all\n",
-                argv[0], argv[0], argv[0], argv[0]);
+                "       %s cache sdk clean --all\n"
+                "       %s cache android inspect [--json]\n"
+                "       %s cache android clean --all|<package>\n",
+                argv[0], argv[0], argv[0], argv[0], argv[0], argv[0]);
         return false;
     }
 

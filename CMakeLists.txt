@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 project(budo C CXX)
+# Objective-C (the macOS VoiceOver bridge) is enabled here, before any
+# subproject: enabling it later, after llama.cpp/ggml enabled it in their own
+# scope, leaves CMAKE_OBJC_COMPILE_OBJECT unset and generation fails.
+if(APPLE)
+    enable_language(OBJC)
+endif()
 
 include(CMakePackageConfigHelpers)
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BudoDependencyLock.cmake")
@@ -11,8 +17,30 @@ set(BUDO_NATIVE_SDK_RELEASE_METADATA_URL "" CACHE STRING
     "Immutable native SDK release metadata URL")
 set(BUDO_NATIVE_SDK_RELEASE_METADATA_SHA256 "" CACHE STRING
     "Independently published SHA-256 of native SDK release metadata")
-if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
+# Minimum macOS. CI (CI is set) builds the macOS 11 baseline of the release
+# binaries. A local build links Homebrew libraries (OpenSSL, SDL2) built for
+# this Mac's macOS, so it targets this macOS: an older target only made the
+# linker warn once per library object. -DCMAKE_OSX_DEPLOYMENT_TARGET=... wins.
+if(APPLE)
+    if(DEFINED ENV{CI})
+        set(BUDO_DEFAULT_MACOS "11.0")
+    else()
+        execute_process(COMMAND sw_vers -productVersion
+            OUTPUT_VARIABLE BUDO_HOST_MACOS OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        string(REGEX MATCH "^[0-9]+" BUDO_HOST_MACOS_MAJOR "${BUDO_HOST_MACOS}")
+        if(BUDO_HOST_MACOS_MAJOR)
+            set(BUDO_DEFAULT_MACOS "${BUDO_HOST_MACOS_MAJOR}.0")
+        else()
+            set(BUDO_DEFAULT_MACOS "11.0")
+        endif()
+    endif()
+    # Replace only a default this file chose (11.0 in older build trees).
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET
+       OR CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "${BUDO_DEFAULTED_MACOS}"
+       OR (NOT DEFINED BUDO_DEFAULTED_MACOS AND CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "11.0"))
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "${BUDO_DEFAULT_MACOS}" CACHE STRING "Minimum macOS version" FORCE)
+        set(BUDO_DEFAULTED_MACOS "${BUDO_DEFAULT_MACOS}" CACHE INTERNAL "Deployment target chosen by default")
+    endif()
 endif()
 
 set(CMAKE_C_STANDARD 11)
@@ -121,6 +149,10 @@ if(ENABLE_LLAMACPP)
     set(LLAMA_BUILD_MTMD OFF CACHE BOOL "" FORCE)
     set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
     set(GGML_CPU ON CACHE BOOL "" FORCE)
+    if(APPLE)
+        # Apple Clang has no OpenMP; ggml uses its own threads and Accelerate.
+        set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+    endif()
     set(GGML_METAL ${APPLE} CACHE BOOL "" FORCE)
     set(GGML_METAL_EMBED_LIBRARY ${APPLE} CACHE BOOL "" FORCE)
     set(GGML_BACKEND_DL ${BUDO_LLAMACPP_DYNAMIC_BACKENDS} CACHE BOOL "" FORCE)
@@ -146,11 +178,12 @@ FetchContent_Declare(
     miniaudio
     GIT_REPOSITORY ${BUDO_MINIAUDIO_GIT_REPOSITORY}
     GIT_TAG        ${BUDO_MINIAUDIO_GIT_TAG}
+    SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
 )
 FetchContent_GetProperties(miniaudio)
 if(NOT miniaudio_POPULATED)
     message(STATUS "Downloading miniaudio...")
-    FetchContent_Populate(miniaudio)
+    FetchContent_MakeAvailable(miniaudio)
 endif()
 
 # Option to use system Skia or download
@@ -219,12 +252,13 @@ if(BUDO_QUICKJS_IMPL STREQUAL "ng")
         quickjs_ng
         GIT_REPOSITORY ${BUDO_QUICKJS_NG_GIT_REPOSITORY}
         GIT_TAG        ${BUDO_QUICKJS_NG_GIT_TAG}
+        SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
     )
 
     FetchContent_GetProperties(quickjs_ng)
     if(NOT quickjs_ng_POPULATED)
         message(STATUS "Downloading QuickJS-NG (${BUDO_QUICKJS_NG_GIT_TAG})...")
-        FetchContent_Populate(quickjs_ng)
+        FetchContent_MakeAvailable(quickjs_ng)
     endif()
     set(quickjs_SOURCE_DIR ${quickjs_ng_SOURCE_DIR})
     set(QUICKJS_VERSION_DEF "quickjs-ng")
@@ -241,12 +275,14 @@ elseif(BUDO_QUICKJS_IMPL STREQUAL "bellard")
         quickjs_fallback
         URL      ${BUDO_QUICKJS_BELLARD_URL}
         URL_HASH ${BUDO_QUICKJS_BELLARD_URL_HASH}
+        SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     FetchContent_GetProperties(quickjs_fallback)
     if(NOT quickjs_fallback_POPULATED)
         message(STATUS "Downloading QuickJS...")
-        FetchContent_Populate(quickjs_fallback)
+        FetchContent_MakeAvailable(quickjs_fallback)
     endif()
     set(quickjs_SOURCE_DIR ${quickjs_fallback_SOURCE_DIR})
     set(QUICKJS_VERSION_DEF "${BUDO_QUICKJS_BELLARD_VERSION}")
@@ -320,12 +356,14 @@ FetchContent_Declare(
     lua
     URL      "${BUDO_LUA_URL}"
     URL_HASH "${BUDO_LUA_URL_HASH}"
+    SOURCE_SUBDIR  budo-sources-only # fetch only: Budo builds these files itself
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_GetProperties(lua)
 if(NOT lua_POPULATED)
     message(STATUS "Downloading Lua ${LUA_VERSION}...")
-    FetchContent_Populate(lua)
+    FetchContent_MakeAvailable(lua)
     set(lua_SOURCE_DIR ${lua_SOURCE_DIR})
 
     set(LUA_CORE_SOURCES
@@ -640,11 +678,14 @@ set(SOURCES
     src/core/managed_subsystems.c
     src/graphics/js_core_bindings.c
     src/graphics/js_canvas_bindings.c
+    src/graphics/js_canvas_effects_bindings.c
     src/graphics/js_gl_bindings.c
     src/graphics/wasm_canvas_bindings.c
+    src/graphics/wasm_canvas_effects_bindings.c
     src/graphics/wasm_gl_bindings.c
     src/graphics/wasm_transform_bindings.c
     src/graphics/lua_canvas_bindings.c
+    src/graphics/lua_canvas_effects_bindings.c
     src/graphics/lua_gl_bindings.c
     src/graphics/lua_transform_bindings.c
     src/graphics/color_util.c
@@ -655,11 +696,15 @@ set(SOURCES
     src/audio/audio_wrapper.c
     src/audio/audio_service.c
     src/audio/audio_decoder.c
+    src/audio/audio_streams.c
     src/audio/js_audio_bindings.c
+    src/audio/audio_dsp.c
     src/audio/wasm_audio_bindings.c
     src/audio/lua_audio_bindings.c
     src/midi/midi_wrapper.c
     src/midi/midi_service.c
+    src/midi/midi_stream_parser.c
+    src/midi/midi_event_queue.c
     src/midi/midi_topology.c
     src/midi/js_midi_bindings.c
     src/midi/wasm_midi_bindings.c
@@ -697,8 +742,20 @@ set(SOURCES
     src/device/js_device_bindings.c
     src/device/lua_device_bindings.c
     src/device/wasm_device_bindings.c
+    src/accessibility/accessibility_service.c
+    src/accessibility/js_accessibility_bindings.c
+    src/accessibility/lua_accessibility_bindings.c
+    src/accessibility/wasm_accessibility_bindings.c
     src/wasm_util/wasm_memory.c
 )
+
+# Screen-reader bridges: VoiceOver on macOS; other desktops report none yet.
+if(APPLE)
+    list(APPEND SOURCES src/accessibility/accessibility_macos.m)
+    set_source_files_properties(src/accessibility/accessibility_macos.m PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+else()
+    list(APPEND SOURCES src/accessibility/accessibility_desktop.c)
+endif()
 
 # Android APK/AAB packaging is supplied by the private Budo Pro feature pack.
 # Public builds keep the CLI commands visible, but link an unavailable stub.
@@ -857,12 +914,42 @@ add_custom_command(
     COMMENT "Embedding native C GPU starter"
 )
 
+# `budo init --template ui`: the budo-ui library under ui/ and a starter main.js.
+file(GLOB_RECURSE BUDO_UI_TEMPLATE_LIB CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/examples/budo-ui/lib/*.js")
+set(BUDO_UI_TEMPLATE_ENTRIES
+    "main.js=${CMAKE_SOURCE_DIR}/src/core/templates/ui/main.js"
+    "ui/budo-ui.js=${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.js"
+    "ui/README.md=${CMAKE_SOURCE_DIR}/examples/budo-ui/README.md")
+set(BUDO_UI_TEMPLATE_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/core/templates/ui/main.js"
+    "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.js"
+    "${CMAKE_SOURCE_DIR}/examples/budo-ui/README.md")
+foreach(source IN LISTS BUDO_UI_TEMPLATE_LIB)
+    file(RELATIVE_PATH relative "${CMAKE_SOURCE_DIR}/examples/budo-ui" "${source}")
+    list(APPEND BUDO_UI_TEMPLATE_ENTRIES "ui/${relative}=${source}")
+    list(APPEND BUDO_UI_TEMPLATE_SOURCES "${source}")
+endforeach()
+add_custom_command(
+    OUTPUT  "${GENERATED_DIR}/embedded_ui_template.h"
+    COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/cmake/embed_tree.py"
+        --shallower-references
+        "embedded_ui_template"
+        "${GENERATED_DIR}/embedded_ui_template.h"
+        ${BUDO_UI_TEMPLATE_ENTRIES}
+    DEPENDS ${BUDO_UI_TEMPLATE_SOURCES}
+        "${CMAKE_SOURCE_DIR}/cmake/embed_tree.py"
+    COMMENT "Embedding the budo-ui init template"
+)
+
 add_custom_target(budo_embedded_headers
     DEPENDS
         "${GENERATED_DIR}/embedded_devapi.h"
         "${GENERATED_DIR}/embedded_types.h"
     "${GENERATED_DIR}/embedded_native_canvas.h"
     "${GENERATED_DIR}/embedded_native_gpu.h"
+    "${GENERATED_DIR}/embedded_ui_template.h"
 )
 
 # ==================================================
@@ -1436,6 +1523,14 @@ if(BUILD_TESTING)
             ${CMAKE_BINARY_DIR}/test-data/headless-run
             ${HEADLESS_RUN_TEST_ARGS})
 
+    add_test(NAME gl_canvas_interleave
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/gl_canvas_interleave_test.py
+            $<TARGET_FILE:${PROJECT_NAME}>
+            ${CMAKE_BINARY_DIR}/test-data/gl-canvas-interleave
+            ${CMAKE_SOURCE_DIR}/examples/07_file_explorer)
+    set_tests_properties(gl_canvas_interleave PROPERTIES SKIP_RETURN_CODE 77)
+
     add_test(NAME binding_ownership
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tests/binding_ownership_test.py
@@ -1527,6 +1622,12 @@ if(BUILD_TESTING)
         src/device/js_device_bindings.c
         src/device/lua_device_bindings.c
         src/device/wasm_device_bindings.c
+        src/accessibility/accessibility_service.c
+        src/accessibility/accessibility_desktop.c
+        src/accessibility/js_accessibility_bindings.c
+        src/accessibility/lua_accessibility_bindings.c
+        src/accessibility/wasm_accessibility_bindings.c
+        src/core/json_util.c
         src/math/math_wrapper.c
         src/math/js_math_bindings.c
         src/math/lua_math_bindings.c
@@ -1546,6 +1647,9 @@ if(BUILD_TESTING)
         Threads::Threads)
     if(UNIX)
         target_link_libraries(basic_runtime_conformance_test PRIVATE m)
+    endif()
+    if(APPLE)
+        target_link_libraries(basic_runtime_conformance_test PRIVATE "-framework CoreFoundation")
     endif()
     add_test(NAME basic_runtime_conformance
         COMMAND basic_runtime_conformance_test)
@@ -1588,8 +1692,10 @@ if(BUILD_TESTING)
         src/core/api_error.c
         tests/audio_mock.c
         tests/magneto_mock.c
+        src/audio/audio_streams.c
         src/audio/audio_service.c
         src/audio/js_audio_bindings.c
+        src/audio/audio_dsp.c
         src/audio/lua_audio_bindings.c
         src/audio/wasm_audio_bindings.c
         src/magneto/js_magneto_bindings.c
@@ -1614,6 +1720,7 @@ if(BUILD_TESTING)
         src/core/ts_strip.c
         src/graphics/color_util.c
         src/graphics/js_canvas_bindings.c
+        src/graphics/js_canvas_effects_bindings.c
         src/graphics/js_core_bindings.c
         src/graphics/js_gl_bindings.c)
     target_include_directories(js_canvas_binding_state_test PRIVATE
@@ -1637,6 +1744,7 @@ if(BUILD_TESTING)
         src/core/ts_strip.c
         src/graphics/color_util.c
         src/graphics/js_canvas_bindings.c
+        src/graphics/js_canvas_effects_bindings.c
         src/graphics/js_core_bindings.c
         src/graphics/js_gl_bindings.c)
     target_include_directories(js_runtime_load_test PRIVATE
@@ -1810,8 +1918,10 @@ if(BUILD_TESTING)
         tests/managed_audio_binding_state_test.c
         src/core/api_error.c
         tests/audio_mock.c
+        src/audio/audio_streams.c
         src/audio/audio_service.c
         src/audio/js_audio_bindings.c
+        src/audio/audio_dsp.c
         src/audio/lua_audio_bindings.c)
     target_include_directories(managed_audio_binding_state_test PRIVATE
         ${CMAKE_SOURCE_DIR}
@@ -1821,6 +1931,59 @@ if(BUILD_TESTING)
     add_test(NAME managed_audio_binding_state
         COMMAND managed_audio_binding_state_test)
 
+    add_executable(js_audio_streams_test
+        tests/js_audio_streams_test.c
+        src/core/api_error.c
+        tests/audio_mock.c
+        src/audio/audio_streams.c
+        src/audio/audio_service.c
+        src/audio/js_audio_bindings.c
+        src/audio/audio_dsp.c)
+    target_include_directories(js_audio_streams_test PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(js_audio_streams_test PRIVATE c_std_11)
+    target_link_libraries(js_audio_streams_test PRIVATE quickjs)
+    add_test(NAME js_audio_streams COMMAND js_audio_streams_test)
+
+    add_executable(midi_stream_parser_test
+        tests/midi_stream_parser_test.c
+        src/midi/midi_stream_parser.c
+        src/midi/midi_event_queue.c)
+    target_include_directories(midi_stream_parser_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(midi_stream_parser_test PRIVATE c_std_11)
+    target_link_libraries(midi_stream_parser_test PRIVATE Threads::Threads)
+    add_test(NAME midi_stream_parser COMMAND midi_stream_parser_test)
+
+    add_executable(audio_mix_test tests/audio_mix_test.c)
+    target_include_directories(audio_mix_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(audio_mix_test PRIVATE c_std_11)
+    if(NOT WIN32)
+        target_link_libraries(audio_mix_test PRIVATE m)
+    endif()
+    add_test(NAME audio_mix COMMAND audio_mix_test)
+
+    if(NOT WIN32)
+        add_executable(audio_streams_test
+            tests/audio_streams_test.c
+            src/audio/audio_streams.c
+            src/audio/audio_decoder.c
+            src/file/file_wrapper.c)
+        target_include_directories(audio_streams_test PRIVATE
+            ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/audio ${miniaudio_SOURCE_DIR})
+        target_compile_features(audio_streams_test PRIVATE c_std_11)
+        target_link_libraries(audio_streams_test PRIVATE m Threads::Threads ${CMAKE_DL_LIBS})
+        add_test(NAME audio_streams COMMAND audio_streams_test)
+    endif()
+
+    add_executable(audio_dsp_test tests/audio_dsp_test.c src/audio/audio_dsp.c)
+    target_include_directories(audio_dsp_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(audio_dsp_test PRIVATE c_std_11)
+    if(NOT WIN32)
+        target_link_libraries(audio_dsp_test PRIVATE m)
+    endif()
+    add_test(NAME audio_dsp COMMAND audio_dsp_test)
+
     add_executable(managed_midi_binding_state_test
         tests/managed_midi_binding_state_test.c
         src/core/api_error.c
@@ -1829,6 +1992,7 @@ if(BUILD_TESTING)
         src/core/subsystem_queue.c
         src/midi/midi_topology.c
         src/midi/midi_service.c
+        src/midi/midi_event_queue.c
         src/midi/js_midi_bindings.c
         src/midi/lua_midi_bindings.c)
     target_include_directories(managed_midi_binding_state_test PRIVATE
@@ -1844,6 +2008,7 @@ if(BUILD_TESTING)
         tests/wasm_audio_binding_state_test.c
         src/core/api_error.c
         tests/audio_mock.c
+        src/audio/audio_streams.c
         src/audio/audio_service.c
         src/audio/wasm_audio_bindings.c)
     target_include_directories(wasm_audio_binding_state_test PRIVATE
@@ -1898,6 +2063,55 @@ if(BUILD_TESTING)
     file(MAKE_DIRECTORY "${WASM_CANVAS_TEST_ROOT}")
     add_test(NAME wasm_canvas_binding_state
         COMMAND wasm_canvas_binding_state_test "${WASM_CANVAS_TEST_ROOT}")
+
+    if(APPLE)
+        add_executable(accessibility_macos_test
+            tests/accessibility_macos_test.m
+            src/accessibility/accessibility_service.c
+            src/accessibility/accessibility_macos.m
+            src/core/json_util.c)
+        set_source_files_properties(tests/accessibility_macos_test.m PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+        target_include_directories(accessibility_macos_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+        target_link_libraries(accessibility_macos_test PRIVATE "-framework AppKit")
+        add_test(NAME accessibility_macos COMMAND accessibility_macos_test)
+    endif()
+
+    # budo-ui behavior and draw-command snapshot tests (skipped without Node.js).
+    find_program(BUDO_NODE_EXECUTABLE node)
+    if(BUDO_NODE_EXECUTABLE)
+        add_test(NAME budo_ui
+            COMMAND "${BUDO_NODE_EXECUTABLE}" --test
+                "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.test.mjs"
+                "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.snapshots.test.mjs")
+        # The MIDI Preset Saver's capture, recording, playback, and recall,
+        # running main.ts through Budo's own TypeScript stripper.
+        add_executable(ts_strip_tool tests/ts_strip_tool.c src/core/ts_strip.c)
+        target_include_directories(ts_strip_tool PRIVATE ${CMAKE_SOURCE_DIR}/src)
+        add_test(NAME midi_preset_saver
+            COMMAND "${BUDO_NODE_EXECUTABLE}" --test
+                "${CMAKE_SOURCE_DIR}/examples/midi_preset_saver/midi.test.mjs")
+        set_tests_properties(midi_preset_saver PROPERTIES
+            ENVIRONMENT "BUDO_TS_STRIP=$<TARGET_FILE:ts_strip_tool>")
+    endif()
+
+    add_executable(canvas_features_test
+        tests/canvas_features_test.c)
+    target_include_directories(canvas_features_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${WASMTIME_DIR}/include)
+    target_compile_features(canvas_features_test PRIVATE c_std_11)
+    target_link_libraries(canvas_features_test PRIVATE
+        budo_managed_drivers
+        budo_desktop_host
+        quickjs
+        lua
+        ${WASMTIME_LIBRARY}
+        ${CMAKE_DL_LIBS}
+        Threads::Threads)
+    set(CANVAS_FEATURES_TEST_ROOT "${CMAKE_BINARY_DIR}/test-data/canvas-features")
+    file(MAKE_DIRECTORY "${CANVAS_FEATURES_TEST_ROOT}")
+    add_test(NAME canvas_features
+        COMMAND canvas_features_test "${CANVAS_FEATURES_TEST_ROOT}")
 
     add_executable(managed_magneto_binding_state_test
         tests/managed_magneto_binding_state_test.c
@@ -2033,6 +2247,7 @@ if(BUILD_TESTING)
         src/graphics/lua_canvas_bindings.c
         src/graphics/lua_gl_bindings.c
         src/graphics/lua_transform_bindings.c
+        src/graphics/lua_canvas_effects_bindings.c
         src/graphics/color_util.c
     )
     target_include_directories(lua_canvas_binding_state_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -2280,6 +2495,7 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
                 "-DSTAGING_ROOT=${CMAKE_BINARY_DIR}/android-package"
+                "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/android_packaging_security"
                 "-DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
                 "-DBUDO_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
                 "-DPRIVATE_ANDROID_ROOT=${CMAKE_SOURCE_DIR}/private/android"
@@ -2290,7 +2506,7 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
                 "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples/12_native_c"
-                "-DSTAGING_ROOT=${CMAKE_BINARY_DIR}/android-package"
+                "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_staging"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_staging PROPERTIES
             RESOURCE_LOCK android_package_staging)
@@ -2298,7 +2514,7 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
                 "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples/14_native_gpu_assets"
-                "-DSTAGING_ROOT=${CMAKE_BINARY_DIR}/android-package"
+                "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_gpu_assets_staging"
                 "-DREQUIRED_ASSETS=shader.vert;shader.frag"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_gpu_assets_staging PROPERTIES
@@ -2307,7 +2523,7 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
                 "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples/15_native_render_targets"
-                "-DSTAGING_ROOT=${CMAKE_BINARY_DIR}/android-package"
+                "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_render_targets_staging"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_render_targets_staging PROPERTIES
             RESOURCE_LOCK android_package_staging)
@@ -2315,7 +2531,7 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
                 "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples/17_native_region_passes"
-                "-DSTAGING_ROOT=${CMAKE_BINARY_DIR}/android-package"
+                "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_region_passes_staging"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_region_passes_staging PROPERTIES
             RESOURCE_LOCK android_package_staging)
@@ -2323,7 +2539,7 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
                 "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples/16_native_terrain_physics"
-                "-DSTAGING_ROOT=${CMAKE_BINARY_DIR}/android-package"
+                "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_terrain_physics_staging"
                 "-DREQUIRED_ASSETS=terrain.vert;terrain.frag;car.vert;car.frag;assets/kenney_car_kit/LICENSE.txt"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_terrain_physics_staging PROPERTIES
@@ -2467,6 +2683,17 @@ if(BUILD_TESTING)
             "-DTEST_ROOT=${NATIVE_INIT_GPU_DIR}"
             "-DTEMPLATE=gpu"
             -P "${CMAKE_SOURCE_DIR}/tests/verify_native_init.cmake")
+    # Examples that use budo-ui carry a copy in ui/ (projects cannot import
+    # outside their folder); scripts/sync-budo-ui.py refreshes them.
+    add_test(NAME budo_ui_copies
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/sync-budo-ui.py" --check)
+    add_test(NAME init_ui_template
+        COMMAND ${CMAKE_COMMAND}
+            "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
+            "-DTEST_ROOT=${CMAKE_BINARY_DIR}/init-ui-template"
+            "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+            "-DNODE=${BUDO_NODE_EXECUTABLE}"
+            -P "${CMAKE_SOURCE_DIR}/tests/verify_ui_init.cmake")
     add_test(NAME native_init_invalid_options
         COMMAND ${CMAKE_COMMAND}
             "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
@@ -2734,13 +2961,15 @@ elseif(APPLE)
         ${SECURITY_FRAMEWORK}
         "-framework OpenGL"
     )
-    if(TARGET wasm_canvas_binding_state_test)
-        target_link_libraries(wasm_canvas_binding_state_test PRIVATE
-            ${COREMIDI_FRAMEWORK}
-            ${COREAUDIO_FRAMEWORK}
-            ${AUDIOTOOLBOX_FRAMEWORK}
-            ${SECURITY_FRAMEWORK})
-    endif()
+    foreach(managed_test wasm_canvas_binding_state_test canvas_features_test)
+        if(TARGET ${managed_test})
+            target_link_libraries(${managed_test} PRIVATE
+                ${COREMIDI_FRAMEWORK}
+                ${COREAUDIO_FRAMEWORK}
+                ${AUDIOTOOLBOX_FRAMEWORK}
+                ${SECURITY_FRAMEWORK})
+        endif()
+    endforeach()
 else()
     find_package(OpenGL REQUIRED)
     find_package(Freetype REQUIRED)
@@ -2767,14 +2996,16 @@ else()
         target_link_libraries(${PROJECT_NAME} PRIVATE ${ALSA_LIBRARIES})
         target_include_directories(${PROJECT_NAME} PRIVATE ${ALSA_INCLUDE_DIRS})
     endif()
-    if(TARGET wasm_canvas_binding_state_test)
-        target_link_libraries(wasm_canvas_binding_state_test PRIVATE
-            OpenSSL::SSL OpenSSL::Crypto)
-        if(ALSA_FOUND)
-            target_link_libraries(wasm_canvas_binding_state_test PRIVATE
-                ${ALSA_LIBRARIES})
+    foreach(managed_test wasm_canvas_binding_state_test canvas_features_test)
+        if(TARGET ${managed_test})
+            target_link_libraries(${managed_test} PRIVATE
+                OpenSSL::SSL OpenSSL::Crypto)
+            if(ALSA_FOUND)
+                target_link_libraries(${managed_test} PRIVATE
+                    ${ALSA_LIBRARIES})
+            endif()
         endif()
-    endif()
+    endforeach()
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${Freetype_INCLUDE_DIRS}
     )

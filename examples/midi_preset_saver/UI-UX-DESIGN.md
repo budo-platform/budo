@@ -112,12 +112,13 @@ The following rules govern use of the scale:
 - Sequence memos can collapse to its header and expand again through an
   always-visible toggle. A reversible eased transition gives reclaimed height
   to the Library on phones and reclaimed width on larger layouts.
-- Edit/Live transitions lock input for their duration, use smootherstep easing,
-  and preserve the shared song/preset surface as the visual anchor while
-  mode-specific chrome fades independently. Broad overlapping opacity envelopes
-  avoid abrupt content handoffs, and nested panels inherit their parent fade.
-  Geometry uses smootherstep easing while opacity advances linearly across the
-  entire transition, so disappearing panels visibly lose alpha on every frame.
+- Edit/Live transitions lock input until they settle and preserve the shared
+  song/preset surface as the visual anchor: the Library panel morphs into the
+  Live flow on a critically damped spring while mode-specific chrome fades
+  across the whole transition. The shared surface hands its content over in
+  sequence (Edit rows fade out during the first half, Live chips fade in during
+  the second), so the two never overlap, and nested panels fade as one layer.
+  With the system's reduced-motion setting, the switch is immediate.
 - `MIDI Preset Saver` is a persistent, fixed-position anchor across both modes.
   Live and Setup share one fixed button rectangle and crossfade labels inside it.
   Live connectivity is reduced to a small red/green dot immediately left of that
@@ -126,9 +127,9 @@ The following rules govern use of the scale:
   song/preset and MIDI output context visible, then displays whichever is newer:
   the current status or the latest event-log entry. The panel does not move,
   resize, duplicate, or crossfade during mode transitions.
-- Row action menus are primarily hidden behind long-press, which is not
-  discoverable and conflicts with scrolling.
-- The 12dp movement threshold is too sensitive for touch use.
+- Row actions use always-visible `•••` buttons; long-press is no longer used,
+  so it cannot conflict with scrolling.
+- A touch moves 18dp before it scrolls instead of activating.
 - Capture, sequence, and persistence tools have similar visual weight despite
   different frequency and risk.
 - Import/export are technically safe but visually compressed in narrow layouts.
@@ -142,11 +143,19 @@ The following rules govern use of the scale:
 - Recall feedback uses the shared bottom log/debug panel and the recalled-row
   pulse, preserving the same feedback location in both modes.
 - The Edit exit control is as prominent as performance actions.
-- The 12dp movement threshold risks interpreting stage tremor as scrolling.
+- A touch moves 18dp before it scrolls, and a recall is cancelled when the
+  finger moved that far, so stage tremor neither scrolls nor recalls.
 
 ## Remediation plan
 
 ### Implemented foundation
+
+- The interface is built with budo-ui (vendored in `ui/`, refreshed by
+  `scripts/sync-budo-ui.py`): the grouped Library is a reorderable list,
+  dialogs trap the keyboard focus, every control is reachable with Tab and
+  readable by screen readers, and colors come from the palette above as a
+  budo-ui theme. The data model, MIDI handling, and the JSON export/import are
+  independent of the interface and unchanged by it.
 
 - Native Budo text sessions and IME composition.
 - Versioned JSON export/import with a published JSON Schema, strict validation,

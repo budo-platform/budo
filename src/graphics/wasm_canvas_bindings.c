@@ -2,6 +2,8 @@
 #include "core/graphics_activation.h"
 #include "graphics/wasm_gl_bindings.h"
 #include "graphics/wasm_transform_bindings.h"
+#include "graphics/wasm_canvas_effects_bindings.h"
+#include "accessibility/wasm_accessibility_bindings.h"
 #include "audio/wasm_audio_bindings.h"
 #include "midi/wasm_midi_bindings.h"
 #include "sqlite/wasm_sqlite_bindings.h"
@@ -53,6 +55,7 @@ struct WasmCanvasContext
     wasmtime_func_t frame_func;
     bool has_init_func;
     bool has_frame_func;
+    BudoAnimationWait animation_wait;
 
     wasmtime_memory_t memory;
     bool has_memory;
@@ -1248,6 +1251,24 @@ static wasmtime_error_t *define_canvas_host_function(
     return error;
 }
 
+SkiaPaint *wasm_canvas_active_paint(WasmCanvasContext *ctx) { return ctx ? ctx->active_paint : NULL; }
+
+BudoAnimationWait *wasm_canvas_animation_wait(WasmCanvasContext *ctx, int *width, int *height)
+{
+    if (ctx && width && height)
+        *width = ctx->width, *height = ctx->height;
+    return ctx ? &ctx->animation_wait : NULL;
+}
+
+SkiaPath *wasm_canvas_path(WasmCanvasContext *ctx, int id) { return ctx ? get_path(ctx, id) : NULL; }
+
+uint8_t *wasm_canvas_guest_bytes(WasmCanvasContext *ctx, int32_t ptr, int32_t len)
+{
+    return (uint8_t *)read_wasm_bytes(ctx, ptr, len);
+}
+
+WasmCanvasContext *wasm_canvas_graphics(void *env) { return wasm_canvas_graphics_context(env); }
+
 SkiaCanvas *wasm_canvas_current_canvas(WasmCanvasContext *ctx)
 {
     if (!ctx)
@@ -1678,6 +1699,10 @@ WasmCanvasContext *wasm_canvas_create(const char *project_dir)
             goto error_cleanup;
     }
 
+    error = wasm_canvas_effects_register(ctx->linker, ctx);
+    if (error)
+        goto error_cleanup;
+
     error = wasm_transform_register(ctx->linker, ctx);
     if (error)
         goto error_cleanup;
@@ -1909,6 +1934,8 @@ WasmCanvasContext *wasm_canvas_create(const char *project_dir)
     }
 
     error = wasm_device_register(ctx->linker, ctx->device_binding_state);
+    if (!error)
+        error = wasm_accessibility_register(ctx->linker);
     if (error)
         goto error_cleanup;
 

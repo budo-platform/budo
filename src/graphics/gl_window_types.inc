@@ -58,6 +58,7 @@ typedef struct
     int width;
     int height;
     bool has_depth;
+    GLRenderTarget *slot; /* the app render target, NULL for the screen */
 } GLBoundRenderTarget;
 typedef GpuBufferSlot GLBufferSlot;
 typedef GpuTextureSlot GLTextureSlot;

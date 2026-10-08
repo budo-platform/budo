@@ -66,6 +66,9 @@
             "namespace": "guest.exports",
             "platforms": [
                 "desktop"
+            ],
+            "export_sources": [
+                "src/graphics/wasm_canvas_effects_bindings.c"
             ]
         },
         "browser_wasm": {
@@ -124,6 +127,25 @@
                     "namespace": "sys.animation"
                 },
                 "lua": "requestFrame"
+            }
+        },
+        {
+            "name": "wait_for_input",
+            "signature": "(callback(timestamp_ms), timeout_ms?) -> handle 1; like request_frame, but the callback runs only on the next input event, canvas resize, or timeout; hosts may sleep meanwhile",
+            "binding_symbols": {
+                "javascript": "js_wait_for_input",
+                "lua": "l_animation_wait_for_input",
+                "wasmtime": "host_wait_for_input",
+                "browser_wasm": "budo_web_wasm_wait_for_input"
+            },
+            "exports": {
+                "javascript": {
+                    "name": "waitForInput",
+                    "namespace": "sys.animation"
+                },
+                "lua": "waitForInput",
+                "wasmtime": "animation_wait_for_input",
+                "browser_wasm": "animation_wait_for_input"
             }
         },
         {

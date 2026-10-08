@@ -1,4 +1,6 @@
 #include "tests/audio_mock.h"
+#include "audio/audio_decoder.h"
+#include "file/file_wrapper.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,9 +12,11 @@ struct AudioContext
     float master_gain;
     char asset_root[4096];
     char error[128];
+    AudioStreams streams; 
 };
 
 static int create_count;
+static AudioContext *last_context;
 static int destroy_count;
 static int live_count;
 
@@ -58,6 +62,8 @@ AudioContext *audio_create(void)
     if (!ctx)
         return NULL;
     ctx->master_gain = 0.5f;
+    audio_streams_init(&ctx->streams, 48000);
+    last_context = ctx;
     create_count++;
     live_count++;
     return ctx;
@@ -69,6 +75,9 @@ void audio_destroy(AudioContext *ctx)
         return;
     destroy_count++;
     live_count--;
+    audio_streams_destroy(&ctx->streams);
+    if (last_context == ctx)
+        last_context = NULL;
     free(ctx);
 }
 
@@ -243,4 +252,94 @@ float audio_midi_to_freq(int note)
 const char *audio_get_error(AudioContext *ctx)
 {
     return ctx ? ctx->error : "Invalid context";
+}
+
+int audio_stream_sample_rate(AudioContext *ctx) { return ctx ? ctx->streams.sample_rate : 0; }
+int audio_output_open(AudioContext *ctx, int channels, double latency_ms)
+{
+    return ctx ? audio_streams_open(&ctx->streams, false, channels, latency_ms) : -1;
+}
+void audio_output_close(AudioContext *ctx, int id) { if (ctx) audio_streams_close(&ctx->streams, false, id); }
+int audio_output_wanted(AudioContext *ctx, int id) { return ctx ? audio_streams_output_wanted(&ctx->streams, id) : 0; }
+int audio_output_write(AudioContext *ctx, int id, const float *frames, int count)
+{
+    return ctx ? audio_streams_output_write(&ctx->streams, id, frames, count) : 0;
+}
+int audio_input_open(AudioContext *ctx, int channels, double latency_ms)
+{
+    return ctx ? audio_streams_open(&ctx->streams, true, channels, latency_ms) : -1;
+}
+void audio_input_close(AudioContext *ctx, int id) { if (ctx) audio_streams_close(&ctx->streams, true, id); }
+int audio_input_available(AudioContext *ctx, int id) { return ctx ? audio_streams_input_available(&ctx->streams, id) : 0; }
+int audio_input_read(AudioContext *ctx, int id, float *frames, int count)
+{
+    return ctx ? audio_streams_input_read(&ctx->streams, id, frames, count) : 0;
+}
+bool audio_stream_get_stats(AudioContext *ctx, bool input, int id, AudioStreamStats *out)
+{
+    return ctx && audio_streams_stats(&ctx->streams, input, id, out);
+}
+bool audio_streams_active(AudioContext *ctx) { return ctx && audio_streams_any_open(&ctx->streams); }
+void audio_streams_serviced(AudioContext *ctx) { if (ctx) audio_streams_clear_wake(&ctx->streams); }
+
+void audio_mock_mix(AudioContext *ctx, float *out, int frames) { audio_streams_mix(&ctx->streams, out, frames, 2); }
+void audio_mock_capture(AudioContext *ctx, const float *in, int frames, int channels)
+{
+    audio_streams_capture(&ctx->streams, in, frames, channels);
+}
+
+AudioStreamDecoder *audio_stream_decoder_open_file(void *file, int rate, int channels, char *error, int size)
+{
+    (void)file, (void)rate, (void)channels;
+    if (error && size > 0)
+        snprintf(error, (size_t)size, "mock: no decoder");
+    return NULL;
+}
+AudioStreamDecoder *audio_stream_decoder_open_memory(const uint8_t *data, size_t bytes, int rate, int channels,
+                                                     char *error, int size)
+{
+    (void)data, (void)bytes;
+    return audio_stream_decoder_open_file(NULL, rate, channels, error, size);
+}
+AudioStreamDecoder *audio_stream_decoder_create_push(int rate, int channels)
+{
+    (void)rate, (void)channels;
+    return NULL;
+}
+bool audio_stream_decoder_feed(AudioStreamDecoder *d, const uint8_t *data, size_t size, bool end, char *e, int n)
+{
+    (void)d, (void)data, (void)size, (void)end, (void)e, (void)n;
+    return false;
+}
+int audio_stream_decoder_read(AudioStreamDecoder *d, float *out, int frames, char *e, int n)
+{
+    (void)d, (void)out, (void)frames, (void)e, (void)n;
+    return -1;
+}
+bool audio_stream_decoder_seek(AudioStreamDecoder *d, int64_t frame, char *e, int n)
+{
+    (void)d, (void)frame, (void)e, (void)n;
+    return false;
+}
+void audio_stream_decoder_info(AudioStreamDecoder *d, AudioStreamDecoderInfo *out)
+{
+    (void)d;
+    if (out)
+        memset(out, 0, sizeof(*out));
+}
+void audio_stream_decoder_close(AudioStreamDecoder *d) { (void)d; }
+bool file_native_open(FileContext *ctx, const char *path, FileNativeReference *out)
+{
+    (void)ctx, (void)path, (void)out;
+    return false;
+}
+const char *file_get_error(FileContext *ctx)
+{
+    (void)ctx;
+    return "mock: no files";
+}
+
+AudioContext *audio_mock_last_context(void)
+{
+    return last_context;
 }

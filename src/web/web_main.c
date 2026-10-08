@@ -8,6 +8,8 @@
 
 #include "core/window.h"
 #include "core/input.h"
+#include "core/animation_wait.h"
+#include "device/device_service.h"
 #include "core/app_entrypoint.h"
 #include "core/app_metadata.h"
 #include "core/managed_runtime.h"
@@ -94,6 +96,7 @@ typedef struct
     bool wasm_exit_requested; 
     int wasm_exit_code;
     bool finished;
+    BudoAnimationWait wasm_wait; 
 } AppState;
 
 static AppState g_state;
@@ -456,6 +459,183 @@ void budo_web_wasm_canvas_draw_path(int id)
     SkiaPath *path = wasm_path(id);
     if (canvas && paint && path)
         skia_canvas_draw_path(canvas, path, paint);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_canvas_set_gradient(int kind, float a, float b, float c, float d,
+                                       const uint32_t *colors, const float *stops, int count)
+{
+    SkiaPaint *paint = wasm_paint();
+    if (!paint || !colors)
+        return;
+    if (kind == 0)
+        skia_paint_set_linear_gradient(paint, a, b, c, d, colors, stops, count);
+    else if (kind == 1)
+        skia_paint_set_radial_gradient(paint, a, b, c, colors, stops, count);
+    else if (kind == 2)
+        skia_paint_set_sweep_gradient(paint, a, b, colors, stops, count);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_canvas_clear_gradient(void)
+{
+    SkiaPaint *paint = wasm_paint();
+    if (paint)
+        skia_paint_clear_shader(paint);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_canvas_clip_rect(float x, float y, float w, float h)
+{
+    SkiaCanvas *canvas = wasm_canvas();
+    if (canvas)
+        skia_canvas_clip_rect(canvas, x, y, x + w, y + h);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_canvas_clip_round_rect(float x, float y, float w, float h, float rx, float ry)
+{
+    SkiaCanvas *canvas = wasm_canvas();
+    if (canvas)
+        skia_canvas_clip_round_rect(canvas, x, y, x + w, y + h, rx, ry);
+}
+
+EMSCRIPTEN_KEEPALIVE
+int budo_web_wasm_path_add_svg(int id, const char *data)
+{
+    SkiaPath *path = wasm_path(id);
+    return path && skia_path_add_svg(path, data) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_canvas_clip_path(int id)
+{
+    SkiaCanvas *canvas = wasm_canvas();
+    SkiaPath *path = wasm_path(id);
+    if (canvas && path)
+        skia_canvas_clip_path(canvas, path);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_canvas_save_layer(int alpha, int has_bounds, float x, float y, float w, float h,
+                                     float backdrop_blur)
+{
+    SkiaCanvas *canvas = wasm_canvas();
+    SkiaRect bounds = {x, y, x + w, y + h};
+    if (canvas)
+        skia_canvas_save_layer(canvas, has_bounds ? &bounds : NULL,
+                               (uint8_t)(alpha < 0 ? 0 : alpha > 255 ? 255 : alpha), backdrop_blur);
+}
+
+EMSCRIPTEN_KEEPALIVE
+float budo_web_wasm_canvas_draw_paragraph(const char *text, float x, float y, float width, float font_size,
+                                          int align, float line_height, int max_lines)
+{
+    SkiaCanvas *canvas = wasm_canvas();
+    SkiaPaint *paint = wasm_paint();
+    if (!canvas || !paint || !text)
+        return 0.0f;
+    return skia_canvas_draw_paragraph(canvas, text, x, y, width, font_size, line_height,
+                                      align >= 0 && align <= 2 ? (SkiaTextAlign)align : SKIA_TEXT_ALIGN_LEFT,
+                                      max_lines, paint, NULL)
+        .height;
+}
+
+EMSCRIPTEN_KEEPALIVE
+float budo_web_wasm_canvas_measure_paragraph(const char *text, float width, float font_size, float line_height,
+                                             int max_lines, uint8_t *out)
+{
+    SkiaParagraphMetrics metrics = skia_measure_paragraph(text, width, font_size, line_height, max_lines, NULL);
+    if (out)
+    {
+        memcpy(out, &metrics.width, 4);
+        memcpy(out + 4, &metrics.height, 4);
+        memcpy(out + 8, &metrics.lines, 4);
+    }
+    return metrics.height;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void budo_web_wasm_wait_for_input(float timeout_ms)
+{
+    int width = 0, height = 0;
+    if (g_state.window)
+        window_get_size(g_state.window, &width, &height);
+    budo_animation_wait_start(&g_state.wasm_wait, timeout_ms, width, height);
+}
+
+EMSCRIPTEN_KEEPALIVE
+float budo_web_wasm_canvas_rich_text(const uint8_t *records, int count, int draw, float x, float y, float width,
+                                     int align, float line_height, int max_lines, uint8_t *out)
+{
+    SkiaTextSpan spans[64];
+    if (count < 0 || count > 64)
+        return 0.0f;
+    for (int i = 0; i < count; i++)
+    {
+        const char *text;
+        float size;
+        uint32_t color;
+        memcpy(&text, records + i * 12, 4);
+        memcpy(&size, records + i * 12 + 4, 4);
+        memcpy(&color, records + i * 12 + 8, 4);
+        spans[i] = (SkiaTextSpan){text, size, NULL, color, color != 0};
+    }
+    SkiaCanvas *canvas = wasm_canvas();
+    SkiaPaint *paint = wasm_paint();
+    SkiaParagraphMetrics metrics =
+        draw ? (canvas && paint ? skia_canvas_draw_rich_text(canvas, spans, count, x, y, width, line_height,
+                                                             align >= 0 && align <= 2 ? (SkiaTextAlign)align : SKIA_TEXT_ALIGN_LEFT,
+                                                             max_lines, paint)
+                                : (SkiaParagraphMetrics){0.0f, 0.0f, 0})
+             : skia_measure_rich_text(spans, count, width, line_height, max_lines);
+    if (out)
+    {
+        memcpy(out, &metrics.width, 4);
+        memcpy(out + 4, &metrics.height, 4);
+        memcpy(out + 8, &metrics.lines, 4);
+    }
+    return metrics.height;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int budo_web_wasm_device_keep_screen_on(int enabled)
+{
+    return device_keep_screen_on(enabled != 0) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int budo_web_wasm_device_set_clipboard_text(const char *text)
+{
+    return device_set_clipboard_text(text) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+char *budo_web_wasm_device_get_clipboard_text(void)
+{
+    return device_get_clipboard_text();
+}
+
+EMSCRIPTEN_KEEPALIVE
+int budo_web_wasm_device_haptic(int kind)
+{
+    return kind >= 0 && kind < DEVICE_HAPTIC_COUNT && device_haptic((DeviceHaptic)kind) ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+float budo_web_wasm_device_get_preference(int id)
+{
+    DevicePreferences p;
+    device_get_preferences(&p);
+    const float values[] = {p.dark_mode, p.reduced_motion, p.high_contrast, p.font_scale,
+                            p.safe_top, p.safe_right, p.safe_bottom, p.safe_left};
+    return id >= 0 && id < 8 ? values[id] : 0.0f;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int budo_web_wasm_device_set_cursor(int cursor)
+{
+    return cursor >= 0 && cursor < DEVICE_CURSOR_COUNT && device_set_cursor((DeviceCursor)cursor) ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -910,6 +1090,67 @@ EM_JS(void, js_web_wasm_start, (void), {
             return withHeapBytes(appPtr, count * 4, callback);
         }
 
+        function gradient(kind, a, b, c, d, colorsPtr, stopsPtr, count) {
+            if (count < 2 || count > 16 || !validRange(colorsPtr, count * 4) ||
+                (stopsPtr >= 0 && !validRange(stopsPtr, count * 4))) return;
+            withHeapBytes(colorsPtr, count * 4, (colors) => {
+                if (stopsPtr < 0) return cwrap0('budo_web_wasm_canvas_set_gradient')(kind, a, b, c, d, colors, 0, count);
+                return withHeapBytes(stopsPtr, count * 4, (stops) =>
+                    cwrap0('budo_web_wasm_canvas_set_gradient')(kind, a, b, c, d, colors, stops, count));
+            });
+        }
+
+        function richText(spansPtr, count, draw, x, y, width, align, lineHeight, maxLines, outPtr) {
+            if (count < 0 || count > 64 || !validRange(spansPtr, count * 16)) return 0;
+            const view = new DataView(wasmMemory.buffer);
+            const texts = [];
+            for (let i = 0; i < count; i++) {
+                const ptr = view.getInt32(spansPtr + i * 16, true), len = view.getInt32(spansPtr + i * 16 + 4, true);
+                if (!validRange(ptr, len)) return 0;
+                texts.push(readString(ptr, len));
+            }
+            return withStrings(texts, (...pointers) => {
+                const records = _malloc(Math.max(1, count * 12)), out = _malloc(12);
+                try {
+                    for (let i = 0; i < count; i++) {
+                        HEAPU32[(records >> 2) + i * 3] = pointers[i];
+                        HEAPF32[(records >> 2) + i * 3 + 1] = view.getFloat32(spansPtr + i * 16 + 8, true);
+                        HEAPU32[(records >> 2) + i * 3 + 2] = view.getUint32(spansPtr + i * 16 + 12, true);
+                    }
+                    const height = cwrap0('budo_web_wasm_canvas_rich_text')(records, count, draw, x, y, width, align, lineHeight, maxLines, out);
+                    if (outPtr >= 0 && validRange(outPtr, 12)) bytes().set(HEAPU8.subarray(out, out + 12), outPtr);
+                    return height;
+                } finally {
+                    _free(records);
+                    _free(out);
+                }
+            });
+        }
+
+        function clipboardText(ptr, max) {
+            const text = cwrap0('budo_web_wasm_device_get_clipboard_text')();
+            if (!text) return -1;
+            const length = HEAPU8.indexOf(0, text) - text;
+            if (max > 0 && validRange(ptr, Math.min(length, max)))
+                bytes().set(HEAPU8.subarray(text, text + Math.min(length, max)), ptr);
+            _free(text);
+            return length;
+        }
+
+        function measureParagraph(ptr, len, width, size, lineHeight, maxLines, outPtr) {
+            if (!validRange(ptr, len)) return 0;
+            const out = _malloc(12);
+            try {
+                const height = withStrings([readString(ptr, len)], (text) =>
+                    cwrap0('budo_web_wasm_canvas_measure_paragraph')(text, width, size, lineHeight, maxLines, out));
+                if (outPtr >= 0 && validRange(outPtr, 12))
+                    bytes().set(HEAPU8.subarray(out, out + 12), outPtr);
+                return height;
+            } finally {
+                _free(out);
+            }
+        }
+
         const env = {
             canvas_clear: (color) => cwrap0('budo_web_wasm_canvas_clear')(color),
             canvas_draw_rect: (x, y, w, h) => cwrap0('budo_web_wasm_canvas_draw_rect')(x, y, w, h),
@@ -931,7 +1172,32 @@ EM_JS(void, js_web_wasm_start, (void), {
             path_move_to: (id, x, y) => cwrap0('budo_web_wasm_path_move_to')(id, x, y),
             path_line_to: (id, x, y) => cwrap0('budo_web_wasm_path_line_to')(id, x, y),
             path_close: (id) => cwrap0('budo_web_wasm_path_close')(id),
+            path_add_svg: (id, ptr, len) => len > 0 && len <= 65536 && validRange(ptr, len)
+                ? withStrings([readString(ptr, len)], (data) => cwrap0('budo_web_wasm_path_add_svg')(id, data))
+                : 0,
             canvas_draw_path: (id) => cwrap0('budo_web_wasm_canvas_draw_path')(id),
+            canvas_set_linear_gradient: (x0, y0, x1, y1, colors, stops, count) => gradient(0, x0, y0, x1, y1, colors, stops, count),
+            canvas_set_radial_gradient: (cx, cy, r, colors, stops, count) => gradient(1, cx, cy, r, 0, colors, stops, count),
+            canvas_set_sweep_gradient: (cx, cy, colors, stops, count) => gradient(2, cx, cy, 0, 0, colors, stops, count),
+            canvas_clear_gradient: () => cwrap0('budo_web_wasm_canvas_clear_gradient')(),
+            canvas_clip_rect: (x, y, w, h) => cwrap0('budo_web_wasm_canvas_clip_rect')(x, y, w, h),
+            canvas_clip_round_rect: (x, y, w, h, rx, ry) => cwrap0('budo_web_wasm_canvas_clip_round_rect')(x, y, w, h, rx, ry),
+            canvas_clip_path: (id) => cwrap0('budo_web_wasm_canvas_clip_path')(id),
+            canvas_save_layer: (alpha) => cwrap0('budo_web_wasm_canvas_save_layer')(alpha, 0, 0, 0, 0, 0, 0),
+            canvas_save_layer_bounds: (x, y, w, h, alpha, blur) => cwrap0('budo_web_wasm_canvas_save_layer')(alpha, 1, x, y, w, h, blur),
+            canvas_draw_paragraph: (ptr, len, x, y, width, size, align, lineHeight, maxLines) => validRange(ptr, len)
+                ? withStrings([readString(ptr, len)], (text) => cwrap0('budo_web_wasm_canvas_draw_paragraph')(text, x, y, width, size, align, lineHeight, maxLines))
+                : 0,
+            canvas_measure_paragraph: measureParagraph,
+            canvas_draw_rich_text: (spans, count, x, y, width, align, lineHeight, maxLines) => richText(spans, count, 1, x, y, width, align, lineHeight, maxLines, -1),
+            canvas_measure_rich_text: (spans, count, width, lineHeight, maxLines, outPtr) => richText(spans, count, 0, 0, 0, width, 0, lineHeight, maxLines, outPtr),
+            animation_wait_for_input: (timeout) => cwrap0('budo_web_wasm_wait_for_input')(timeout),
+            device_keep_screen_on: (enabled) => cwrap0('budo_web_wasm_device_keep_screen_on')(enabled),
+            device_set_clipboard_text: (ptr, len) => validRange(ptr, len) ? withStrings([readString(ptr, len)], (text) => cwrap0('budo_web_wasm_device_set_clipboard_text')(text)) : 0,
+            device_get_clipboard_text: clipboardText,
+            device_haptic: (kind) => cwrap0('budo_web_wasm_device_haptic')(kind),
+            device_get_preference: (id) => cwrap0('budo_web_wasm_device_get_preference')(id),
+            device_set_cursor: (cursor) => cwrap0('budo_web_wasm_device_set_cursor')(cursor),
             window_get_width: () => cwrap0('budo_web_wasm_window_get_width')(),
             window_get_height: () => cwrap0('budo_web_wasm_window_get_height')(),
             input_get_mouse_x: () => cwrap0('budo_web_wasm_input_get_mouse_x')(),
@@ -1113,7 +1379,8 @@ static EM_BOOL frame_tick(double timestamp_ms, void *user_data)
         
         if (state->common_contexts.net_ctx)
             network_async_poll(state->common_contexts.net_ctx);
-        js_web_wasm_frame(timestamp_ms);
+        if (budo_animation_wait_due(&state->wasm_wait, &state->input, frame.width, frame.height, timestamp_ms))
+            js_web_wasm_frame(timestamp_ms);
     }
     else
     {

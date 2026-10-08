@@ -1397,7 +1397,8 @@ static JSValue js_gl_render_target_texture(JSContext *ctx, JSValue this_val, int
 static JSValue js_gl_draw_mesh(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
 {
     int program_id, layout_id;
-    int32_t first = 0, count = 0, target_id = -1, instance_count = 1;
+    
+    int32_t first = 0, count = 0, target_id = 0, instance_count = 1;
     WindowGLPrimitive mode = WINDOW_GL_PRIM_TRIANGLES;
     WindowGLDrawState state;
     JSValue opts;

@@ -164,6 +164,68 @@ static wasm_trap_t *transform_clip_rect(void *environment,
     return NULL;
 }
 
+static wasm_trap_t *transform_clip_round_rect(void *environment,
+                                              wasmtime_caller_t *caller,
+                                              const wasmtime_val_t *arguments,
+                                              size_t argument_count,
+                                              wasmtime_val_t *results,
+                                              size_t result_count)
+{
+    SkiaCanvas *canvas = transform_canvas(environment);
+    float x = arguments[0].of.f32;
+    float y = arguments[1].of.f32;
+    (void)caller;
+    (void)argument_count;
+    (void)results;
+    (void)result_count;
+    if (canvas)
+        skia_canvas_clip_round_rect(canvas, x, y, x + arguments[2].of.f32, y + arguments[3].of.f32,
+                                    arguments[4].of.f32, arguments[5].of.f32);
+    return NULL;
+}
+
+static uint8_t layer_alpha(int32_t alpha)
+{
+    return (uint8_t)(alpha < 0 ? 0 : alpha > 255 ? 255 : alpha);
+}
+
+static wasm_trap_t *transform_save_layer(void *environment,
+                                         wasmtime_caller_t *caller,
+                                         const wasmtime_val_t *arguments,
+                                         size_t argument_count,
+                                         wasmtime_val_t *results,
+                                         size_t result_count)
+{
+    SkiaCanvas *canvas = transform_canvas(environment);
+    (void)caller;
+    (void)argument_count;
+    (void)results;
+    (void)result_count;
+    if (canvas)
+        skia_canvas_save_layer(canvas, NULL, layer_alpha(arguments[0].of.i32), 0.0f);
+    return NULL;
+}
+
+static wasm_trap_t *transform_save_layer_bounds(void *environment,
+                                                wasmtime_caller_t *caller,
+                                                const wasmtime_val_t *arguments,
+                                                size_t argument_count,
+                                                wasmtime_val_t *results,
+                                                size_t result_count)
+{
+    SkiaCanvas *canvas = transform_canvas(environment);
+    float x = arguments[0].of.f32;
+    float y = arguments[1].of.f32;
+    SkiaRect bounds = {x, y, x + arguments[2].of.f32, y + arguments[3].of.f32};
+    (void)caller;
+    (void)argument_count;
+    (void)results;
+    (void)result_count;
+    if (canvas)
+        skia_canvas_save_layer(canvas, &bounds, layer_alpha(arguments[4].of.i32), arguments[5].of.f32);
+    return NULL;
+}
+
 static wasmtime_error_t *define_transform_function(
     wasmtime_linker_t *linker, WasmCanvasContext *context, const char *name,
     wasmtime_func_callback_t callback,
@@ -193,6 +255,9 @@ wasmtime_error_t *wasm_transform_register(wasmtime_linker_t *linker,
     const wasm_valkind_t f32x2[] = {WASM_F32, WASM_F32};
     const wasm_valkind_t f32x3[] = {WASM_F32, WASM_F32, WASM_F32};
     const wasm_valkind_t f32x4[] = {WASM_F32, WASM_F32, WASM_F32, WASM_F32};
+    const wasm_valkind_t f32x6[] = {WASM_F32, WASM_F32, WASM_F32, WASM_F32, WASM_F32, WASM_F32};
+    const wasm_valkind_t i32[] = {WASM_I32};
+    const wasm_valkind_t layer_bounds[] = {WASM_F32, WASM_F32, WASM_F32, WASM_F32, WASM_I32, WASM_F32};
     wasmtime_error_t *error;
 
     error = define_transform_function(
@@ -230,6 +295,18 @@ wasmtime_error_t *wasm_transform_register(wasmtime_linker_t *linker,
         return error;
     error = define_transform_function(linker, context, "canvas_clip_rect",
                                       transform_clip_rect, f32x4, 4);
+    if (error)
+        return error;
+    error = define_transform_function(linker, context, "canvas_clip_round_rect",
+                                      transform_clip_round_rect, f32x6, 6);
+    if (error)
+        return error;
+    error = define_transform_function(linker, context, "canvas_save_layer",
+                                      transform_save_layer, i32, 1);
+    if (error)
+        return error;
+    error = define_transform_function(linker, context, "canvas_save_layer_bounds",
+                                      transform_save_layer_bounds, layer_bounds, 6);
     if (error)
         return error;
     return NULL;

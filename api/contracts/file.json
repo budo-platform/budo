@@ -379,6 +379,80 @@
                     }
                 ]
             }
+        },
+        {
+            "name": "open_read",
+            "wrapper_symbol": "file_native_open",
+            "signature": "(path: string) -> i32 handle|null",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "openRead",
+                        "namespace": "sys.files",
+                        "signature": "(path: assets/|files/ virtual path) -> number|null"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "read_block",
+            "wrapper_symbol": "file_native_read",
+            "signature": "(handle: i32, max_bytes?: i32) -> bytes (empty at the end)|null",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "read",
+                        "namespace": "sys.files",
+                        "signature": "(handle: number, maxBytes?: number) -> ArrayBuffer|null"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "seek",
+            "binding_symbols": {
+                "javascript": "js_file_seek"
+            },
+            "signature": "(handle: i32, byte_offset: f64) -> bool",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "seek",
+                        "namespace": "sys.files",
+                        "signature": "(handle: number, byteOffset: number) -> boolean"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "get_read_info",
+            "binding_symbols": {
+                "javascript": "js_file_get_read_info"
+            },
+            "signature": "(handle: i32) -> {size, position}",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "getReadInfo",
+                        "namespace": "sys.files",
+                        "signature": "(handle: number) -> {size, position}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "close_read",
+            "wrapper_symbol": "file_native_close",
+            "signature": "(handle: i32) -> void",
+            "exports": {
+                "javascript": [
+                    {
+                        "name": "closeRead",
+                        "namespace": "sys.files",
+                        "signature": "(handle: number) -> void"
+                    }
+                ]
+            }
         }
     ]
 }

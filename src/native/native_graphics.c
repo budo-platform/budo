@@ -163,6 +163,79 @@ PAINT_SETTER(budo_paint_set_stroke_join, BudoStrokeJoin,
              skia_paint_set_stroke_join, SkiaStrokeJoin)
 PAINT_SETTER(budo_paint_set_alpha, uint8_t, true, skia_paint_set_alpha, uint8_t)
 
+static BudoStatus validate_paint_call(BudoPaint *paint)
+{
+    BudoStatus status;
+    if (!paint || !paint->host)
+        return BUDO_STATUS_INVALID_ARGUMENT;
+    status = validate_resource_callback(paint->host);
+    if (status == BUDO_STATUS_OK)
+        status = validate_paint(paint->host, paint);
+    return status;
+}
+
+static BudoStatus set_gradient(BudoPaint *paint, int kind, const float *values,
+                               size_t value_count, const BudoColor *colors,
+                               const float *stops, size_t count)
+{
+    BudoStatus status = validate_paint_call(paint);
+    bool ok;
+    if (status != BUDO_STATUS_OK)
+        return status;
+    if (!colors || count < 2 || count > BUDO_GRADIENT_MAX_STOPS ||
+        !finite_values(values, value_count) ||
+        (stops && !finite_values(stops, count)))
+        return graphics_error(paint->host, BUDO_STATUS_INVALID_ARGUMENT,
+                              "Invalid gradient");
+    if (kind == 0)
+        ok = skia_paint_set_linear_gradient(paint->implementation, values[0], values[1],
+                                            values[2], values[3], colors, stops, (int)count);
+    else if (kind == 1)
+        ok = skia_paint_set_radial_gradient(paint->implementation, values[0], values[1],
+                                            values[2], colors, stops, (int)count);
+    else
+        ok = skia_paint_set_sweep_gradient(paint->implementation, values[0], values[1],
+                                           colors, stops, (int)count);
+    return ok ? BUDO_STATUS_OK
+              : graphics_error(paint->host, BUDO_STATUS_INVALID_ARGUMENT,
+                               "Invalid gradient");
+}
+
+BudoStatus budo_paint_set_linear_gradient(BudoPaint *paint, float x0, float y0,
+                                          float x1, float y1,
+                                          const BudoColor *colors,
+                                          const float *stops, size_t count)
+{
+    float values[] = {x0, y0, x1, y1};
+    return set_gradient(paint, 0, values, 4, colors, stops, count);
+}
+
+BudoStatus budo_paint_set_radial_gradient(BudoPaint *paint, float center_x,
+                                          float center_y, float radius,
+                                          const BudoColor *colors,
+                                          const float *stops, size_t count)
+{
+    float values[] = {center_x, center_y, radius};
+    return set_gradient(paint, 1, values, 3, colors, stops, count);
+}
+
+BudoStatus budo_paint_set_sweep_gradient(BudoPaint *paint, float center_x,
+                                         float center_y,
+                                         const BudoColor *colors,
+                                         const float *stops, size_t count)
+{
+    float values[] = {center_x, center_y};
+    return set_gradient(paint, 2, values, 2, colors, stops, count);
+}
+
+BudoStatus budo_paint_clear_gradient(BudoPaint *paint)
+{
+    BudoStatus status = validate_paint_call(paint);
+    if (status == BUDO_STATUS_OK)
+        skia_paint_clear_shader(paint->implementation);
+    return status;
+}
+
 BudoPath *budo_path_create(BudoHost *host)
 {
     BudoPath *path;
@@ -446,5 +519,61 @@ BudoStatus budo_canvas_clip_rect(BudoCanvas *canvas, float x, float y,
     if (status == BUDO_STATUS_OK)
         skia_canvas_clip_rect(canvas->implementation, x, y, x + width,
                               y + height);
+    return status;
+}
+
+BudoStatus budo_canvas_clip_round_rect(BudoCanvas *canvas, float x, float y,
+                                       float width, float height,
+                                       float radius_x, float radius_y)
+{
+    float values[] = {x, y, width, height, radius_x, radius_y};
+    BudoStatus status = validate_canvas(canvas);
+    if (status == BUDO_STATUS_OK && !finite_values(values, 6))
+        status = graphics_error(canvas->host, BUDO_STATUS_INVALID_ARGUMENT,
+                                "Clip rectangle must be finite");
+    if (status == BUDO_STATUS_OK &&
+        (width < 0 || height < 0 || radius_x < 0 || radius_y < 0))
+        status = graphics_error(canvas->host, BUDO_STATUS_INVALID_ARGUMENT,
+                                "Clip dimensions cannot be negative");
+    if (status == BUDO_STATUS_OK)
+        skia_canvas_clip_round_rect(canvas->implementation, x, y, x + width,
+                                    y + height, radius_x, radius_y);
+    return status;
+}
+
+BudoStatus budo_canvas_clip_path(BudoCanvas *canvas, BudoPath *path)
+{
+    BudoStatus status = validate_canvas(canvas);
+    if (status == BUDO_STATUS_OK)
+        status = validate_path(canvas->host, path);
+    if (status == BUDO_STATUS_OK)
+        skia_canvas_clip_path(canvas->implementation, path->implementation);
+    return status;
+}
+
+BudoStatus budo_canvas_save_layer(BudoCanvas *canvas, uint8_t alpha)
+{
+    BudoStatus status = validate_canvas(canvas);
+    if (status == BUDO_STATUS_OK)
+        skia_canvas_save_layer(canvas->implementation, NULL, alpha, 0.0f);
+    return status;
+}
+
+BudoStatus budo_canvas_save_layer_bounds(BudoCanvas *canvas, float x, float y,
+                                         float width, float height,
+                                         uint8_t alpha, float backdrop_blur)
+{
+    float values[] = {x, y, width, height, backdrop_blur};
+    BudoStatus status = validate_canvas(canvas);
+    if (status == BUDO_STATUS_OK && !finite_values(values, 5))
+        status = graphics_error(canvas->host, BUDO_STATUS_INVALID_ARGUMENT,
+                                "Layer bounds must be finite");
+    if (status == BUDO_STATUS_OK)
+    {
+        SkiaRect bounds = {x, y, x + width, y + height};
+        skia_canvas_save_layer(canvas->implementation,
+                               width >= 0 && height >= 0 ? &bounds : NULL,
+                               alpha, backdrop_blur > 0 ? backdrop_blur : 0.0f);
+    }
     return status;
 }

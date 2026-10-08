@@ -24,6 +24,8 @@ extern "C"
         void (*update)(void *context, const char *text, int selection_start,
                        int selection_end, int x, int y, int width, int height);
         void (*stop)(void *context);
+
+        bool native_editing;
     } InputTextPlatformCallbacks;
 
     typedef enum
@@ -102,6 +104,8 @@ extern "C"
         double delta_time;    
         double total_time;    
         uint64_t frame_count; 
+
+        uint32_t event_count;
     } InputState;
 
     void input_init(InputState *input);

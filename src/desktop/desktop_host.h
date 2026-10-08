@@ -20,6 +20,8 @@ extern "C"
                              double now_seconds);
         
         bool (*keep_running)(void *context);
+
+        double (*idle_ms)(void *context);
     } DesktopHostApplication;
 
     int desktop_host_run(Window *window, InputState *input,

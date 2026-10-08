@@ -53,7 +53,7 @@ extern "C"
         uint32_t framebuffer;
         uint32_t color_attachment0;
         uint32_t renderbuffer;
-        uint32_t depth_component16;
+        uint32_t depth_format; 
         uint32_t depth_attachment;
         uint32_t framebuffer_complete;
     } GlRenderTargetConstants;

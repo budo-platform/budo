@@ -109,6 +109,8 @@ void input_init(InputState *input)
 
 void input_begin_frame(InputState *input)
 {
+    if (input)
+        input->event_count = 0;
     if (!input)
         return;
 
@@ -137,6 +139,8 @@ void input_begin_frame(InputState *input)
 
 void input_set_mouse_position(InputState *input, int x, int y)
 {
+    if (input)
+        input->event_count++;
     if (!input)
         return;
 
@@ -148,6 +152,8 @@ void input_set_mouse_position(InputState *input, int x, int y)
 
 void input_set_mouse_button(InputState *input, InputMouseButton button, bool pressed)
 {
+    if (input)
+        input->event_count++;
     if (!input || button >= INPUT_MOUSE_MAX)
         return;
 
@@ -166,6 +172,8 @@ void input_set_mouse_button(InputState *input, InputMouseButton button, bool pre
 
 void input_set_mouse_wheel(InputState *input, int x, int y)
 {
+    if (input)
+        input->event_count++;
     if (!input)
         return;
     input->mouse_wheel_x += x;
@@ -174,6 +182,8 @@ void input_set_mouse_wheel(InputState *input, int x, int y)
 
 void input_touch_start(InputState *input, int pointer_id, int x, int y)
 {
+    if (input)
+        input->event_count++;
     InputTouchPoint *touch;
 
     if (!input)
@@ -199,6 +209,8 @@ void input_touch_start(InputState *input, int pointer_id, int x, int y)
 
 void input_touch_move(InputState *input, int pointer_id, int x, int y)
 {
+    if (input)
+        input->event_count++;
     InputTouchPoint *touch;
 
     if (!input)
@@ -222,6 +234,8 @@ void input_touch_move(InputState *input, int pointer_id, int x, int y)
 
 void input_touch_end(InputState *input, int pointer_id, int x, int y)
 {
+    if (input)
+        input->event_count++;
     InputTouchPoint *touch;
 
     if (!input)
@@ -247,6 +261,8 @@ void input_touch_end(InputState *input, int pointer_id, int x, int y)
 
 void input_touch_cancel(InputState *input, int pointer_id)
 {
+    if (input)
+        input->event_count++;
     InputTouchPoint *touch;
 
     if (!input)
@@ -270,6 +286,8 @@ void input_touch_cancel(InputState *input, int pointer_id)
 
 void input_touch_cancel_all(InputState *input)
 {
+    if (input)
+        input->event_count++;
     int i;
 
     if (!input)
@@ -293,6 +311,8 @@ void input_touch_cancel_all(InputState *input)
 
 void input_set_key(InputState *input, int scancode, bool pressed)
 {
+    if (input)
+        input->event_count++;
     if (!input || scancode < 0 || scancode >= INPUT_MAX_KEYS)
         return;
 
@@ -311,6 +331,8 @@ void input_set_key(InputState *input, int scancode, bool pressed)
 
 void input_append_text(InputState *input, const char *text)
 {
+    if (input)
+        input->event_count++;
     size_t available;
     size_t length;
 
@@ -517,6 +539,8 @@ void input_text_stop(InputState *input)
 void input_text_set_edit(InputState *input, const char *text,
                          int selection_start, int selection_end)
 {
+    if (input)
+        input->event_count++;
     if (!input || !input->text_session_active)
         return;
     input_copy_text(input->text_value, sizeof(input->text_value),
@@ -532,6 +556,8 @@ void input_text_set_composition(InputState *input, const char *text,
                                 int selection_start, int selection_end,
                                 bool active)
 {
+    if (input)
+        input->event_count++;
     if (!input)
         return;
     input_copy_text(input->composition_text, sizeof(input->composition_text),
@@ -556,6 +582,8 @@ void input_set_modifiers(InputState *input, bool shift, bool ctrl, bool alt, boo
 
 void input_set_focus(InputState *input, bool focused)
 {
+    if (input)
+        input->event_count++;
     if (!input)
         return;
     input->window_focused = focused;

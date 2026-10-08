@@ -714,6 +714,19 @@ static bool managed_desktop_keep_running(void *opaque)
     return !managed_desktop_exit_requested(opaque, NULL);
 }
 
+static double managed_desktop_idle_ms(void *opaque)
+{
+    ManagedDesktopApplication *application = opaque;
+    double idle = application->runtime->driver.initialized
+                      ? managed_runtime_idle_ms(application->config->runtime_kind,
+                                                &application->runtime->common_contexts, app_time_ms())
+                      : -1.0;
+    
+    if (idle > 50.0 && application->watcher)
+        idle = 50.0;
+    return idle;
+}
+
 static void managed_desktop_reload_if_changed(ManagedDesktopApplication *application)
 {
     RuntimeInstance *runtime = application->runtime;
@@ -792,6 +805,7 @@ static int managed_desktop_loop(ManagedDesktopApplication *application)
                 .get_driver = managed_desktop_get_driver,
                 .before_frame = managed_desktop_before_frame,
                 .keep_running = managed_desktop_keep_running,
+                .idle_ms = managed_desktop_idle_ms,
             };
             runtime_attach_window(runtime);
             desktop_host_run(application->window, application->input, &desktop_application);

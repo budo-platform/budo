@@ -38,7 +38,7 @@ bool gl_render_target_create(const GlRenderTargetApi *api,
         api->gen_renderbuffers(1, &slot->depth_rbo);
         api->bind_renderbuffer(constants->renderbuffer, slot->depth_rbo);
         api->renderbuffer_storage(constants->renderbuffer,
-                                  constants->depth_component16,
+                                  constants->depth_format,
                                   width, height);
         api->framebuffer_renderbuffer(
             constants->framebuffer, constants->depth_attachment,
@@ -95,7 +95,7 @@ bool gl_render_target_resize(const GlRenderTargetApi *api,
     {
         api->bind_renderbuffer(constants->renderbuffer, slot->depth_rbo);
         api->renderbuffer_storage(constants->renderbuffer,
-                                  constants->depth_component16,
+                                  constants->depth_format,
                                   width, height);
         api->bind_renderbuffer(constants->renderbuffer, 0);
     }
@@ -108,5 +108,6 @@ bool gl_render_target_resize(const GlRenderTargetApi *api,
 
     slot->width = width;
     slot->height = height;
+    slot->depth_frame = 0; 
     return true;
 }

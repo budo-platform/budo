@@ -26,6 +26,9 @@ OUT="$PROJECT_ROOT/types/budo.d.ts"
 SNAPSHOT_OUTS=(
     "$PROJECT_ROOT/budo.d.ts"
     "$PROJECT_ROOT/examples/midi_preset_saver/budo.d.ts"
+    "$PROJECT_ROOT/examples/3d_cube/budo.d.ts"
+    "$PROJECT_ROOT/examples/sound-instrument/budo.d.ts"
+    "$PROJECT_ROOT/examples/07_file_explorer/budo.d.ts"
 )
 CHECK_ONLY=false
 if [[ "${1:-}" == "--check" ]]; then
@@ -48,11 +51,11 @@ extract_cfunc_defs() {
 
     while IFS= read -r line; do
         # Detect which function-list array we're in (sys.* namespace hierarchy)
-        if [[ "$line" =~ js_canvas_texture_canvas_funcs || "$line" =~ js_canvas_texture_funcs || "$line" =~ js_gl_program_funcs || "$line" =~ js_gl_screen_funcs ]]; then
+        if [[ "$line" =~ js_canvas_texture_canvas_funcs || "$line" =~ js_canvas_texture_funcs || "$line" =~ js_canvas_texture_effect_funcs || "$line" =~ js_gl_program_funcs || "$line" =~ js_gl_screen_funcs ]]; then
             current_scope=""
-        elif [[ "$line" =~ js_sys_canvas_funcs ]]; then
+        elif [[ "$line" =~ js_sys_canvas_funcs || "$line" =~ js_canvas_effect_funcs ]]; then
             current_scope="canvas"
-        elif [[ "$line" =~ js_sys_path_funcs ]]; then
+        elif [[ "$line" =~ js_sys_path_funcs || "$line" =~ js_path_effect_funcs ]]; then
             current_scope="path"
         elif [[ "$line" =~ js_sys_svg_funcs ]]; then
             current_scope="svg"
@@ -119,6 +122,8 @@ ALL_CONSTS=$(mktemp)
 trap 'rm -f "$ALL_FUNCS" "$ALL_CONSTS" "$GENERATED_OUT"' EXIT
 
 extract_cfunc_defs "$SRC_DIR/graphics/js_canvas_bindings.c"  >> "$ALL_FUNCS"
+extract_cfunc_defs "$SRC_DIR/graphics/js_canvas_effects_bindings.c" >> "$ALL_FUNCS"
+extract_cfunc_defs "$SRC_DIR/graphics/js_gl_bindings.c"      >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/audio/js_audio_bindings.c"     >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/midi/js_midi_bindings.c"       >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/sqlite/js_sqlite_bindings.c"   >> "$ALL_FUNCS"
@@ -260,6 +265,8 @@ interface InputState {
     textEdit: TextInputEdit | null;
     composition: TextInputComposition;
     textInputActive: boolean;
+    /** The platform edits text itself (web input element, mobile IME): do not handle clipboard or editing shortcuts. */
+    nativeTextEditing: boolean;
   deltaTime: number;
   totalTime: number;
   frameCount: number;
@@ -376,17 +383,55 @@ interface Response {
   arrayBuffer(): ArrayBuffer;
 }
 
+interface ParagraphOptions {
+    /** Horizontal alignment inside the paragraph width. Default "left". */
+    align?: "left" | "center" | "right";
+    /** Line height as a multiple of the font size. Default 1.25. */
+    lineHeight?: number;
+    /** Stop after this many lines and end the last one with an ellipsis. 0 (default) means no limit. */
+    maxLines?: number;
+}
+
+/** A run of rich text: a string, or text with its own size, color, or registered font. */
+type RichTextSpan = string | {
+    text: string;
+    /** Font size; defaults to the `size` option, then 32. */
+    size?: number;
+    /** Text color; defaults to the paint color (or gradient). */
+    color?: Color;
+    /** Name of a font registered with sys.font.load; defaults to the active font. */
+    font?: string;
+};
+
+interface RichTextOptions extends ParagraphOptions {
+    /** Default size of spans that do not set one. Default 32. */
+    size?: number;
+}
+
+interface ParagraphMetrics {
+    /** Width of the widest line. */
+    width: number;
+    /** Total height: lines × line height. */
+    height: number;
+    /** Number of lines. */
+    lines: number;
+}
+
 interface CanvasTextureCanvas {
     /** Clear this offscreen canvas texture. */
     clear(color?: Color): void;
-    /** Flush this offscreen canvas texture so its GL texture can be sampled. */
-    flush(): void;
     /** Draw a filled/stroked rectangle into this offscreen canvas texture. */
     drawRect(x: number, y: number, width: number, height: number): void;
     /** Draw a filled/stroked circle into this offscreen canvas texture. */
     drawCircle(cx: number, cy: number, radius: number): void;
     /** Draw text into this offscreen canvas texture. */
     drawText(text: string, x: number, y: number, fontSize?: number): void;
+    /** Set or clear a gradient on this canvas texture's paint; same forms as sys.canvas.setGradient. */
+    setGradient(kind?: "linear" | "radial" | "sweep" | "none" | null, ...args: (number | Color[] | number[])[]): boolean;
+    /** Draw wrapped text into this offscreen canvas texture; same arguments as sys.canvas.drawParagraph. */
+    drawParagraph(text: string, x: number, y: number, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics;
+    /** Measure wrapped text with this canvas texture's font; same arguments as sys.canvas.measureParagraph. */
+    measureParagraph(text: string, width: number, fontSize?: number, options?: ParagraphOptions): ParagraphMetrics;
 }
 
 interface CanvasTexture {
@@ -402,8 +447,6 @@ interface CanvasTexture {
     readonly target: number;
     /** Skia drawing API for this offscreen texture. */
     readonly canvas: CanvasTextureCanvas;
-    /** Flush pending Skia work so the backing GL texture can be sampled. */
-    flush(): void;
     /** Resize this texture-backed Skia surface. */
     resize(width: number, height: number): void;
     /** Destroy the owned Skia surface, GL texture, and framebuffer. */
@@ -471,7 +514,7 @@ emit_const() {
     echo "interface SysGL {"
     # Names handled by the 3D-pipeline fragment (skipped here so the auto path
     # doesn't emit a generic `(arg1: any, …): any` shadow signature for them).
-    GL3D_NAMES="|createBuffer|updateBuffer|destroyBuffer|createTexture2D|loadTexture2D|createTextureCube|loadTextureCube|updateTexture2D|destroyTexture|createVertexLayout|setAttribute|setIndexBuffer|destroyVertexLayout|getAttribLocation|setUniformMatrix3|setUniformMatrix4|setUniform1fv|setUniform2fv|setUniform3fv|setUniform4fv|setUniform1iv|bindTexture2D|bindTextureCube|drawMesh|drawMeshInstanced|"
+    GL3D_NAMES="|createBuffer|updateBuffer|destroyBuffer|createTexture2D|loadTexture2D|loadTextureCube|updateTexture2D|destroyTexture|createVertexLayout|setAttribute|setIndexBuffer|destroyVertexLayout|getAttribLocation|setUniformMatrix3|setUniformMatrix4|setUniform1fv|setUniform2fv|setUniform3fv|setUniform4fv|setUniform1iv|bindTexture2D|bindTextureCube|drawMesh|"
     while read -r scope name argc; do
         [[ "$scope" == "gl" ]] || continue
         [[ "$GL3D_NAMES" == *"|$name|"* ]] && continue
@@ -483,6 +526,7 @@ emit_const() {
 
     # ── GLDrawOptions + contract-generated basic interfaces.
     cat "$FRAGMENTS_DIR/gl-options.d.ts.frag"
+    cat "$FRAGMENTS_DIR/sysaudio-streams.d.ts.frag"
     echo ""
     cat "$FRAGMENTS_DIR/generated-basics.d.ts.frag"
     echo ""
@@ -724,6 +768,8 @@ NEURAL_TYPES
     echo ""
     echo "interface SysNetwork {"
     emit_func "  " "network.fetch" "fetch" "2"
+    echo "  /** UDP sockets. */"
+    echo "  readonly udp: SysUDP;"
     echo "}"
     echo ""
 
@@ -768,13 +814,13 @@ NEURAL_TYPES
     echo "  /** Read-only convenience wrapper over the sys.files assets/ mount. */"
     echo "  readonly assets: SysAssets;"
     echo "  /** HTTP networking. */"
-    echo "  readonly network: SysNetwork;"
+    echo "  readonly net: SysNetwork;"
     echo "  /** Accelerometer and compass sensors. */"
-    echo "  readonly magneto: SysMagneto;"
+    echo "  readonly sensors: SysMagneto;"
     echo "  /** Device-level controls. */"
     echo "  readonly device: SysDevice;"
-    echo "  /** UDP datagram sockets. */"
-    echo "  readonly udp: SysUDP;"
+    echo "  /** Screen-reader access to what the app draws. */"
+    echo "  readonly accessibility: SysAccessibility;"
     echo "  /** Per-feature availability probes. */"
     echo "  readonly capabilities: SysCapabilities;"
     echo "  /** ONNX Runtime neural network inference (requires \"neural\": true in app.json). */"

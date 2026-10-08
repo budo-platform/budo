@@ -74,6 +74,8 @@ BUDO_DEFINE_CLEANUP_ADAPTER(managed_device_cleanup,
 
 BUDO_DEFINE_POLL_ADAPTER(managed_js_midi_poll,
                          JsMidiContext, js_midi_poll)
+BUDO_DEFINE_POLL_ADAPTER(managed_js_audio_poll,
+                         JsAudioContext, js_audio_poll)
 BUDO_DEFINE_POLL_ADAPTER(managed_lua_midi_poll,
                          LuaMidiContext, lua_midi_poll)
 BUDO_DEFINE_POLL_ADAPTER(managed_js_file_poll,
@@ -98,6 +100,7 @@ BUDO_DEFINE_POLL_ADAPTER(managed_lua_network_poll,
 BUDO_DEFINE_PENDING_ADAPTER(managed_js_network_pending, JsNetworkContext, js_network_has_pending_work)
 BUDO_DEFINE_PENDING_ADAPTER(managed_lua_network_pending, LuaNetworkContext, lua_network_has_pending_work)
 BUDO_DEFINE_PENDING_ADAPTER(managed_js_midi_pending, JsMidiContext, js_midi_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_js_audio_pending, JsAudioContext, js_audio_has_pending_work)
 BUDO_DEFINE_PENDING_ADAPTER(managed_lua_midi_pending, LuaMidiContext, lua_midi_has_pending_work)
 BUDO_DEFINE_PENDING_ADAPTER(managed_js_file_pending, JsFileContext, js_file_has_pending_work)
 #ifdef BUDO_LLAMACPP

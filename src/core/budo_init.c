@@ -14,6 +14,7 @@
 #include "embedded_types.h"
 #include "embedded_native_canvas.h"
 #include "embedded_native_gpu.h"
+#include "embedded_ui_template.h"
 #include "core/version.h"
 
 static int file_exists_local(const char *path)
@@ -178,6 +179,26 @@ static const char *DEFAULT_JSCONFIG_JSON =
     "  ]\n"
     "}\n";
 
+static int write_ui_template(void)
+{
+    for (size_t i = 0; i < embedded_ui_template_count; i++)
+    {
+        const EmbeddedTreeFile *file = &embedded_ui_template[i];
+        char directory[PATH_MAX];
+        snprintf(directory, sizeof(directory), "%s", file->path);
+        char *slash = strrchr(directory, '/');
+        if (slash)
+        {
+            *slash = '\0';
+            if (ensure_directory(directory) != 0)
+                return -1;
+        }
+        if (write_embedded_file(file->path, file->data, file->len, file->uncompressed_len, file->is_gzip) != 0)
+            return -1;
+    }
+    return 0;
+}
+
 static int run_native_init(const char *target_dir, BudoInitTemplate template_kind)
 {
     static const char *managed_entries[] = {
@@ -300,11 +321,16 @@ int budo_run_init(const char *target_dir, const BudoInitOptions *options)
                             strlen(DEFAULT_JSCONFIG_JSON),
                             0) != 0)
         return 1;
-    if (write_embedded_file("main.js",
-                            (const unsigned char *)DEFAULT_MAIN_JS,
-                            strlen(DEFAULT_MAIN_JS),
-                            strlen(DEFAULT_MAIN_JS),
-                            0) != 0)
+    if (options && options->template_kind == BUDO_INIT_TEMPLATE_UI)
+    {
+        if (write_ui_template() != 0)
+            return 1;
+    }
+    else if (write_embedded_file("main.js",
+                                 (const unsigned char *)DEFAULT_MAIN_JS,
+                                 strlen(DEFAULT_MAIN_JS),
+                                 strlen(DEFAULT_MAIN_JS),
+                                 0) != 0)
         return 1;
 
     if (file_exists_local("app.json"))

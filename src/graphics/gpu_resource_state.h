@@ -19,6 +19,8 @@ typedef struct GpuRenderTargetSlot
     uint32_t fbo;
     uint32_t texture;
     uint32_t depth_rbo;
+
+    uint32_t depth_frame;
 } GpuRenderTargetSlot;
 
 typedef struct GpuBufferSlot

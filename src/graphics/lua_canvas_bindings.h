@@ -1,6 +1,7 @@
 #ifndef LUA_CANVAS_BINDINGS_H
 #define LUA_CANVAS_BINDINGS_H
 
+#include "core/animation_wait.h"
 #include "core/graphics_activation.h"
 #include <stdbool.h>
 #include "graphics/skia_wrapper.h"
@@ -34,6 +35,7 @@ extern "C"
 
         int animation_callback_ref;
         bool has_animation_callback;
+        BudoAnimationWait animation_wait;
 
         SkiaPath **paths;
         int path_count;
@@ -71,6 +73,8 @@ extern "C"
     bool lua_canvas_call_animation(LuaCanvasContext *ctx, double timestamp);
 
     bool lua_canvas_has_animation(LuaCanvasContext *ctx);
+    
+    BudoAnimationWait *lua_canvas_animation_wait(LuaCanvasContext *ctx);
 
     bool lua_canvas_exit_requested(const LuaCanvasContext *ctx, int *code);
 
