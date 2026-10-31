@@ -3,5 +3,8 @@
     "author": "Budo",
     "version": "1.0.0",
     "date": "2026-04-21",
-    "icon": "icon.svg"
+    "icon": "icon.svg",
+    "screenshots": [
+        "screenshot.png"
+    ]
 }

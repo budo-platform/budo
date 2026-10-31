@@ -166,6 +166,16 @@ file(MAKE_DIRECTORY "${fixture_root}/package_ignore/source/maps")
 file(WRITE "${fixture_root}/package_ignore/source/maps/level.json" "ignored directory asset\n")
 file(MAKE_DIRECTORY "${fixture_root}/package_ignore/source/maps-old")
 file(WRITE "${fixture_root}/package_ignore/source/maps-old/level.json" "kept directory asset\n")
+set(android_ignored_assets
+    ".git/config" ".gitignore" ".DS_Store" "source/.hidden/data.txt"
+    "source/_private/data.txt" "CVS/Entries" "Thumbs.db" "picasa.ini"
+    "source/control.SCC" "main.js~")
+foreach(asset IN LISTS android_ignored_assets)
+    get_filename_component(parent "${fixture_root}/package_ignore/${asset}" DIRECTORY)
+    file(MAKE_DIRECTORY "${parent}")
+    file(WRITE "${fixture_root}/package_ignore/${asset}" "excluded by Android packaging\n")
+endforeach()
+file(WRITE "${fixture_root}/package_ignore/source/_visible.txt" "kept underscore file\n")
 clear_android_build_cache()
 execute_process(
     COMMAND "${BUDO_EXECUTABLE}" android-apk "${fixture_root}/package_ignore" --no-build
@@ -185,6 +195,25 @@ if(NOT EXISTS "${staged_assets}/dev-notes.txt.backup" OR
    NOT EXISTS "${staged_assets}/source/maps-old/level.json")
     message(FATAL_ERROR "package_ignore matched a non-identical path prefix")
 endif()
+file(READ "${staged_assets}/budo_asset_manifest.txt" asset_manifest)
+if(EXISTS "${staged_assets}/.git")
+    message(FATAL_ERROR "Git directory was staged into Android assets")
+endif()
+foreach(asset IN LISTS android_ignored_assets)
+    if(EXISTS "${staged_assets}/${asset}")
+        message(FATAL_ERROR "Android-ignored asset was staged: ${asset}")
+    endif()
+    string(FIND "${asset_manifest}" "${asset}\n" found)
+    if(NOT found EQUAL -1)
+        message(FATAL_ERROR "Extraction manifest requires an asset Android omits: ${asset}")
+    endif()
+endforeach()
+foreach(asset IN ITEMS "main.js" "source/_visible.txt" "source/maps-old/level.json")
+    string(FIND "${asset_manifest}" "${asset}\n" found)
+    if(found EQUAL -1 OR NOT EXISTS "${staged_assets}/${asset}")
+        message(FATAL_ERROR "Packaged asset is missing from staging or manifest: ${asset}")
+    endif()
+endforeach()
 
 write_managed_fixture(package_ignore_traversal [=[{
   "name":"Invalid package ignore",

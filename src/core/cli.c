@@ -126,7 +126,7 @@ void budo_cli_print_usage(const char *program_name)
             "Examples:\n"
             "  %s init my-app\n"
             "  %s run examples/demo\n"
-            "  %s compile examples/12_native_c\n"
+            "  %s compile examples-private/12_native_c\n"
             "  %s compile native-app --run\n"
             "  %s examples/demo                # equivalent to `run examples/demo`\n"
             "  %s sketch.js                    # run one file as a virtual app\n"

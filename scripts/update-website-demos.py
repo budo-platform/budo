@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate website demo pages and the homepage demos carousel."""
+"""Regenerate website demo pages, the homepage carousel, and playground options."""
 
 from __future__ import annotations
 
@@ -16,12 +16,18 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 WEBSITE_DIR = ROOT / "website"
 DEMOS_DIR = WEBSITE_DIR / "demos"
+PLAYGROUND_DEMOS_DIR = WEBSITE_DIR / "demos-playground"
+PLAYGROUND_HTML = WEBSITE_DIR / "playground.html"
 DOWNLOAD_DEMOS_DIR = WEBSITE_DIR / "download" / "demos"
 INDEX_HTML = WEBSITE_DIR / "index.html"
 
 START_MARKER = "<!-- DEMOS:START -->"
 END_MARKER = "<!-- DEMOS:END -->"
+PLAYGROUND_START_MARKER = "<!-- PLAYGROUND-DEMOS:START -->"
+PLAYGROUND_END_MARKER = "<!-- PLAYGROUND-DEMOS:END -->"
 ENTRY_FILES = ("main.js", "main.lua", "main.ts", "main.wat", "main.wasm")
+# Entry points the playground editor can run (see loadExample in playground.html).
+PLAYGROUND_ENTRY_FILES = ("main.js", "main.lua", "main.ts")
 IMAGE_KEYS = ("image", "thumbnail", "cover", "icon")
 GENERATED_PAGE = "index.html"
 TEXT_SUFFIXES = {
@@ -88,13 +94,6 @@ def nested_get(data: dict, path: str) -> object:
 
 
 def resolve_image(demo_dir: Path, metadata: dict) -> str:
-    for key in IMAGE_KEYS:
-        value = nested_get(metadata, key)
-        if isinstance(value, str) and value.strip():
-            image_path = demo_dir / value.strip()
-            if image_path.exists() and image_path.is_file():
-                return demo_url(demo_dir, value.strip())
-
     screenshots = metadata.get("screenshots")
     if isinstance(screenshots, list):
         for screenshot in screenshots:
@@ -102,7 +101,14 @@ def resolve_image(demo_dir: Path, metadata: dict) -> str:
                 image_path = demo_dir / screenshot.strip()
                 if image_path.exists() and image_path.is_file():
                     return demo_url(demo_dir, screenshot.strip())
-
+                
+    for key in IMAGE_KEYS:
+        value = nested_get(metadata, key)
+        if isinstance(value, str) and value.strip():
+            image_path = demo_dir / value.strip()
+            if image_path.exists() and image_path.is_file():
+                return demo_url(demo_dir, value.strip())
+            
     return ""
 
 
@@ -112,10 +118,10 @@ def is_demo_dir(path: Path) -> bool:
     return any((path / entry_file).exists() for entry_file in ENTRY_FILES) or (path / "app.json").exists()
 
 
-def demo_dirs() -> list[Path]:
-    if not DEMOS_DIR.exists():
+def demo_dirs(directory: Path = DEMOS_DIR) -> list[Path]:
+    if not directory.exists():
         return []
-    return sorted((path for path in DEMOS_DIR.iterdir() if is_demo_dir(path)), key=lambda path: path.name.lower())
+    return sorted((path for path in directory.iterdir() if is_demo_dir(path)), key=lambda path: path.name.lower())
 
 
 def demo_title(demo_dir: Path, metadata: dict) -> str:
@@ -146,7 +152,7 @@ def render_card(demo_dir: Path) -> str:
             f'                <div class="demo-thumb">{thumb}</div>',
             '                <div class="demo-meta">',
             f'                    <h3>{escaped_title}</h3>',
-            f'                    <span class="demo-slug">{escaped_slug}</span>',
+            #f'                    <span class="demo-slug">{escaped_slug}</span>',
             '                </div>',
             '            </a>',
         ]
@@ -170,6 +176,29 @@ def update_homepage() -> None:
     cards = generate_cards()
     next_text = f"{before}{START_MARKER}\n{cards}\n            {END_MARKER}{after}"
     INDEX_HTML.write_text(next_text, encoding="utf-8")
+
+
+def update_playground() -> None:
+    playground_text = PLAYGROUND_HTML.read_text(encoding="utf-8")
+    if PLAYGROUND_START_MARKER not in playground_text or PLAYGROUND_END_MARKER not in playground_text:
+        raise RuntimeError(f"playground demo markers not found in {PLAYGROUND_HTML.relative_to(ROOT)}")
+
+    before, rest = playground_text.split(PLAYGROUND_START_MARKER, 1)
+    _, after = rest.split(PLAYGROUND_END_MARKER, 1)
+    options = []
+    for demo_dir in demo_dirs(PLAYGROUND_DEMOS_DIR):
+        if not any((demo_dir / entry).is_file() for entry in PLAYGROUND_ENTRY_FILES):
+            continue
+        title = html.escape(demo_title(demo_dir, read_metadata(demo_dir)))
+        slug = html.escape(demo_dir.name, quote=True)
+        selected = " selected" if demo_dir.name == "shader_demo" else ""
+        options.append(f'            <option value="{slug}"{selected}>{title}</option>')
+    next_text = (
+        f"{before}{PLAYGROUND_START_MARKER}\n"
+        + "\n".join(options)
+        + f"\n            {PLAYGROUND_END_MARKER}{after}"
+    )
+    PLAYGROUND_HTML.write_text(next_text, encoding="utf-8")
 
 
 def is_text_file(path: Path) -> bool:
@@ -270,7 +299,7 @@ def json_script(data: object) -> str:
 
 
 def metadata_rows(metadata: dict, slug: str) -> str:
-    rows = [f"<div class=\"meta-row\"><span>slug</span><strong>{html.escape(slug)}</strong></div>"]
+    rows = [] #f"<div class=\"meta-row\"><span>slug</span><strong>{html.escape(slug)}</strong></div>"]
     for key in METADATA_FIELDS:
         if key not in metadata:
             continue
@@ -579,16 +608,47 @@ def generate_demo_pages() -> int:
     return count
 
 
+def render_playground_manifest(demo_dir: Path) -> str:
+    title = html.escape(demo_title(demo_dir, read_metadata(demo_dir)))
+    file_data = json_script(list_demo_files(demo_dir))
+    return f'''<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{title} - Budo Playground Demo</title>
+</head>
+
+<body>
+    <script id="demo-files" type="application/json">{file_data}</script>
+</body>
+
+</html>
+'''
+
+
+def generate_playground_manifests() -> int:
+    count = 0
+    for demo_dir in demo_dirs(PLAYGROUND_DEMOS_DIR):
+        (demo_dir / GENERATED_PAGE).write_text(render_playground_manifest(demo_dir), encoding="utf-8")
+        count += 1
+    return count
+
+
 def main() -> int:
     try:
         update_homepage()
+        update_playground()
         page_count = generate_demo_pages()
+        manifest_count = generate_playground_manifests()
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Updated demos section in {INDEX_HTML.relative_to(ROOT)}")
+    print(f"Updated playground examples in {PLAYGROUND_HTML.relative_to(ROOT)}")
     print(f"Generated {page_count} demo pages in {DEMOS_DIR.relative_to(ROOT)}")
+    print(f"Generated {manifest_count} playground manifests in {PLAYGROUND_DEMOS_DIR.relative_to(ROOT)}")
     return 0
 
 

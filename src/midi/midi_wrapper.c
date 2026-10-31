@@ -658,8 +658,15 @@ bool midi_get_input_info(MidiContext *ctx, int index, MidiDeviceInfo *info)
                             info->id = index;
                             info->is_input = true;
                             info->is_output = false;
-                            snprintf(info->name, MIDI_MAX_DEVICE_NAME, "%s",
-                                     snd_rawmidi_info_get_name(rawinfo));
+                            if(strncmp(snd_rawmidi_info_get_name(rawinfo), snd_rawmidi_info_get_subdevice_name(rawinfo), strlen(snd_rawmidi_info_get_name(rawinfo)))) {
+                                snprintf(info->name, MIDI_MAX_DEVICE_NAME, "%s / %s",
+                                         snd_rawmidi_info_get_name(rawinfo),
+                                         snd_rawmidi_info_get_subdevice_name(rawinfo));
+                            }
+                            else {
+                                snprintf(info->name, MIDI_MAX_DEVICE_NAME, "%s",
+                                         snd_rawmidi_info_get_subdevice_name(rawinfo));
+                            }
 
                             snd_ctl_close(ctl);
                             return true;
@@ -712,9 +719,16 @@ bool midi_get_output_info(MidiContext *ctx, int index, MidiDeviceInfo *info)
                             info->id = index;
                             info->is_input = false;
                             info->is_output = true;
-                            snprintf(info->name, MIDI_MAX_DEVICE_NAME, "%s",
-                                     snd_rawmidi_info_get_name(rawinfo));
-
+                            if(strncmp(snd_rawmidi_info_get_name(rawinfo), snd_rawmidi_info_get_subdevice_name(rawinfo), strlen(snd_rawmidi_info_get_name(rawinfo)))) {
+                                snprintf(info->name, MIDI_MAX_DEVICE_NAME, "%s / %s",
+                                         snd_rawmidi_info_get_name(rawinfo),
+                                         snd_rawmidi_info_get_subdevice_name(rawinfo));
+                            }
+                            else {
+                                snprintf(info->name, MIDI_MAX_DEVICE_NAME, "%s",
+                                         snd_rawmidi_info_get_subdevice_name(rawinfo));
+                            }
+                            
                             snd_ctl_close(ctl);
                             return true;
                         }

@@ -7,8 +7,7 @@ where it is going.
 
 Start a project with it using `budo init my-app --template ui`: the library goes
 to `my-app/ui/` (import `./ui/budo-ui.js`), next to a starter `main.js`.
-Examples in this repository that use it (`examples/07_file_explorer`,
-`examples/midi_preset_saver`) carry the
+Examples in this repository that use it (`examples/07_file_explorer`) carry the
 same `ui/` copy; `scripts/sync-budo-ui.py` refreshes those copies after a
 library change, and CTest fails when one is stale.
 

@@ -7,8 +7,7 @@ where it is going.
 
 Start a project with it using `budo init my-app --template ui`: the library goes
 to `my-app/ui/` (import `./ui/budo-ui.js`), next to a starter `main.js`.
-Examples in this repository that use it (`examples/07_file_explorer`,
-`examples/midi_preset_saver`) carry the
+Examples in this repository that use it (`examples/07_file_explorer`) carry the
 same `ui/` copy; `scripts/sync-budo-ui.py` refreshes those copies after a
 library change, and CTest fails when one is stale.
 
@@ -54,6 +53,8 @@ scale, the toggle's sliding thumb, and the field's focus ring all animate.
   density-independent.
 - **Draw back to front.** When widgets overlap, the one drawn last gets the
   pointer. `ui.overlay(draw)` draws above everything (menus, popovers, toasts).
+  Overlays queued while drawing another overlay are rendered in the same frame,
+  above their parent, so dropdowns inside dialogs work normally.
 - **One theme.** `createUI(overrides)` merges tokens with `themes.light`;
   `ui.setTheme(themes.dark)` switches theme and every color animates there.
   Besides colors and sizes, `elevation` sets the three shadow levels and

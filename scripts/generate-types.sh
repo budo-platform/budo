@@ -25,8 +25,8 @@ FRAGMENTS_DIR="$SCRIPT_DIR/type-fragments"
 OUT="$PROJECT_ROOT/types/budo.d.ts"
 SNAPSHOT_OUTS=(
     "$PROJECT_ROOT/budo.d.ts"
-    "$PROJECT_ROOT/examples/midi_preset_saver/budo.d.ts"
-    "$PROJECT_ROOT/examples/3d_cube/budo.d.ts"
+    "$PROJECT_ROOT/examples-private/midi_preset_saver/budo.d.ts"
+    "$PROJECT_ROOT/examples-playground/3d_cube/budo.d.ts"
     "$PROJECT_ROOT/examples/sound-instrument/budo.d.ts"
     "$PROJECT_ROOT/examples/07_file_explorer/budo.d.ts"
 )

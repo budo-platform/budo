@@ -134,7 +134,7 @@ native-ci:
 	@ctest --test-dir $(BUILD_DIR) -C RelWithDebInfo --output-on-failure
 	@$(MAKE) native-sdk
 	@rm -rf $(BUILD_DIR)/native-ci-app
-	@$(EXECUTABLE) compile examples/12_native_c --offline \
+	@$(EXECUTABLE) compile examples-private/12_native_c --offline \
 		--sdk $(BUILD_DIR)/native-sdk/stage \
 		--build-dir $(BUILD_DIR)/native-ci-app
 
@@ -422,9 +422,10 @@ playground-serve:
 website:
 	@./scripts/build-website-icons.sh
 
-# Sync examples into website/demos/ and regenerate the homepage demos carousel.
+# Sync website demos and regenerate the homepage carousel and playground options.
 website-demos:
 	@./scripts/sync-website-demos.sh
+	@./scripts/sync-website-playground-demos.sh
 	@./scripts/update-website-demos.py
 
 # Build APK downloads for generated website demo pages. Use flags like:
@@ -464,7 +465,7 @@ docs: generate-contract-artifacts
 ifeq ($(DETECTED_OS),macOS)
 EVERYTHING_PLATFORM_TARGETS := macos-cli macos-app macos-dmg
 else ifeq ($(DETECTED_OS),Linux)
-EVERYTHING_PLATFORM_TARGETS := linux-cli linux-appimage linux-flatpak
+EVERYTHING_PLATFORM_TARGETS := linux-cli # linux-appimage linux-flatpak
 else
 EVERYTHING_PLATFORM_TARGETS :=
 endif
@@ -496,18 +497,18 @@ endif
 	@$(MAKE) docs
 	@$(MAKE) playground
 	@echo ""
-	@echo "[6/7] Building platform release bundles for $(DETECTED_OS)..."
-ifeq ($(strip $(EVERYTHING_PLATFORM_TARGETS)),)
-	@echo "  (no platform release bundles defined for $(DETECTED_OS))"
-else
-	@for t in $(EVERYTHING_PLATFORM_TARGETS); do \
-	    echo ""; echo "  → $$t"; \
-	    $(MAKE) $$t || echo "  ! $$t failed (continuing)"; \
-	done
-endif
-	@echo ""
-	@echo "  → windows-build (requires Vagrant + windows-11-qemu box)"
-	@-$(MAKE) windows-build || echo "  ! windows-build skipped/failed (continuing)"
+#	@echo "[6/7] Building platform release bundles for $(DETECTED_OS)..."
+#ifeq ($(strip $(EVERYTHING_PLATFORM_TARGETS)),)
+#	@echo "  (no platform release bundles defined for $(DETECTED_OS))"
+#else
+#	@for t in $(EVERYTHING_PLATFORM_TARGETS); do \
+#	    echo ""; echo "  → $$t"; \
+#	    $(MAKE) $$t || echo "  ! $$t failed (continuing)"; \
+#	done
+#endif
+#	@echo ""
+#	@echo "  → windows-build (requires Vagrant + windows-11-qemu box)"
+#	@-$(MAKE) windows-build || echo "  ! windows-build skipped/failed (continuing)"
 	@echo ""
 	@echo "[7/7] Computing release hashes..."
 	@$(MAKE) release-hashes

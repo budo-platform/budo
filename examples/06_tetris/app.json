@@ -3,5 +3,8 @@
     "author": "Budo",
     "version": "1.0",
     "orientation": "portrait",
-    "icon": "icon.svg"
+    "icon": "icon.svg",
+    "screenshots": [
+        "screenshot.png"
+    ]
 }

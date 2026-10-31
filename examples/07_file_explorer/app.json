@@ -1,4 +1,7 @@
 {
     "name": "File Explorer",
-    "filesystem": true
+    "filesystem": true,
+    "screenshots": [
+        "screenshot.png"
+    ]
 }

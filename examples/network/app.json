@@ -1,4 +1,7 @@
 {
     "network": "*",
-    "icon": "icon.svg"
+    "icon": "icon.svg",
+    "screenshots": [
+        "screenshot.png"
+    ]
 }

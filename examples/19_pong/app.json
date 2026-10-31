@@ -1,5 +1,8 @@
 {
     "name": "Pong",
     "description": "Classic Pong game example built with Budo input and canvas APIs.",
-    "icon": "icon.svg"
+    "icon": "icon.svg",
+    "screenshots": [
+        "screenshot.png"
+    ]
 }

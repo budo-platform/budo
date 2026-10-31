@@ -1,5 +1,8 @@
 {
-  "name": "sound-instrument",
+  "name": "Sound Touch Instrument",
   "author": "Unknown",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "screenshots": [
+    "screenshot.png"
+  ]
 }

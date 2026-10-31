@@ -3,5 +3,8 @@
     "description": "A Spaceshooter written Lua for the Budo platform",
     "author": "Budo",
     "version": "1.0",
-    "icon": "icon.svg"
+    "icon": "icon.svg",
+    "screenshots": [
+        "screenshot.png"
+    ]
 }
