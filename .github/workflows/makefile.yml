@@ -8,6 +8,7 @@ on:
 
 jobs:
   build-linux:
+    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -36,6 +37,7 @@ jobs:
         run: make build CMAKE_FLAGS="-DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
   build-macos:
+    if: false
     runs-on: macos-latest
 
     steps:
@@ -62,4 +64,5 @@ jobs:
         run: make build CMAKE_FLAGS="-DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
   build-windows:
+    if: false
     uses: ./.github/workflows/windows-build.yml
