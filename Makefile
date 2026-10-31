@@ -134,7 +134,7 @@ native-ci:
 	@ctest --test-dir $(BUILD_DIR) -C RelWithDebInfo --output-on-failure
 	@$(MAKE) native-sdk
 	@rm -rf $(BUILD_DIR)/native-ci-app
-	@$(EXECUTABLE) compile examples-private/12_native_c --offline \
+	@$(EXECUTABLE) compile examples-native/12_native_c --offline \
 		--sdk $(BUILD_DIR)/native-sdk/stage \
 		--build-dir $(BUILD_DIR)/native-ci-app
 

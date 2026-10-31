@@ -1,0 +1,29 @@
+{
+    "schema_version": 1,
+    "name": "Budo Native Terrain Physics",
+    "sources": [
+        "main.c",
+        "math3d.c",
+        "terrain.c",
+        "physics.c",
+        "ui_gpu.c",
+        "generated/car_models.c"
+    ],
+    "include_directories": [
+        "include",
+        "generated"
+    ],
+    "assets": [
+        "terrain.vert",
+        "terrain.frag",
+        "car.vert",
+        "car.frag",
+        "assets/kenney_car_kit/LICENSE.txt"
+    ],
+    "definitions": [],
+    "modules": [
+        "core"
+    ],
+    "c_standard": 11,
+    "sdk_version": "0.4.3"
+}

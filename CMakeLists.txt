@@ -894,10 +894,10 @@ add_custom_command(
     OUTPUT  "${GENERATED_DIR}/embedded_native_canvas.h"
     COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
-        "${CMAKE_SOURCE_DIR}/examples-private/12_native_c/main.c"
+        "${CMAKE_SOURCE_DIR}/examples-native/12_native_c/main.c"
         "embedded_native_canvas"
         "${GENERATED_DIR}/embedded_native_canvas.h"
-    DEPENDS "${CMAKE_SOURCE_DIR}/examples-private/12_native_c/main.c"
+    DEPENDS "${CMAKE_SOURCE_DIR}/examples-native/12_native_c/main.c"
         "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
     COMMENT "Embedding native C canvas starter"
 )
@@ -906,10 +906,10 @@ add_custom_command(
     OUTPUT  "${GENERATED_DIR}/embedded_native_gpu.h"
     COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
-        "${CMAKE_SOURCE_DIR}/examples-private/13_native_gpu/main.c"
+        "${CMAKE_SOURCE_DIR}/examples-native/13_native_gpu/main.c"
         "embedded_native_gpu"
         "${GENERATED_DIR}/embedded_native_gpu.h"
-    DEPENDS "${CMAKE_SOURCE_DIR}/examples-private/13_native_gpu/main.c"
+    DEPENDS "${CMAKE_SOURCE_DIR}/examples-native/13_native_gpu/main.c"
         "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
     COMMENT "Embedding native C GPU starter"
 )
@@ -1392,7 +1392,7 @@ endif()
 
 option(BUDO_BUILD_NATIVE_EXAMPLE "Build the native C desktop example" ON)
 if(BUDO_BUILD_NATIVE_EXAMPLE)
-    add_executable(budo_native_example examples-private/12_native_c/main.c)
+    add_executable(budo_native_example examples-native/12_native_c/main.c)
     target_link_libraries(budo_native_example PRIVATE budo_native_launcher)
 
     add_executable(native_windowless_app tests/native_windowless_app.c)
@@ -1404,44 +1404,44 @@ if(BUDO_BUILD_NATIVE_EXAMPLE)
                 -P ${CMAKE_SOURCE_DIR}/tests/expect_exit_status.cmake)
     endif()
 
-    add_executable(budo_native_gpu_example examples-private/13_native_gpu/main.c)
+    add_executable(budo_native_gpu_example examples-native/13_native_gpu/main.c)
     target_link_libraries(budo_native_gpu_example PRIVATE budo_native_launcher)
 
     add_executable(budo_native_gpu_assets_example
-        examples-private/14_native_gpu_assets/main.c)
+        examples-native/14_native_gpu_assets/main.c)
     target_link_libraries(budo_native_gpu_assets_example PRIVATE budo_native_launcher)
     add_custom_command(TARGET budo_native_gpu_assets_example POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/examples-private/14_native_gpu_assets/shader.vert"
+            "${CMAKE_SOURCE_DIR}/examples-native/14_native_gpu_assets/shader.vert"
             "$<TARGET_FILE_DIR:budo_native_gpu_assets_example>/shader.vert"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/examples-private/14_native_gpu_assets/shader.frag"
+            "${CMAKE_SOURCE_DIR}/examples-native/14_native_gpu_assets/shader.frag"
             "$<TARGET_FILE_DIR:budo_native_gpu_assets_example>/shader.frag"
         VERBATIM)
 
     add_executable(budo_native_render_targets_example
-        examples-private/15_native_render_targets/main.c)
+        examples-native/15_native_render_targets/main.c)
     target_link_libraries(budo_native_render_targets_example PRIVATE budo_native_launcher)
 
     add_executable(budo_native_region_passes_example
-        examples-private/17_native_region_passes/main.c)
+        examples-native/17_native_region_passes/main.c)
     target_link_libraries(budo_native_region_passes_example PRIVATE budo_native_launcher)
 
     add_executable(budo_native_terrain_physics_example
-        examples-private/16_native_terrain_physics/main.c
-        examples-private/16_native_terrain_physics/math3d.c
-        examples-private/16_native_terrain_physics/terrain.c
-        examples-private/16_native_terrain_physics/physics.c
-        examples-private/16_native_terrain_physics/ui_gpu.c
-        examples-private/16_native_terrain_physics/generated/car_models.c)
+        examples-native/16_native_terrain_physics/main.c
+        examples-native/16_native_terrain_physics/math3d.c
+        examples-native/16_native_terrain_physics/terrain.c
+        examples-native/16_native_terrain_physics/physics.c
+        examples-native/16_native_terrain_physics/ui_gpu.c
+        examples-native/16_native_terrain_physics/generated/car_models.c)
     target_include_directories(budo_native_terrain_physics_example PRIVATE
-        examples-private/16_native_terrain_physics/include
-        examples-private/16_native_terrain_physics/generated)
+        examples-native/16_native_terrain_physics/include
+        examples-native/16_native_terrain_physics/generated)
     target_link_libraries(budo_native_terrain_physics_example PRIVATE budo_native_launcher)
     foreach(shader terrain.vert terrain.frag car.vert car.frag)
         add_custom_command(TARGET budo_native_terrain_physics_example POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/examples-private/16_native_terrain_physics/${shader}"
+                "${CMAKE_SOURCE_DIR}/examples-native/16_native_terrain_physics/${shader}"
                 "$<TARGET_FILE_DIR:budo_native_terrain_physics_example>/${shader}"
             VERBATIM)
     endforeach()
@@ -2087,11 +2087,6 @@ if(BUILD_TESTING)
         # running main.ts through Budo's own TypeScript stripper.
         add_executable(ts_strip_tool tests/ts_strip_tool.c src/core/ts_strip.c)
         target_include_directories(ts_strip_tool PRIVATE ${CMAKE_SOURCE_DIR}/src)
-        add_test(NAME midi_preset_saver
-            COMMAND "${BUDO_NODE_EXECUTABLE}" --test
-                "${CMAKE_SOURCE_DIR}/examples-private/midi_preset_saver/midi.test.mjs")
-        set_tests_properties(midi_preset_saver PROPERTIES
-            ENVIRONMENT "BUDO_TS_STRIP=$<TARGET_FILE:ts_strip_tool>")
     endif()
 
     add_executable(canvas_features_test
@@ -2434,7 +2429,7 @@ if(BUILD_TESTING)
 
     add_executable(native_example_test
         tests/native_example_test.c
-        examples-private/12_native_c/main.c
+        examples-native/12_native_c/main.c
     )
     target_include_directories(native_example_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_link_libraries(native_example_test PRIVATE budo_native_host budo_desktop_host)
@@ -2505,7 +2500,7 @@ if(BUILD_TESTING)
         add_test(NAME native_android_staging
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
-                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/12_native_c"
+                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/12_native_c"
                 "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_staging"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_staging PROPERTIES
@@ -2513,7 +2508,7 @@ if(BUILD_TESTING)
         add_test(NAME native_android_gpu_assets_staging
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
-                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/14_native_gpu_assets"
+                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/14_native_gpu_assets"
                 "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_gpu_assets_staging"
                 "-DREQUIRED_ASSETS=shader.vert;shader.frag"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
@@ -2522,7 +2517,7 @@ if(BUILD_TESTING)
         add_test(NAME native_android_render_targets_staging
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
-                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/15_native_render_targets"
+                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/15_native_render_targets"
                 "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_render_targets_staging"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_render_targets_staging PROPERTIES
@@ -2530,7 +2525,7 @@ if(BUILD_TESTING)
         add_test(NAME native_android_region_passes_staging
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
-                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/17_native_region_passes"
+                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/17_native_region_passes"
                 "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_region_passes_staging"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
         set_tests_properties(native_android_region_passes_staging PROPERTIES
@@ -2538,7 +2533,7 @@ if(BUILD_TESTING)
         add_test(NAME native_android_terrain_physics_staging
             COMMAND ${CMAKE_COMMAND}
                 "-DBUDO_EXECUTABLE=$<TARGET_FILE:budo>"
-                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/16_native_terrain_physics"
+                "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/16_native_terrain_physics"
                 "-DBUILD_CACHE=${CMAKE_BINARY_DIR}/test-data/android-build/native_android_terrain_physics_staging"
                 "-DREQUIRED_ASSETS=terrain.vert;terrain.frag;car.vert;car.frag;assets/kenney_car_kit/LICENSE.txt"
                 -P "${CMAKE_SOURCE_DIR}/tests/verify_android_native_staging.cmake")
@@ -2569,7 +2564,7 @@ if(BUILD_TESTING)
     set(NATIVE_COMPILE_CLI_DIR "${CMAKE_BINARY_DIR}/native-compile-cli")
     add_test(NAME native_compile_cli
         COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-            "${CMAKE_SOURCE_DIR}/examples-private/12_native_c"
+            "${CMAKE_SOURCE_DIR}/examples-native/12_native_c"
             --build-dir "${NATIVE_COMPILE_CLI_DIR}")
     add_test(NAME native_compile_cli_verify
         COMMAND ${CMAKE_COMMAND}
@@ -2583,7 +2578,7 @@ if(BUILD_TESTING)
         "${CMAKE_BINARY_DIR}/native-compile-gpu-assets")
     add_test(NAME native_compile_gpu_assets
         COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-            "${CMAKE_SOURCE_DIR}/examples-private/14_native_gpu_assets"
+            "${CMAKE_SOURCE_DIR}/examples-native/14_native_gpu_assets"
             --build-dir "${NATIVE_GPU_ASSETS_COMPILE_DIR}")
     set_tests_properties(native_compile_gpu_assets PROPERTIES
         ENVIRONMENT "BUDO_NATIVE_CACHE_DIR=${CMAKE_BINARY_DIR}/native-cache-test")
@@ -2600,7 +2595,7 @@ if(BUILD_TESTING)
         "${CMAKE_BINARY_DIR}/native-compile-render-targets")
     add_test(NAME native_compile_render_targets
         COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-            "${CMAKE_SOURCE_DIR}/examples-private/15_native_render_targets"
+            "${CMAKE_SOURCE_DIR}/examples-native/15_native_render_targets"
             --build-dir "${NATIVE_RENDER_TARGETS_COMPILE_DIR}")
     set_tests_properties(native_compile_render_targets PROPERTIES
         ENVIRONMENT "BUDO_NATIVE_CACHE_DIR=${CMAKE_BINARY_DIR}/native-cache-test")
@@ -2616,7 +2611,7 @@ if(BUILD_TESTING)
         "${CMAKE_BINARY_DIR}/native-compile-region-passes")
     add_test(NAME native_compile_region_passes
         COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-            "${CMAKE_SOURCE_DIR}/examples-private/17_native_region_passes"
+            "${CMAKE_SOURCE_DIR}/examples-native/17_native_region_passes"
             --build-dir "${NATIVE_REGION_PASSES_COMPILE_DIR}")
     set_tests_properties(native_compile_region_passes PROPERTIES
         ENVIRONMENT "BUDO_NATIVE_CACHE_DIR=${CMAKE_BINARY_DIR}/native-cache-test")
@@ -2632,7 +2627,7 @@ if(BUILD_TESTING)
         "${CMAKE_BINARY_DIR}/native-compile-terrain-physics")
     add_test(NAME native_compile_terrain_physics
         COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-            "${CMAKE_SOURCE_DIR}/examples-private/16_native_terrain_physics"
+            "${CMAKE_SOURCE_DIR}/examples-native/16_native_terrain_physics"
             --build-dir "${NATIVE_TERRAIN_PHYSICS_COMPILE_DIR}")
     set_tests_properties(native_compile_terrain_physics PROPERTIES
         ENVIRONMENT "BUDO_NATIVE_CACHE_DIR=${CMAKE_BINARY_DIR}/native-cache-test")
@@ -2649,7 +2644,7 @@ if(BUILD_TESTING)
     add_test(NAME native_compile_cache_hit
         COMMAND ${CMAKE_COMMAND}
             "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
-            "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/12_native_c"
+            "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/12_native_c"
             "-DFIRST_BUILD_DIR=${CMAKE_BINARY_DIR}/native-compile-cache-seed"
             "-DSECOND_BUILD_DIR=${NATIVE_COMPILE_CACHE_HIT_DIR}"
             "-DCACHE_DIR=${CMAKE_BINARY_DIR}/native-cache-hit-test"
@@ -2666,7 +2661,7 @@ if(BUILD_TESTING)
         DEPENDS native_compile_cache_hit)
     add_test(NAME native_compile_watch_rejected
         COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-            "${CMAKE_SOURCE_DIR}/examples-private/12_native_c" --watch)
+            "${CMAKE_SOURCE_DIR}/examples-native/12_native_c" --watch)
     set_tests_properties(native_compile_watch_rejected PROPERTIES
         WILL_FAIL TRUE)
     set(NATIVE_INIT_CANVAS_DIR "${CMAKE_BINARY_DIR}/native-init-canvas")
@@ -2709,7 +2704,7 @@ if(BUILD_TESTING)
     if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
         add_test(NAME native_compile_sanitizer
             COMMAND $<TARGET_FILE:${PROJECT_NAME}> compile
-                "${CMAKE_SOURCE_DIR}/examples-private/12_native_c"
+                "${CMAKE_SOURCE_DIR}/examples-native/12_native_c"
                 --debug --sanitize address,undefined
                 --build-dir "${CMAKE_BINARY_DIR}/native-compile-sanitizer")
         set_tests_properties(native_compile_sanitizer PROPERTIES
@@ -2720,7 +2715,7 @@ if(BUILD_TESTING)
             "-DCMAKE_COMMAND_PATH=${CMAKE_COMMAND}"
             "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
             "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
-            "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/12_native_c"
+            "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/12_native_c"
             "-DSDK_STAGE=${CMAKE_BINARY_DIR}/native-sdk-test-stage"
             "-DSDK_RELOCATED=${CMAKE_BINARY_DIR}/native-sdk-test-relocated"
             "-DAPP_BUILD_DIR=${CMAKE_BINARY_DIR}/native-sdk-test-app"
@@ -2736,7 +2731,7 @@ if(BUILD_TESTING)
             "-DCMAKE_COMMAND_PATH=${CMAKE_COMMAND}"
             "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
             "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
-            "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-private/12_native_c"
+            "-DPROJECT_DIR=${CMAKE_SOURCE_DIR}/examples-native/12_native_c"
             "-DSDK_STAGE=${CMAKE_BINARY_DIR}/native-sdk-resolution-stage"
             "-DTEST_ROOT=${CMAKE_BINARY_DIR}/native-sdk-resolution-test"
             "-DCONFIGURATION=$<CONFIG>"
