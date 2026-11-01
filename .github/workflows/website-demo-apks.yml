@@ -49,7 +49,7 @@ jobs:
 
       - name: Build APKs
         run: |
-          ./budo android-apk examples/01_drum_loop_machine -o ./
+          ./budo android-apk examples/01_drum_loop_machine -o ./ --release
           mkdir -p dist
           cp drum-loop-machine-1.0.0-debug.apk dist/
 
@@ -58,8 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # A prerelease that is never "latest": releases/latest/download/... must keep
-          # pointing at the Budo binaries.
+          # A prerelease that is never "latest": releases/latest/download/...
           if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
               gh release upload "$RELEASE_TAG" dist/* --repo "$GH_REPO" --clobber
           else
@@ -67,3 +66,4 @@ jobs:
                   --title "Budo demos artifacts $RELEASE_TAG" \
                   --notes "APK files build by CI with latest official Budo release binary" \
                   --prerelease --latest=false
+          fi
