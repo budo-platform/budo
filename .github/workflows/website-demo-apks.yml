@@ -1,0 +1,68 @@
+name: Demos APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the support bundle release
+
+jobs:
+  bundle:
+    name: Build and publish the demos apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Budo
+        run: |
+          curl -fL -o budo https://github.com/budo-platform/budo/releases/latest/download/budo-linux-x86_64
+          chmod +x budo
+
+      # Same NDK as the Android app (ndkVersion in its build.gradle), so the
+      # prebuilt Skia libraries match the toolchain that links them.
+      - name: Install the Android NDK
+        id: ndk
+        run: |
+          version="27.0.12077973"
+          if [ -z "$version" ]; then echo "::error::ndkVersion not found in the Android app"; exit 1; fi
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "ndk;$version" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Android NDK $version"
+
+      - name: Build APKs
+        run: |
+          ./budo android-apk examples/01_drum_loop_machine -o ./
+
+      # Same as `make android-support-publish`.
+
+#      - name: Publish the support bundle
+#        env:
+#          GH_TOKEN: ${{ github.token }}
+#        run: ./private/android/scripts/publish-android-support.sh
+#
+#      - name: Lock update
+#        run: |
+#          tag="$(sed -nE 's/^set\(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "([^"]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
+#          {
+#            echo "## Android support bundle published"
+#            echo ""
+#            echo "Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag"
+#            echo ""
+#            echo "Pin it in \`cmake/BudoDependencyLock.cmake\` (also uploaded as the"
+#            echo "\`dependency-lock\` artifact), then commit:"
+#            echo ""
+#            echo '```diff'
+#            git diff -- cmake/BudoDependencyLock.cmake
+#            echo '```'
+#          } >> "$GITHUB_STEP_SUMMARY"
+#          echo "::notice title=Android support bundle::Published $tag; pin it in the dependency lock (see the run summary)"
+#
+#      - uses: actions/upload-artifact@v4
+#        with:
+#          name: dependency-lock
+#          path: cmake/BudoDependencyLock.cmake
