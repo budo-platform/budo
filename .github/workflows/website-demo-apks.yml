@@ -6,6 +6,10 @@ on:
 permissions:
   contents: write # create the support bundle release
 
+env:
+  #RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  RELEASE_TAG: demos-artifacts
+
 jobs:
   bundle:
     name: Build and publish the demos apks
@@ -46,32 +50,20 @@ jobs:
       - name: Build APKs
         run: |
           ./budo android-apk examples/01_drum_loop_machine -o ./
+          mkdir -p dist
+          cp drum-loop-machine-1.0.0-debug.apk dist/
 
-      # Same as `make android-support-publish`.
-
-#      - name: Publish the support bundle
-#        env:
-#          GH_TOKEN: ${{ github.token }}
-#        run: ./private/android/scripts/publish-android-support.sh
-#
-#      - name: Lock update
-#        run: |
-#          tag="$(sed -nE 's/^set\(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "([^"]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
-#          {
-#            echo "## Android support bundle published"
-#            echo ""
-#            echo "Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag"
-#            echo ""
-#            echo "Pin it in \`cmake/BudoDependencyLock.cmake\` (also uploaded as the"
-#            echo "\`dependency-lock\` artifact), then commit:"
-#            echo ""
-#            echo '```diff'
-#            git diff -- cmake/BudoDependencyLock.cmake
-#            echo '```'
-#          } >> "$GITHUB_STEP_SUMMARY"
-#          echo "::notice title=Android support bundle::Published $tag; pin it in the dependency lock (see the run summary)"
-#
-#      - uses: actions/upload-artifact@v4
-#        with:
-#          name: dependency-lock
-#          path: cmake/BudoDependencyLock.cmake
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # A prerelease that is never "latest": releases/latest/download/... must keep
+          # pointing at the Budo binaries.
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+              gh release upload "$RELEASE_TAG" dist/* --repo "$GH_REPO" --clobber
+          else
+              gh release create "$RELEASE_TAG" dist/* --repo "$GH_REPO" \
+                  --title "Budo demos artifacts $RELEASE_TAG" \
+                  --notes "APK files build by CI with latest official Budo release binary" \
+                  --prerelease --latest=false
