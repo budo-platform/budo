@@ -46,13 +46,12 @@ jobs:
         run: |
           mkdir -p dist
           ./budo android-apk examples/01_drum_loop_machine -o dist --release
-          python3 ./examples/02_desert_racer/download_kenney_car_kit.py
+          python3 ./examples/02_desert_racer/download_kenney_car_kit.py --force-download
           ./budo android-apk examples/02_desert_racer -o dist --release
           ./budo android-apk examples/03_lua_spaceshooter -o dist --release
           ./budo android-apk examples/06_tetris -o dist --release
           ./budo android-apk examples/07_file_explorer -o dist --release
           ./budo android-apk examples/10_audio_synth -o dist --release
-          ./budo android-apk examples/18_llamacpp_chat -o dist --release
           ./budo android-apk examples/19_pong -o dist --release
           ./budo android-apk examples/20_microphone -o dist --release
           ./budo android-apk examples/amstrad-cpc -o dist --release
@@ -60,7 +59,6 @@ jobs:
           ./budo android-apk examples/clock_demo -o dist --release
           ./budo android-apk examples/layout_demo -o dist --release
           ./budo android-apk examples/midi_dumper -o dist --release
-          ./budo android-apk examples/midi_preset_saver -o dist --release
           ./budo android-apk examples/network -o dist --release
           ./budo android-apk examples/persistence -o dist --release
           ./budo android-apk examples/sound-instrument -o dist --release

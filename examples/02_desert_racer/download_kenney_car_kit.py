@@ -17,16 +17,15 @@ License: Creative Commons Zero (CC0)
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import urllib.request
 import zipfile
 from pathlib import Path
 
-DOWNLOAD_URL = (
-    "https://kenney.nl/media/pages/assets/car-kit/"
-    "a9b1e99e92-1775131960/kenney_car-kit.zip"
-)
+DOWNLOAD_LINK_URL = "https://kenney.nl/download-link/6173736574732f6361722d6b6974"
+ASSET_PAGE_URL = "https://kenney.nl/assets/car-kit"
 
 VEHICLE_OBJS = [
     "ambulance.obj",
@@ -59,8 +58,18 @@ VEHICLE_OBJS = [
 
 def download(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {url}")
-    with urllib.request.urlopen(url, timeout=60) as response:
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": ASSET_PAGE_URL,
+    }
+    print("Resolving current Kenney Car Kit download URL")
+    request = urllib.request.Request(url, headers={**headers, "Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        download_url = json.load(response)["url"]
+
+    print("Downloading Kenney Car Kit")
+    request = urllib.request.Request(download_url, headers=headers)
+    with urllib.request.urlopen(request, timeout=60) as response:
         data = response.read()
     dest.write_bytes(data)
     print(f"Wrote {dest} ({len(data) / 1024:.1f} KiB)")
@@ -99,6 +108,7 @@ def obj_stats(text: str) -> tuple[int, int, int, int, tuple[float, float], tuple
 
 def extract_assets(zip_path: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"zip path: {zip_path}")
     with zipfile.ZipFile(zip_path) as archive:
         license_text = archive.read("License.txt")
         (output_dir / "LICENSE.txt").write_bytes(license_text)
@@ -147,7 +157,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.force_download or not args.zip_path.exists():
-        download(DOWNLOAD_URL, args.zip_path)
+        download(DOWNLOAD_LINK_URL, args.zip_path)
     else:
         print(f"Using cached {args.zip_path}")
 
