@@ -51,7 +51,7 @@ jobs:
         run: |
           ./budo android-apk examples/01_drum_loop_machine -o ./ --release
           mkdir -p dist
-          cp drum-loop-machine-1.0.0-debug.apk dist/
+          cp drum-loop-machine-1.0.0-release.apk dist/
 
       - name: Publish
         env:
