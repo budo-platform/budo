@@ -1321,18 +1321,22 @@ endif()
 if(BUDO_ENABLE_ANDROID_PACKAGING)
     string(REGEX REPLACE "^SHA256=" "" BUDO_ANDROID_SUPPORT_BUNDLE_SHA256
         "${BUDO_ANDROID_SUPPORT_BUNDLE_URL_HASH}")
+    if(NOT BUDO_GITHUB_REPOSITORY)
+        set(BUDO_GITHUB_REPOSITORY "budo-platform/budo")
+    endif()
     # The support bundle is published on a GitHub release (tag pinned in the
-    # lock). CI passes its repository; without one, keep the Budo website.
+    # lock). CI can override the default repository for release builds.
     if(BUDO_GITHUB_REPOSITORY_OVERRIDE)
         set(BUDO_DOWNLOAD_GITHUB_REPOSITORY "${BUDO_GITHUB_REPOSITORY_OVERRIDE}")
     else()
         set(BUDO_DOWNLOAD_GITHUB_REPOSITORY "${BUDO_GITHUB_REPOSITORY}")
     endif()
-    if(BUDO_DOWNLOAD_GITHUB_REPOSITORY AND BUDO_ANDROID_SUPPORT_BUNDLE_TAG)
+    if(BUDO_ANDROID_SUPPORT_BUNDLE_TAG)
         set(BUDO_ANDROID_SUPPORT_BASE_URL
             "https://github.com/${BUDO_DOWNLOAD_GITHUB_REPOSITORY}/releases/download/${BUDO_ANDROID_SUPPORT_BUNDLE_TAG}")
     else()
-        set(BUDO_ANDROID_SUPPORT_BASE_URL "https://budo-platform.dev/download")
+        message(FATAL_ERROR
+            "Android support bundle URL requires BUDO_ANDROID_SUPPORT_BUNDLE_TAG")
     endif()
     message(STATUS "Android support bundle base URL: ${BUDO_ANDROID_SUPPORT_BASE_URL}")
     target_compile_definitions(budo_managed_drivers PRIVATE

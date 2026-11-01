@@ -497,6 +497,8 @@ endif
 	@$(MAKE) docs
 	@$(MAKE) playground
 	@echo ""
+	@echo "[6/7] Building Demos apk"
+	@$(MAKE) website-demo-apks
 #	@echo "[6/7] Building platform release bundles for $(DETECTED_OS)..."
 #ifeq ($(strip $(EVERYTHING_PLATFORM_TARGETS)),)
 #	@echo "  (no platform release bundles defined for $(DETECTED_OS))"

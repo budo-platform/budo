@@ -4,10 +4,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # create the support bundle release
+  contents: write # create the release
 
 env:
-  #RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   RELEASE_TAG: demos-artifacts
 
 jobs:
