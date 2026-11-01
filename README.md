@@ -10,7 +10,7 @@ A lightweight runtime combining **Skia** (2D graphics), **SDL2** (windowing/inpu
 - **Full JavaScript runtime** with QuickJS
 - **WebAssembly support** with WAT/WASM files via Wasmtime
 - **Canvas-like API** familiar to web developers
-- **Immediate mode API** customizable and moderne UIs
+- **Immediate mode API** 100% customizable and modern UIs
 - **Mouse, Touch and keyboard input** accessible from both runtimes
 - **Immediate OpenGL ES 3-style rendering** with fullscreen shaders, render targets, meshes, and canvas textures
 

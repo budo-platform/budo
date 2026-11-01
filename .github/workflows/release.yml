@@ -35,7 +35,7 @@ jobs:
             asset: budo-macos-aarch64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@main
 
       # Budo Pro Android packaging, free during the preview (see
       # export-to-public/android-ci-build.md). A set secret makes it required.
