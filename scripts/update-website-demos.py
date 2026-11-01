@@ -435,7 +435,7 @@ def render_demo_page(demo_dir: Path) -> str:
             </section>
             <section class="panel actions">
                 <button id="run-demo" class="btn btn-primary" type="button">RUN</button>
-                <a class="apk-link" href="{html.escape(zip_href, quote=True)}" download>Download demo folder (.zip)</a>
+                <!--<a class="apk-link" href="{html.escape(zip_href, quote=True)}" download>Download demo folder (.zip)</a>-->
                 <a class="apk-link" href="{html.escape(apk_href, quote=True)}" download>Download Android APK</a>
             </section>
         </aside>
