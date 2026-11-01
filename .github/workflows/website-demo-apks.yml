@@ -15,12 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Budo
-        run: |
-          curl -fL -o budo https://github.com/budo-platform/budo/releases/latest/download/budo-linux-x86_64
-          chmod +x budo
-          ./budo version
-
       - name: Install packages
         run: |
           sudo apt-get update
@@ -28,6 +22,12 @@ jobs:
           #sudo apt-get install -y cmake build-essential ninja-build python3 \
           #  libsdl2-dev libfreetype6-dev libfontconfig1-dev libssl-dev zlib1g-dev \
           #  libgl1-mesa-dev
+
+      - name: Download Budo
+        run: |
+          curl -fL -o budo https://github.com/budo-platform/budo/releases/latest/download/budo-linux-x86_64
+          chmod +x budo
+          ./budo version
 
       # Same NDK as the Android app (ndkVersion in its build.gradle), so the
       # prebuilt Skia libraries match the toolchain that links them.
