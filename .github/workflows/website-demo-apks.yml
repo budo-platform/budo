@@ -1,4 +1,4 @@
-name: Demos APK
+name: Demos artifacts
 
 on:
   workflow_dispatch:
@@ -17,15 +17,12 @@ jobs:
     timeout-minutes: 330
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@main
 
       - name: Install packages
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev
-          #sudo apt-get install -y cmake build-essential ninja-build python3 \
-          #  libsdl2-dev libfreetype6-dev libfontconfig1-dev libssl-dev zlib1g-dev \
-          #  libgl1-mesa-dev
 
       - name: Download Budo
         run: |
@@ -39,7 +36,6 @@ jobs:
         id: ndk
         run: |
           version="27.0.12077973"
-          if [ -z "$version" ]; then echo "::error::ndkVersion not found in the Android app"; exit 1; fi
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkmanager" --licenses > /dev/null || true
           "$sdkmanager" --install "ndk;$version" > /dev/null
@@ -49,9 +45,8 @@ jobs:
 
       - name: Build APKs
         run: |
-          ./budo android-apk examples/01_drum_loop_machine -o ./ --release
           mkdir -p dist
-          cp drum-loop-machine-1.0.0-release.apk dist/
+          ./budo android-apk examples/01_drum_loop_machine -o dist --release
 
       - name: Publish
         env:
