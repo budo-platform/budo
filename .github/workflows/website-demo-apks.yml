@@ -45,23 +45,23 @@ jobs:
       - name: Build APKs
         run: |
           mkdir -p dist
-          ./budo android-apk examples/01_drum_loop_machine -o dist --release
+          ./budo android-apk examples/01_drum_loop_machine --output-file dist/01_drum_loop_machine.apk --release
           python3 ./examples/02_desert_racer/download_kenney_car_kit.py --force-download
-          ./budo android-apk examples/02_desert_racer -o dist --release
-          ./budo android-apk examples/03_lua_spaceshooter -o dist --release
-          ./budo android-apk examples/06_tetris -o dist --release
-          ./budo android-apk examples/07_file_explorer -o dist --release
-          ./budo android-apk examples/10_audio_synth -o dist --release
-          ./budo android-apk examples/19_pong -o dist --release
-          ./budo android-apk examples/20_microphone -o dist --release
-          ./budo android-apk examples/amstrad-cpc -o dist --release
-          ./budo android-apk examples/budo-ui -o dist --release
-          ./budo android-apk examples/clock_demo -o dist --release
-          ./budo android-apk examples/layout_demo -o dist --release
-          ./budo android-apk examples/midi_dumper -o dist --release
-          ./budo android-apk examples/network -o dist --release
-          ./budo android-apk examples/persistence -o dist --release
-          ./budo android-apk examples/sound-instrument -o dist --release
+          ./budo android-apk examples/02_desert_racer --output-file dist/02_desert_racer.apk --release
+          ./budo android-apk examples/03_lua_spaceshooter --output-file dist/03_lua_spaceshooter.apk --release
+          ./budo android-apk examples/06_tetris --output-file dist/06_tetris.apk --release
+          ./budo android-apk examples/07_file_explorer --output-file dist/07_file_explorer.apk --release
+          ./budo android-apk examples/10_audio_synth --output-file dist/10_audio_synth.apk --release
+          ./budo android-apk examples/19_pong --output-file dist/19_pong.apk --release
+          ./budo android-apk examples/20_microphone --output-file dist/20_microphone.apk --release
+          ./budo android-apk examples/amstrad-cpc --output-file dist/.apk --release
+          ./budo android-apk examples/budo-ui --output-file dist/.apk --release
+          ./budo android-apk examples/clock_demo --output-file dist/clock_demo.apk --release
+          ./budo android-apk examples/layout_demo --output-file dist/layout_demo.apk --release
+          ./budo android-apk examples/midi_duawmper --output-file dist/midi_duawmper.apk --release
+          ./budo android-apk examples/network --output-file dist/network.apk --release
+          ./budo android-apk examples/persistence --output-file dist/persistence.apk --release
+          ./budo android-apk examples/sound-instrument --output-file dist/.apk --release
 
       - name: Publish
         env:

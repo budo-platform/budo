@@ -5,12 +5,13 @@
 
 typedef struct
 {
-    bool aab;               
-    bool release;           
-    bool no_build;          
-    bool clean;             
-    bool install;           
-    const char *output_dir; 
+    bool aab;                
+    bool release;            
+    bool no_build;           
+    bool clean;              
+    bool install;            
+    const char *output_dir;  
+    const char *output_file; 
 } AndroidPackageOptions;
 
 int android_package(const char *app_dir, const AndroidPackageOptions *opts);

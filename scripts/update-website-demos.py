@@ -342,7 +342,7 @@ def render_demo_page(demo_dir: Path) -> str:
     description = nested_get(metadata, "store_listing.short_description") or metadata.get("description") or ""
     files = list_demo_files(demo_dir)
     first_file = first_viewable_file(files)
-    apk_href = f"../../download/demos/{quote(demo_dir.name)}.apk"
+    apk_href = f"https://github.com/budo-platform/budo/releases/download/demos-artifacts/{quote(demo_dir.name)}.apk"
     zip_href = f"../../download/demos/{quote(demo_dir.name)}.zip"
     escaped_title = html.escape(title)
     escaped_description = html.escape(str(description))

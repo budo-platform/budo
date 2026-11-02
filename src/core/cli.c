@@ -119,6 +119,8 @@ void budo_cli_print_usage(const char *program_name)
             "  --debug          Build a debug artifact (default for android-apk)\n"
             "  -o, --output <DIR>\n"
             "                   Copy the final APK/AAB to <DIR> instead of dist/\n"
+            "  -output-file <FILE>\n"
+            "                   Copy the final APK/AAB to <FILE> file instead of dist/computed-name.apk\n"
             "  --install        Install the produced APK on all adb devices (APK only)\n"
             "  --no-build       Stage the project but skip the gradle build\n"
             "  --clean          Discard this app's previous build (full rebuild)\n"
@@ -389,8 +391,8 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
                 }
                 configuration_seen = true;
                 config->compile.configuration = strcmp(argv[i], "--debug") == 0
-                                                   ? NATIVE_BUILD_DEBUG
-                                                   : NATIVE_BUILD_RELEASE;
+                                                    ? NATIVE_BUILD_DEBUG
+                                                    : NATIVE_BUILD_RELEASE;
             }
             else if (strcmp(argv[i], "--sanitize") == 0)
             {
@@ -408,7 +410,7 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
                 else if (strcmp(value, "address,undefined") == 0 ||
                          strcmp(value, "undefined,address") == 0)
                     config->compile.sanitizers = NATIVE_SANITIZER_ADDRESS |
-                                                NATIVE_SANITIZER_UNDEFINED;
+                                                 NATIVE_SANITIZER_UNDEFINED;
                 else
                 {
                     fprintf(stderr, "Error: unsupported sanitizer '%s'; use address, undefined, or address,undefined.\n", value);
@@ -664,6 +666,8 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
                 config->android.clean = true;
             else if ((strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) && i + 1 < argc)
                 config->android.output_dir = argv[++i];
+            else if ((strcmp(argv[i], "--output-file") == 0) && i + 1 < argc)
+                config->android.output_file = argv[++i];
             else
             {
                 fprintf(stderr, "Error: Unknown option '%s' for %s\n", argv[i], first);
