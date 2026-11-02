@@ -54,14 +54,14 @@ jobs:
           ./budo android-apk examples/10_audio_synth --output-file dist/10_audio_synth.apk --release
           ./budo android-apk examples/19_pong --output-file dist/19_pong.apk --release
           ./budo android-apk examples/20_microphone --output-file dist/20_microphone.apk --release
-          ./budo android-apk examples/amstrad-cpc --output-file dist/.apk --release
-          ./budo android-apk examples/budo-ui --output-file dist/.apk --release
+          ./budo android-apk examples/amstrad-cpc --output-file dist/amstrad-cpc.apk --release
+          ./budo android-apk examples/budo-ui --output-file dist/budo-ui.apk --release
           ./budo android-apk examples/clock_demo --output-file dist/clock_demo.apk --release
           ./budo android-apk examples/layout_demo --output-file dist/layout_demo.apk --release
-          ./budo android-apk examples/midi_duawmper --output-file dist/midi_duawmper.apk --release
+          ./budo android-apk examples/midi_dumper --output-file dist/midi_dumper.apk --release
           ./budo android-apk examples/network --output-file dist/network.apk --release
           ./budo android-apk examples/persistence --output-file dist/persistence.apk --release
-          ./budo android-apk examples/sound-instrument --output-file dist/.apk --release
+          ./budo android-apk examples/sound-instrument --output-file dist/sound-instrument.apk --release
 
       - name: Publish
         env:
