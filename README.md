@@ -119,6 +119,12 @@ make build
 
 ## Running
 
+Use `budo version` (also `--version` or `-v`) to see the build configuration,
+compiler and linker flags, enabled features, and versions or source revisions
+for the runtime engines and other dependencies. These are build-time details,
+not a probe of the installed graphics driver or optional runtimes. The first
+line remains `budo <version>`.
+
 ### Run a demo application
 
 ```bash

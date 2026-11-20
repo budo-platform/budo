@@ -7,6 +7,7 @@
 
 #include "core/version.h"
 #include "build_info.h"
+#include "version_report.h"
 
 #define DEFAULT_WIDTH 800
 #define DEFAULT_HEIGHT 600
@@ -17,10 +18,10 @@ void budo_cli_print_version(void)
     printf("budo " BUDO_VERSION_STRING "\n"
            "commit:     " BUDO_BUILD_COMMIT "\n"
            "platform:   " BUDO_BUILD_TARGET "\n"
-           "javascript: " BUDO_BUILD_QUICKJS "\n"
            "android:    " BUDO_BUILD_ANDROID "\n"
            "native api: %u.%u\n",
            (unsigned)BUDO_NATIVE_API_VERSION_MAJOR, (unsigned)BUDO_NATIVE_API_VERSION_MINOR);
+    fputs((const char *)budo_version_report_data, stdout);
 }
 
 void budo_cli_print_usage(const char *program_name)

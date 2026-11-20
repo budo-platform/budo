@@ -539,9 +539,12 @@ endif()
 
 # Find Wasmtime library (prefer static to avoid dylib/rpath issues on install)
 if(BUDO_WINDOWS_STANDALONE)
-    find_library(WASMTIME_STATIC_LIBRARY NAMES wasmtime
-        PATHS ${WASMTIME_DIR}/lib NO_DEFAULT_PATH REQUIRED)
-    set(WASMTIME_LIBRARY ${WASMTIME_STATIC_LIBRARY} ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
+    # find_library can prefer wasmtime.dll.lib (the import library) on Windows.
+    set(WASMTIME_STATIC_LIBRARY "${WASMTIME_DIR}/lib/wasmtime.lib")
+    if(NOT EXISTS "${WASMTIME_STATIC_LIBRARY}" OR IS_DIRECTORY "${WASMTIME_STATIC_LIBRARY}")
+        message(FATAL_ERROR "Static Wasmtime library not found: ${WASMTIME_STATIC_LIBRARY}")
+    endif()
+    set(WASMTIME_LIBRARY "${WASMTIME_STATIC_LIBRARY}" ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
     add_compile_definitions(LIBWASM_STATIC WASI_API_EXTERN=)
 elseif(WIN32)
     find_library(WASMTIME_LIBRARY NAMES wasmtime.dll.lib wasmtime
@@ -1010,8 +1013,10 @@ add_custom_target(budo_embedded_headers
 set(WEB_RUNTIME_JS "${CMAKE_SOURCE_DIR}/web/runtime/budo.js")
 set(WEB_RUNTIME_WASM "${CMAKE_SOURCE_DIR}/web/runtime/budo.wasm")
 set(WEB_TEMPLATE_HTML "${CMAKE_SOURCE_DIR}/web/template.html")
+set(BUDO_EMBED_WEB_RUNTIME OFF)
 
 if(EXISTS "${WEB_RUNTIME_JS}" AND EXISTS "${WEB_RUNTIME_WASM}")
+    set(BUDO_EMBED_WEB_RUNTIME ON)
     message(STATUS "Web runtime found — --export-web will be available")
 
     add_custom_command(
@@ -1327,12 +1332,6 @@ if(BUDO_ENABLE_ANDROID_PACKAGING)
 else()
     set(BUDO_BUILD_ANDROID "not included")
 endif()
-if(BUDO_QUICKJS_IMPL STREQUAL "ng")
-    string(SUBSTRING "${BUDO_QUICKJS_NG_GIT_TAG}" 0 12 BUDO_QUICKJS_SHORT_REVISION)
-    set(BUDO_BUILD_QUICKJS "QuickJS-NG ${BUDO_QUICKJS_SHORT_REVISION}")
-else()
-    set(BUDO_BUILD_QUICKJS "QuickJS (Bellard)")
-endif()
 configure_file(
     src/core/build_info.h.in
     "${GENERATED_DIR}/build_info.h"
@@ -1589,14 +1588,13 @@ if(BUILD_TESTING)
     if(BUDO_QUICKJS_IMPL STREQUAL "ng")
         set(HEADLESS_RUN_TEST_ARGS "--quickjs-ng")
     endif()
-    # `budo version` / --version / -v: first line is "budo <version>".
-    string(REPLACE "." "\\." BUDO_VERSION_STRING_FOR_TESTS "${BUDO_VERSION_STRING}")
-    foreach(version_flag IN ITEMS version --version -v)
-        add_test(NAME cli_version_${version_flag}
-            COMMAND $<TARGET_FILE:${PROJECT_NAME}> ${version_flag})
-        set_tests_properties(cli_version_${version_flag} PROPERTIES
-            PASS_REGULAR_EXPRESSION "^budo ${BUDO_VERSION_STRING_FOR_TESTS}\ncommit: ")
-    endforeach()
+    add_test(NAME cli_version_report COMMAND ${CMAKE_COMMAND}
+        "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
+        "-DBUDO_VERSION=${BUDO_VERSION_STRING}"
+        "-DBUDO_CONFIG=$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unspecified>"
+        "-DBUDO_NEURAL=$<BOOL:${ENABLE_NEURAL}>"
+        "-DBUDO_LLAMACPP=$<BOOL:${ENABLE_LLAMACPP}>"
+        -P "${CMAKE_SOURCE_DIR}/tests/cli_version_test.cmake")
 
     add_test(NAME headless_run
         COMMAND ${Python3_EXECUTABLE}
@@ -3131,6 +3129,9 @@ else()
         ${Freetype_INCLUDE_DIRS}
     )
 endif()
+
+include(cmake/BudoVersionReport.cmake)
+budo_add_version_report(${PROJECT_NAME})
 
 # Relocatable native SDK package metadata.
 configure_package_config_file(
