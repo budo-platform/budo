@@ -859,7 +859,7 @@ endif()
 # ==================================================
 # ONNX Runtime (optional — controlled by ENABLE_NEURAL)
 # ==================================================
-option(ENABLE_NEURAL "Enable ONNX Runtime neural inference API" OFF)
+option(ENABLE_NEURAL "Enable ONNX Runtime neural inference API" ON)
 
 if(ENABLE_NEURAL)
     set(ORT_VERSION "1.21.0")
