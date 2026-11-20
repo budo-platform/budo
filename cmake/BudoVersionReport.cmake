@@ -179,6 +179,8 @@ function(budo_add_version_report target)
         set(configs "unspecified")
     endif()
     set(version_dir "${GENERATED_DIR}/version")
+    # Give CMake a concrete generated output for each configuration: it may
+    # evaluate target sources without a configuration during generation.
     foreach(config IN LISTS configs)
         string(TOUPPER "${config}" upper)
         set(config_report "${report}")
@@ -193,18 +195,18 @@ function(budo_add_version_report target)
         endforeach()
         string(APPEND config_report
             "  Budo link options: $<JOIN:$<TARGET_GENEX_EVAL:${target},$<TARGET_PROPERTY:${target},LINK_OPTIONS>>, >\n")
-        file(GENERATE OUTPUT "${version_dir}/${config}/version.txt" CONTENT "${config_report}"
-            CONDITION "$<STREQUAL:${config},$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unspecified>>")
+        set(config_dir "${version_dir}/${config}")
+        set(config_selected "$<STREQUAL:${config},$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unspecified>>")
+        file(GENERATE OUTPUT "${config_dir}/version.txt" CONTENT "${config_report}"
+            CONDITION "${config_selected}")
+        add_custom_command(OUTPUT "${config_dir}/version_report.h"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
+                "${config_dir}/version.txt" budo_version_report "${config_dir}/version_report.h"
+            DEPENDS "${config_dir}/version.txt" "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
+            VERBATIM)
+        target_sources(${target} PRIVATE "$<${config_selected}:${config_dir}/version_report.h>")
     endforeach()
 
-    # Embed the final text rather than interpolating compiler flags into C
-    # literals. Each configuration gets its own report on multi-config builds.
     set(report_dir "${version_dir}/$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unspecified>")
-    add_custom_command(OUTPUT "${report_dir}/version_report.h"
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
-            "${report_dir}/version.txt" budo_version_report "${report_dir}/version_report.h"
-        DEPENDS "${report_dir}/version.txt" "${CMAKE_SOURCE_DIR}/cmake/embed_file.py"
-        VERBATIM)
-    target_sources(${target} PRIVATE "${report_dir}/version_report.h")
     target_include_directories(${target} PRIVATE "${report_dir}")
 endfunction()
