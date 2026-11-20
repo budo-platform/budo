@@ -138,8 +138,8 @@ jobs:
             !third_party/skia-android/out/*/obj
           key: ${{ steps.skia-android-key.outputs.key }}
 
-      - name: ONNX Runtime for Android
-        run: ./private/android/scripts/setup-onnx-android.sh
+      #- name: ONNX Runtime for Android
+      #  run: ./private/android/scripts/setup-onnx-android.sh
 
       # Same as `make android-support-release`: builds the bundle and pins its
       # hash and release tag in the (runner's copy of the) lock.
