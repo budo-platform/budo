@@ -1,2 +1,2 @@
-// Former entry point of this library; import './budo-ui.js' in new code.
-export * from './budo-ui.js';
+// Former entry point of this library; import './ui/budo-ui.js' in new code.
+export * from './ui/budo-ui.js';

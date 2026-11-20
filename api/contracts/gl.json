@@ -88,15 +88,15 @@
     },
     "state_ownership": {
         "javascript": "Window owns app-created GL programs, targets, buffers, textures, and vertex layouts and resets them with the app runtime.",
-        "lua": "Lua exposes numeric resource ids only; all calls use the active LuaCanvasContext's borrowed Window, which owns and resets app-created GL resources.",
-        "wasmtime": "Wasmtime exposes numeric resource ids and reads strings/buffers from the guest memory export; the borrowed Window owns the underlying GL resources.",
+        "lua": "LuaCanvasContext owns async requests and registry callback references; the borrowed Window owns completed GL resources and resets them with the runtime.",
+        "wasmtime": "WasmCanvasContext owns bounded async image request records and unclaimed textures; guest buffers are copied or revalidated per call. The borrowed Window owns transferred GL resources.",
         "browser_wasm": "The web bridge copies guest strings and byte/float ranges into Emscripten memory for C wrappers; the WebAppState Window owns the resulting GL resources."
     },
     "platform_differences": {
         "web": {
             "source": "src/web/web_main.c",
             "details": [
-                "Managed JavaScript and Lua expose their complete registered GL tables through the web host.",
+                "Managed JavaScript and Lua expose their registered GL tables through the web host. Async textures use two Blob Workers with an embedded standalone STB WebAssembly decoder, host-authorized chunked VFS reads, and the shared graphics-thread upload scheduler. Worker/WebAssembly/Blob URL capabilities and worker-compatible CSP are required; no main-thread decode fallback or cross-origin isolation is required.",
                 "Browser-native WebAssembly exposes only program creation, fullscreen draw, two scalar uniforms, mat4 arrays, buffer create/upload, vertex-layout create/configuration, and mesh draw.",
                 "Browser-native WebAssembly omits destruction, render targets, textures, cubemaps, most uniforms, buffer sub-data, vertex-layout destruction, and attribute lookup.",
                 "Wasmtime and browser-WASM use the same name for several imports but browser-WASM implements a strict subset and copies guest data through temporary Emscripten allocations."
@@ -532,6 +532,130 @@
                 },
                 "lua": "loadTexture2DFromBuffer",
                 "wasmtime": "gl_load_texture_2d_from_buffer"
+            }
+        },
+        {
+            "name": "load_texture_2d_async",
+            "binding_symbols": {
+                "javascript": "js_gl_load_texture_2d_async",
+                "lua": "l_gl_load_texture_2d_async"
+            },
+            "signature": "(project-relative path, options including optional mount, callbacks) -> request id; worker probe/decode and bounded graphics-thread upload; native worker I/O or chunked browser-host VFS reads",
+            "exports": {
+                "javascript": {
+                    "name": "loadTexture2DAsync",
+                    "namespace": "sys.gl",
+                    "platforms": [
+                        "desktop",
+                        "android",
+                        "web"
+                    ]
+                },
+                "lua": {
+                    "name": "loadTexture2DAsync",
+                    "platforms": [
+                        "desktop",
+                        "android",
+                        "web"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "load_texture_2d_from_buffer_async",
+            "binding_symbols": {
+                "javascript": "js_gl_load_texture_2d_from_buffer_async",
+                "lua": "l_gl_load_texture_2d_from_buffer_async"
+            },
+            "signature": "(encoded bytes, options, callbacks) -> request id; copies bytes before returning; worker decode and bounded upload on native and web JS/Lua",
+            "exports": {
+                "javascript": {
+                    "name": "loadTexture2DFromBufferAsync",
+                    "namespace": "sys.gl",
+                    "platforms": [
+                        "desktop",
+                        "android",
+                        "web"
+                    ]
+                },
+                "lua": {
+                    "name": "loadTexture2DFromBufferAsync",
+                    "platforms": [
+                        "desktop",
+                        "android",
+                        "web"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "cancel_texture_load",
+            "binding_symbols": {
+                "javascript": "js_gl_cancel_texture_load",
+                "lua": "l_gl_cancel_texture_load"
+            },
+            "signature": "(request id) -> bool; suppress callbacks and discard work without waiting",
+            "exports": {
+                "javascript": {
+                    "name": "cancelTextureLoad",
+                    "namespace": "sys.gl"
+                },
+                "lua": "cancelTextureLoad"
+            }
+        },
+        {
+            "name": "async_texture_loading_available",
+            "binding_symbols": {
+                "javascript": "js_gl_is_async_texture_loading_available",
+                "lua": "l_gl_is_async_texture_loading_available"
+            },
+            "signature": "() -> bool; true on native JS/Lua or when browser worker capabilities exist; startup may still fail; Wasmtime uses a separate polling ABI",
+            "exports": {
+                "javascript": {
+                    "name": "isAsyncTextureLoadingAvailable",
+                    "namespace": "sys.gl"
+                },
+                "lua": "isAsyncTextureLoadingAvailable"
+            }
+        },
+        {
+            "name": "wasmtime_image_load_async",
+            "binding_symbols": {
+                "wasmtime": "host_gl_image_load"
+            },
+            "signature": "(source pointer, length, mode, max width, max height, max bytes, max pixels) -> request id or 0; copies buffer input",
+            "exports": {
+                "wasmtime": "gl_image_load_async"
+            }
+        },
+        {
+            "name": "wasmtime_image_status",
+            "binding_symbols": {
+                "wasmtime": "host_gl_image_status"
+            },
+            "signature": "(request id, 312-byte result pointer) -> 0 or -1; nonblocking snapshot",
+            "exports": {
+                "wasmtime": "gl_image_status"
+            }
+        },
+        {
+            "name": "wasmtime_image_take_texture",
+            "binding_symbols": {
+                "wasmtime": "host_gl_image_take"
+            },
+            "signature": "(request id) -> texture id or 0; transfers a completed texture once",
+            "exports": {
+                "wasmtime": "gl_image_take_texture"
+            }
+        },
+        {
+            "name": "wasmtime_image_release",
+            "binding_symbols": {
+                "wasmtime": "host_gl_image_release"
+            },
+            "signature": "(request id) -> bool; cancel pending work or release a result and any unclaimed texture",
+            "exports": {
+                "wasmtime": "gl_image_release"
             }
         },
         {

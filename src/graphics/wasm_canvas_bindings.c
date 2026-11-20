@@ -42,6 +42,7 @@ struct WasmCanvasContext
     WasmMathBindingState *math_binding_state;
     WasmSqliteBindingState *sqlite_binding_state;
     WasmFileBindingState *file_binding_state;
+    WasmImageBindingState *image_binding_state;
     WasmNetworkBindingState *network_binding_state;
     WasmMagnetoBindingState *magneto_binding_state;
 #ifdef BUDO_NEURAL
@@ -1313,18 +1314,12 @@ bool wasm_canvas_read_string(WasmCanvasContext *ctx, int32_t pointer,
     return read_wasm_string(ctx, pointer, length, output, output_size);
 }
 
-const uint8_t *wasm_canvas_read_bytes(WasmCanvasContext *ctx,
-                                      int32_t pointer, int32_t length)
-{
-    return read_wasm_bytes(ctx, pointer, length);
-}
-
 void wasm_canvas_set_error(WasmCanvasContext *ctx, const char *message)
 {
     set_error(ctx, message);
 }
 
-WasmCanvasContext *wasm_canvas_create(const char *project_dir)
+WasmCanvasContext *wasm_canvas_create(const char *project_dir, const char *sqlite_dir)
 {
     WasmCanvasContext *ctx = (WasmCanvasContext *)calloc(1, sizeof(WasmCanvasContext));
     if (!ctx)
@@ -1399,7 +1394,7 @@ WasmCanvasContext *wasm_canvas_create(const char *project_dir)
         return NULL;
     }
 
-    ctx->sqlite_binding_state = wasm_sqlite_binding_state_create(project_dir);
+    ctx->sqlite_binding_state = wasm_sqlite_binding_state_create(sqlite_dir ? sqlite_dir : project_dir);
     if (!ctx->sqlite_binding_state)
     {
         wasm_math_binding_state_destroy(ctx->math_binding_state);
@@ -2009,6 +2004,7 @@ void wasm_canvas_destroy(WasmCanvasContext *ctx)
     if (!ctx)
         return;
 
+    wasm_image_binding_state_destroy(ctx->image_binding_state, ctx->window);
     wasm_network_shutdown(ctx->network_binding_state);
 
     for (int i = 0; i < ctx->path_count; i++)
@@ -2093,6 +2089,11 @@ void wasm_canvas_network_poll(WasmCanvasContext *ctx)
 FileContext *wasm_canvas_file_context(WasmCanvasContext *ctx)
 {
     return ctx ? wasm_file_context(ctx->file_binding_state) : NULL;
+}
+
+WasmImageBindingState **wasm_canvas_image_state_slot(WasmCanvasContext *ctx)
+{
+    return ctx ? &ctx->image_binding_state : NULL;
 }
 
 static bool load_file_contents(const char *filename, wasm_byte_vec_t *out)

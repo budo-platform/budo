@@ -1,8 +1,7 @@
-/// <reference path="../budo.d.ts" />
 /**
  * Budo UI: an immediate-mode UI toolkit for Budo canvas apps, with retained
  * motion. The app describes the UI every frame; the library animates between
- * frames. See README.md for usage and ROADMAP.md for the plan.
+ * frames. See README.md for usage.
  */
 
 export { createUI } from './lib/core.js';

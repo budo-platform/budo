@@ -60,7 +60,35 @@ static void run_javascript(const char *assets_root, const char *files_root)
         "try { sys.files.writeText('assets/forbidden.txt', 'x'); } catch (e) { assetWriteThrew = true; }\n"
         "if (!assetWriteThrew) throw Error('asset write did not throw');\n"
         "if (typeof sys.files.writeText('files/written-js.txt', 'ok') !== 'string') throw Error('write success');\n"
-        "if (sys.files.getError() !== '') throw Error('stale write error');\n";
+        "if (sys.files.getError() !== '') throw Error('stale write error');\n"
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+        "const f = sys.files;\n"
+        "const check = (v, message) => { if (!v) throw Error(message); };\n"
+        "for (const path of ['assets/asset.txt', 'files/../escape.txt']) {\n"
+        "  let denied = false; try { f.openAtomicWrite(path); } catch (e) { denied = true; }\n"
+        "  check(denied, 'atomic writer must enforce mounts');\n"
+        "}\n"
+        "check(f.openAtomicWrite('files/blocked') === null, 'should reject directory');\n"
+        "check(f.openAtomicWrite('files/link') === null, 'should reject symlink');\n"
+        "check(f.openAtomicWrite('files/link-dir/escape.txt') === null, 'should reject symlink parent');\n"
+        "const old = f.openRead('files/written-js.txt');\n"
+        "let writer = f.openAtomicWrite('files/written-js.txt');\n"
+        "check(writer !== null, f.getError());\n"
+        "check(f.writeBlock(writer, new Uint8Array([0, 65, 66, 0]).subarray(1, 3)), f.getError());\n"
+        "check(f.writeBlock(writer, new Uint8Array([67]).buffer), f.getError());\n"
+        "check(f.readText('files/written-js.txt') === 'ok', 'staging is not visible');\n"
+        "check(f.finishAtomicWrite(writer, true), f.getError());\n"
+        "check(f.readText('files/written-js.txt') === 'ABC', 'published exact bytes');\n"
+        "check(new Uint8Array(f.read(old, 2)).join() === '111,107', 'old reader still has original');\n"
+        "f.closeRead(old);\n"
+        "const next = f.openAtomicWrite('files/written-js.txt');\n"
+        "check(next !== null && next !== writer, 'stale handle must not be reused');\n"
+        "check(f.writeBlock(next, new Uint8Array([0])), f.getError());\n"
+        "check(f.finishAtomicWrite(next, false), f.getError());\n"
+        "check(f.readText('files/written-js.txt') === 'ABC', 'cancel preserves target');\n"
+        "check(f.openAtomicWrite('files/unfinished') !== null, 'teardown fixture');\n"
+#endif
+        ;
     JSValue result = JS_Eval(context, script, strlen(script), "file_binding_test.js",
                              JS_EVAL_TYPE_GLOBAL);
     if (JS_IsException(result))
@@ -137,6 +165,10 @@ int main(void)
     char path[FILE_MAX_PATH];
     snprintf(path, sizeof(path), "%s/blocked", files_root);
     assert(mkdir(path, 0700) == 0);
+    snprintf(path, sizeof(path), "%s/link", files_root);
+    assert(symlink("../assets/asset.txt", path) == 0);
+    snprintf(path, sizeof(path), "%s/link-dir", files_root);
+    assert(symlink("../assets", path) == 0);
 
     run_javascript(assets_root, files_root);
     run_lua(assets_root, files_root);
@@ -151,8 +183,12 @@ int main(void)
     unlink(path);
     snprintf(path, sizeof(path), "%s/blocked", files_root);
     rmdir(path);
+    snprintf(path, sizeof(path), "%s/link", files_root);
+    unlink(path);
+    snprintf(path, sizeof(path), "%s/link-dir", files_root);
+    unlink(path);
     rmdir(assets_root);
-    rmdir(files_root);
+    assert(rmdir(files_root) == 0);
     rmdir(base);
     puts("file binding error contract tests passed");
     return 0;

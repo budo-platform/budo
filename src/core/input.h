@@ -57,6 +57,9 @@ extern "C"
         int mouse_dy;      
         int mouse_wheel_x; 
         int mouse_wheel_y; 
+        int pinch_x;
+        int pinch_y;
+        double pinch_scale; 
         bool mouse_buttons[INPUT_MOUSE_MAX];
         bool mouse_buttons_pressed[INPUT_MOUSE_MAX];  
         bool mouse_buttons_released[INPUT_MOUSE_MAX]; 
@@ -117,6 +120,7 @@ extern "C"
     void input_set_mouse_button(InputState *input, InputMouseButton button, bool pressed);
 
     void input_set_mouse_wheel(InputState *input, int x, int y);
+    void input_add_pinch(InputState *input, int x, int y, double scale);
 
     void input_touch_start(InputState *input, int pointer_id, int x, int y);
 

@@ -10,6 +10,7 @@ extern "C"
 #endif
 
     bool fs_make_temp_dir(const char *prefix, char *out, size_t out_size);
+    bool fs_make_temp_dir_at(const char *base, const char *prefix, char *out, size_t out_size);
 
     bool fs_remove_tree(const char *path);
 

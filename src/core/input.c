@@ -1,4 +1,5 @@
 #include "input.h"
+#include <math.h>
 #include <string.h>
 
 static InputTouchPoint *find_touch_point(InputState *input, int pointer_id)
@@ -135,6 +136,7 @@ void input_begin_frame(InputState *input)
     input->mouse_dy = 0;
     input->mouse_wheel_x = 0;
     input->mouse_wheel_y = 0;
+    input->pinch_scale = 0.0;
 }
 
 void input_set_mouse_position(InputState *input, int x, int y)
@@ -178,6 +180,16 @@ void input_set_mouse_wheel(InputState *input, int x, int y)
         return;
     input->mouse_wheel_x += x;
     input->mouse_wheel_y += y;
+}
+
+void input_add_pinch(InputState *input, int x, int y, double scale)
+{
+    if (!input || !isfinite(scale) || scale <= 0.0 || scale == 1.0)
+        return;
+    input->pinch_x = x;
+    input->pinch_y = y;
+    input->pinch_scale = input->pinch_scale == 0.0 ? scale : input->pinch_scale * scale;
+    input->event_count++;
 }
 
 void input_touch_start(InputState *input, int pointer_id, int x, int y)

@@ -150,6 +150,15 @@
       }
     },
     {
+      "name": "pause",
+      "wrapper_symbol": "audio_pause",
+      "signature": "() -> void",
+      "exports": {
+        "javascript": "pause",
+        "lua": "pause"
+      }
+    },
+    {
       "name": "is_playing",
       "wrapper_symbol": "audio_is_playing",
       "signature": "() -> bool",

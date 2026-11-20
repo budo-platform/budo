@@ -361,6 +361,12 @@ static void wasm_canvas_poll_adapter(void *opaque)
 {
     wasm_canvas_midi_poll((WasmCanvasContext *)opaque);
     wasm_canvas_network_poll((WasmCanvasContext *)opaque);
+    wasm_canvas_image_poll((WasmCanvasContext *)opaque);
+}
+
+static bool wasm_canvas_pending_adapter(void *opaque)
+{
+    return wasm_canvas_image_pending((WasmCanvasContext *)opaque);
 }
 
 typedef struct
@@ -373,6 +379,7 @@ typedef struct
 
     Window *window;    
     InputState *input; 
+    bool defer_present;
 
     BudoGraphicsActivateFn activate_graphics;
     void *activate_graphics_opaque;
@@ -388,12 +395,13 @@ static void runtime_instance_init(RuntimeInstance *runtime)
 
 #define RUNTIME_SUBSYSTEM(name_, role_, initialize_, poll_, cleanup_, optional_) \
     {                                                                            \
-        name_, role_, initialize_, {.poll = poll_, .cleanup = cleanup_}, optional_}
+        name_, role_, initialize_, {.poll = poll_, .cleanup = cleanup_, .has_pending_work = wasm_canvas_pending_adapter}, optional_}
 
 static void *runtime_init_wasm_canvas(void *opaque)
 {
     RuntimeInstance *runtime = opaque;
-    runtime->common_contexts.wasm_ctx = wasm_canvas_create(runtime->config->project_dir);
+    runtime->common_contexts.wasm_ctx = wasm_canvas_create(runtime->config->project_dir,
+                                                           runtime->config->options->sqlite_root);
     if (runtime->common_contexts.wasm_ctx)
     {
         runtime->common_contexts.file_ctx = wasm_canvas_file_context(runtime->common_contexts.wasm_ctx);
@@ -429,6 +437,7 @@ static bool runtime_compose_subsystems(RuntimeInstance *runtime)
         const ManagedHostConfig host = {
             .project_dir = config->project_dir,
             .files_root = config->file_root,
+            .sqlite_dir = config->options->sqlite_root,
             .metadata = runtime->metadata,
         };
         composed = managed_subsystems_compose(
@@ -551,8 +560,10 @@ static void runtime_adapter_frame(void *opaque, double timestamp_ms, double delt
     (void)timestamp_ms;
     (void)delta_seconds;
 
-    managed_runtime_frame(runtime->config->runtime_kind, &runtime->subsystems,
-                          &runtime->common_contexts, &frame, app_time_ms());
+    runtime->defer_present = !managed_runtime_frame(runtime->config->runtime_kind,
+                                                    &runtime->subsystems,
+                                                    &runtime->common_contexts,
+                                                    &frame, app_time_ms());
 }
 
 static void runtime_adapter_pause(void *opaque)
@@ -647,7 +658,7 @@ typedef struct ManagedDesktopApplication
     AppMetadata *metadata;
     FileWatcher *watcher;
     InputState *input;
-    Window *window;      
+    Window *window; 
     bool window_failed;
 } ManagedDesktopApplication;
 
@@ -775,10 +786,18 @@ static void managed_desktop_reload_if_changed(ManagedDesktopApplication *applica
 static void managed_desktop_before_frame(void *opaque, Window *window,
                                          InputState *input, double now)
 {
+    ManagedDesktopApplication *application = opaque;
     (void)window;
     (void)input;
     (void)now;
-    managed_desktop_reload_if_changed(opaque);
+    managed_desktop_reload_if_changed(application);
+    application->runtime->defer_present = false;
+}
+
+static bool managed_desktop_should_present(void *opaque)
+{
+    ManagedDesktopApplication *application = opaque;
+    return !application->runtime->defer_present;
 }
 
 static int managed_desktop_loop(ManagedDesktopApplication *application)
@@ -806,6 +825,7 @@ static int managed_desktop_loop(ManagedDesktopApplication *application)
                 .before_frame = managed_desktop_before_frame,
                 .keep_running = managed_desktop_keep_running,
                 .idle_ms = managed_desktop_idle_ms,
+                .should_present = managed_desktop_should_present,
             };
             runtime_attach_window(runtime);
             desktop_host_run(application->window, application->input, &desktop_application);

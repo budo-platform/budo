@@ -34,6 +34,7 @@ struct FileContext
 #else
     int root_fd;
     int write_fd;
+    unsigned int staging_serial;
 #endif
 };
 
@@ -475,7 +476,7 @@ static int open_relative(FileContext *ctx, int root_fd, const char *rel_path,
     if (!validate_relative_path(ctx, rel_path, true))
         return -1;
 
-    int current = dup(root_fd);
+    int current = openat(root_fd, ".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (current < 0)
     {
         snprintf(ctx->error, sizeof(ctx->error), "Cannot access file root: %s", strerror(errno));
@@ -623,6 +624,38 @@ FileContext *file_create(const char *root_dir)
     }
 
     return ctx;
+}
+
+FileContext *file_clone(const FileContext *source)
+{
+    if (!source)
+        return NULL;
+    FileContext *copy = file_create(NULL);
+    if (!copy)
+        return NULL;
+    memcpy(copy->root_dir, source->root_dir, sizeof(copy->root_dir));
+    memcpy(copy->write_dir, source->write_dir, sizeof(copy->write_dir));
+#ifdef _WIN32
+    if (source->root_handle != INVALID_HANDLE_VALUE)
+        copy->root_handle = duplicate_handle(copy, source->root_handle);
+    if (source->write_handle != INVALID_HANDLE_VALUE)
+        copy->write_handle = duplicate_handle(copy, source->write_handle);
+    bool failed = (source->root_handle != INVALID_HANDLE_VALUE && copy->root_handle == INVALID_HANDLE_VALUE) ||
+                  (source->write_handle != INVALID_HANDLE_VALUE && copy->write_handle == INVALID_HANDLE_VALUE);
+#else
+    if (source->root_fd >= 0)
+        copy->root_fd = dup(source->root_fd);
+    if (source->write_fd >= 0)
+        copy->write_fd = dup(source->write_fd);
+    bool failed = (source->root_fd >= 0 && copy->root_fd < 0) ||
+                  (source->write_fd >= 0 && copy->write_fd < 0);
+#endif
+    if (failed)
+    {
+        file_destroy(copy);
+        return NULL;
+    }
+    return copy;
 }
 
 void file_destroy(FileContext *ctx)
@@ -1509,6 +1542,162 @@ bool file_append_binary(FileContext *ctx, const char *rel_path,
     }
     return file_write_bytes(ctx, relative, data, len, true);
 }
+
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+struct FileAtomicWriter
+{
+    FileContext *ctx;
+    int parent;
+    int fd;
+    bool failed;
+    mode_t mode;
+    char name[256];
+    char stage[64];
+};
+
+static bool atomic_target(FileContext *ctx, int directory, const char *name, mode_t *mode)
+{
+    struct stat st;
+    if (fstatat(directory, name, &st, AT_SYMLINK_NOFOLLOW) == 0)
+    {
+        if (S_ISREG(st.st_mode))
+        {
+            *mode = st.st_mode & 0777;
+            return true;
+        }
+        snprintf(ctx->error, sizeof(ctx->error), "Atomic write target is not a regular file");
+        return false;
+    }
+    if (errno == ENOENT)
+    {
+        *mode = 0600;
+        return true;
+    }
+    snprintf(ctx->error, sizeof(ctx->error), "Cannot inspect write target: %s", strerror(errno));
+    return false;
+}
+
+FileAtomicWriter *file_atomic_writer_open(FileContext *ctx, const char *path)
+{
+    clear_error(ctx);
+    if (!file_virtual_path_is_valid(path, false, true))
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Atomic writes require a file under files/");
+        return NULL;
+    }
+    const char *relative = path + 6;
+    const char *slash = strrchr(relative, '/');
+    const char *name = slash ? slash + 1 : relative;
+    char parent_path[FILE_MAX_PATH] = "";
+    size_t parent_len = slash ? (size_t)(slash - relative) : 0;
+    if (parent_len >= sizeof(parent_path) || !*name || strcmp(name, ".") == 0)
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Invalid atomic write path");
+        return NULL;
+    }
+    memcpy(parent_path, relative, parent_len);
+    while (parent_len && parent_path[parent_len - 1] == '/')
+        parent_path[--parent_len] = '\0';
+    const char *parent_rel = parent_path;
+    while (*parent_rel == '/')
+        parent_rel++;
+    int parent = open_relative(ctx, ctx->write_fd, parent_rel, O_RDONLY | O_DIRECTORY);
+    if (parent < 0)
+        return NULL;
+    mode_t mode;
+    if (!atomic_target(ctx, parent, name, &mode))
+    {
+        close(parent);
+        return NULL;
+    }
+
+    FileAtomicWriter *writer = calloc(1, sizeof(*writer));
+    if (!writer)
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Out of memory");
+        close(parent);
+        return NULL;
+    }
+    writer->ctx = ctx;
+    writer->parent = parent;
+    writer->mode = mode;
+    strcpy(writer->name, name);
+    for (int attempt = 0; attempt < 64; attempt++)
+    {
+        snprintf(writer->stage, sizeof(writer->stage), ".budo-write-%ld-%u",
+                 (long)getpid(), ++ctx->staging_serial);
+        if (strcmp(writer->stage, name) == 0)
+            continue;
+        writer->fd = openat(parent, writer->stage,
+                            O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (writer->fd >= 0)
+            return writer;
+        if (errno != EEXIST)
+            break;
+    }
+    snprintf(ctx->error, sizeof(ctx->error), "Cannot stage atomic write: %s", strerror(errno));
+    close(parent);
+    free(writer);
+    return NULL;
+}
+
+bool file_atomic_writer_write(FileAtomicWriter *writer, const uint8_t *data, size_t len)
+{
+    if (writer->failed)
+        return false;
+    while (len)
+    {
+        ssize_t count = write(writer->fd, data, len);
+        if (count < 0 && errno == EINTR)
+            continue;
+        if (count <= 0)
+        {
+            snprintf(writer->ctx->error, sizeof(writer->ctx->error),
+                     "Failed to write staged file: %s", count < 0 ? strerror(errno) : "short write");
+            writer->failed = true;
+            return false;
+        }
+        data += count;
+        len -= (size_t)count;
+    }
+    clear_error(writer->ctx);
+    return true;
+}
+
+bool file_atomic_writer_finish(FileAtomicWriter *writer, bool commit)
+{
+    FileContext *ctx = writer->ctx;
+    bool ok = !commit || !writer->failed;
+    if (commit && ok && (fchmod(writer->fd, writer->mode) != 0 || fsync(writer->fd) != 0))
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Cannot sync staged file: %s", strerror(errno));
+        ok = false;
+    }
+    if (close(writer->fd) != 0 && commit && ok)
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Cannot close staged file: %s", strerror(errno));
+        ok = false;
+    }
+    mode_t ignored;
+    if (commit && ok)
+        ok = atomic_target(ctx, writer->parent, writer->name, &ignored);
+    if (commit && ok && renameat(writer->parent, writer->stage, writer->parent, writer->name) != 0)
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Cannot publish staged file: %s", strerror(errno));
+        ok = false;
+    }
+    if (!(commit && ok) && unlinkat(writer->parent, writer->stage, 0) != 0 && !commit)
+    {
+        snprintf(ctx->error, sizeof(ctx->error), "Cannot remove staged file: %s", strerror(errno));
+        ok = false;
+    }
+    close(writer->parent);
+    free(writer);
+    if (ok)
+        clear_error(ctx);
+    return ok;
+}
+#endif
 
 const char *file_get_last_write_path(FileContext *ctx)
 {

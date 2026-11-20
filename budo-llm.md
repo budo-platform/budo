@@ -71,7 +71,7 @@ Canvas GUI invariants:
 - Use `app.json` for network, filesystem, neural, orientation, and packaging metadata.
 - Gate optional `neural|midi|udp|http|sensors` via `sys.capabilities.*.available`; for older web wiring use e.g. `sys.capabilities?.udp?.available === true`.
 - Author app GLSL as GLSL ES 300: `#version 300 es`. Desktop translates to GLSL 150.
-- Examples show architecture; `budo.d.ts` is the JS/TS signature authority. `examples/budo-ui` is the UI toolkit: immediate-mode widgets with motion, keyboard focus, accessibility, authoritative edits, IME/candidate placement, and the Android keyboard lifecycle.
+- Examples show architecture; `budo.d.ts` is the JS/TS signature authority. `examples/budo-ui/ui` is the distributable UI toolkit; copy it unchanged and load `budo.d.ts` through project configuration. It provides immediate-mode widgets with motion, keyboard focus, accessibility, authoritative edits, IME/candidate placement, and the Android keyboard lifecycle.
 
 ## Project, CLI, metadata
 
@@ -201,6 +201,7 @@ Width/height, pointer, canvas, and `u_resolution` are matching physical pixels; 
   pointer:{id,x,y,dx,dy,down,pressed,type:'mouse'|'touch'},
   pointers:[...],
   mouse:{x,y,dx,dy,wheelX,wheelY,left,middle,right,leftPressed,rightPressed},
+  pinch:null|{x,y,scale}, // macOS trackpad; physical pixels and per-frame factor (>1 spreads, <1 pinches)
   keyboard:{shift,ctrl,alt,meta},
   text:'layout-aware text committed since the previous frame',
   textEdit:null|{text,selectionStart,selectionEnd},
@@ -297,6 +298,37 @@ SVG `load*` returns id >= 0 or `-1`. `CanvasTexture` is Skia canvas plus GL text
 
 ### GL and shaders
 
+JS/TS and Lua async counterparts (sync loaders remain unchanged):
+`sys.gl.isAsyncTextureLoadingAvailable()` (browser capabilities checked on web),
+`sys.gl.loadTexture2DAsync(path, options, callbacks) -> requestId`,
+`sys.gl.loadTexture2DFromBufferAsync(bytes, options, callbacks) -> requestId`,
+`sys.gl.cancelTextureLoad(requestId) -> boolean`. Supply both objects; `{}` uses
+defaults. `options`: `mount:'assets'|'files'` (file sources only; default assets,
+project-relative like the sync loader, path omits mount prefix), `maxWidth`,
+`maxHeight` (aspect-fit, no enlargement; each output bound <=16384), `maxBytes` (default/max 64 MiB),
+`maxPixels` (default/max 256 million; each source axis <=32768). Callbacks:
+optional `onMetadata(info)`, required `onComplete(textureId,info)` and
+`onError({code,message})`; info `{width,height,sourceWidth,sourceHeight}`.
+Callbacks are deferred to owning-runtime polling; metadata precedes completion
+but is not proof of successful decode. Completed textures use existing GL calls
+and `destroyTexture`; request IDs are different from texture IDs. Cancellation
+suppresses later callbacks without waiting; native teardown joins workers and web
+teardown terminates Workers. Buffer inputs are copied at submission; native file
+I/O and all probe/decode/resize operations run on workers. Web hosts read authorized
+VFS files in 64 KiB chunks and transfer bytes to embedded STB WebAssembly Blob Workers.
+No cross-origin isolation is required; CSP must permit Blob workers and WebAssembly.
+Two workers,
+eight active requests, bounded memory, <=4 MiB upload rows/poll on graphics thread.
+Pending images cap native input-wait polling at 16 ms; callbacks can request a
+redraw. Lua uses tables and binary strings for encoded bytes. Browser transfer copies
+count against memory budgets: encoded reservations are twice source size (32 MiB
+effective per-source maximum); pixel reservations include source plus output.
+Worker startup failures throw before acceptance; later worker failures use onError.
+Web context loss terminates the managed app; reload is required. Desktop Wasmtime
+uses the polling ABI below; browser-native WASM and the public native SDK expose no
+async counterpart yet. No EXIF/ICC; full source decode
+still precedes worker resizing. See `documentation/pages/async-images.md`.
+
 Budo writes built-ins immediately before each draw: `uniform sampler2D u_canvas`=unit 0, `uniform vec2 u_resolution`=active viewport/target physical size, `uniform float u_time`=frame seconds; region draws add `uniform vec2 u_offset`. Do not call app setters for these names—the draw overwrites them; use distinct custom uniforms. App samplers use units 1..7. Fullscreen attributes: `in vec2 a_position`, `in vec2 a_texCoord`.
 
 Canvas/pointer pixels are top-left, and so is fullscreen/region `a_texCoord`/`v_uv` ((0,0) = top-left): sample `texture(u_canvas, v_uv)` directly (upright; canvas textures and render targets drawn by these passes too), and compare with input via `vec2 fragPx = v_uv * u_resolution`. Only `gl_FragCoord` is bottom-left: `vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y)` converts it. Convert one side once, never mix origins. `u_canvas` is premultiplied RGBA: over opaque `bg`, output `vec4(ui.rgb+bg*(1.0-ui.a),1.0)`, not `mix(bg,ui.rgb,ui.a)` (which applies alpha twice).
@@ -387,14 +419,14 @@ quatFromAxisAngle(out,axis3,angleRad); quatMultiply(out,a,b); quatSlerp(out,a,b,
 
 ```js
 sys.audio.SINE=0; SQUARE=1; SAWTOOTH=2; TRIANGLE=3; NOISE=4;
-sys.audio.start(); sys.audio.stop(); sys.audio.isPlaying(); sys.audio.setMasterGain(0..1); sys.audio.getMasterGain();
+sys.audio.start(); sys.audio.stop(); sys.audio.pause(); sys.audio.isPlaying(); sys.audio.setMasterGain(0..1); sys.audio.getMasterGain();
 const osc = sys.audio.createOscillator(); sys.audio.destroyOscillator(osc);
 sys.audio.setOscillatorType(osc, number|'sine'|'square'|'sawtooth'|'triangle'|'noise');
 sys.audio.setOscillatorFrequency(osc,hz); sys.audio.setOscillatorGain(osc,0..1); sys.audio.setOscillatorDetune(osc,cents);
 sys.audio.startOscillator(osc); sys.audio.stopOscillator(osc);
 sys.audio.setOscillatorEnvelope(osc, attackSec, decaySec, sustain0to1, releaseSec); sys.audio.noteOn(osc); sys.audio.noteOff(osc);
 const b = sys.audio.createBuffer(sampleRate, channels1or2, numSamples);
-const b2 = sys.audio.loadBuffer('hit.ogg'); const b3 = sys.audio.loadBufferFromBuffer(arrayBuffer); // WAV/MP3/Ogg/FLAC
+const b2 = sys.audio.loadBuffer('hit.ogg'); const b3 = sys.audio.loadBufferFromBuffer(arrayBuffer); // WAV/MP3/Ogg/Opus/FLAC
 sys.audio.setBufferData(b, samplesMinus1To1, offset=0); sys.audio.destroyBuffer(b);
 const play = sys.audio.playBuffer(b, loop=false, gain=1); sys.audio.stopBuffer(play);
 sys.audio.midiToFreq(note); sys.audio.getError();
@@ -403,7 +435,7 @@ sys.audio.midiToFreq(note); sys.audio.getError();
 const out = sys.audio.openOutput({channels:2}, (buffer, info) => { /* fill buffer */ }); sys.audio.closeOutput(out); // -1 on failure; latencyMs:N fixes the queue, omitted = adaptive
 const mic = sys.audio.openInput({channels:1}, (samples, info) => { /* copy what you keep */ }); sys.audio.closeInput(mic);
 sys.audio.getSampleRate(); // the device rate streams run at
-// Decoders: WAV/MP3/Ogg/FLAC to float frames a block at a time (any size); path (assets/|files/, seekable) or bytes; push mode for byte sources.
+// Decoders: WAV/MP3/Ogg/Opus/FLAC to float frames a block at a time (any size); path (assets/|files/, seekable) or bytes; push mode for byte sources.
 const dec = sys.audio.openDecoder('assets/song.mp3', {sampleRate: sys.audio.getSampleRate(), channels:2}); // -1 on failure
 sys.audio.decode(dec, float32Out); // frames decoded: 0 at the end (push: or bytes needed), -1 error
 sys.audio.getDecoderInfo(dec); // {sampleRate, channels, sourceSampleRate, sourceChannels, duration (-1 unknown), position, ready, ended, needsData, seekable}
@@ -462,6 +494,8 @@ sys.assets.list(); sys.assets.readText('config.json'); sys.assets.readBinary('im
 sys.assets.exists('config.json'); sys.assets.isDirectory('images'); sys.assets.size('image.png'); sys.assets.getError();
 sys.files.list('files'); sys.files.readText('files/settings.json');
 sys.files.writeText('files/settings.json', text); sys.files.writeBinary('files/data.bin', arrayBufferOrView); // web also downloads
+const w = sys.files.openAtomicWrite?.('files/data.bin'); // macOS/Linux JS only, existing parent, null on I/O failure
+if (w != null) { const ok = sys.files.writeBlock(w, bytes); sys.files.finishAtomicWrite(w, ok); } // check both results; ≤16 MiB/block, commit or abort
 sys.files.exists(mountedPath); sys.files.isDirectory(mountedPath); sys.files.size(mountedPath); sys.files.getError();
 sys.files.pickText((file,error) => { if (file) console.log(file.name, file.text); }, '.json'); // JS only, optional enforced extension, max 8 MiB
 sys.files.saveText('backup.json', text, error => { if (error) console.log(error); }); // JS only, user-visible Save As
@@ -487,6 +521,8 @@ SQLite returns row objects. `sys.files` root contains read-only bundle `assets/`
 Physical project paths remain part of the asset-relative name: a project-root `notes.json` is `sys.assets.readText('notes.json')`; `assets/notes.json` is `sys.assets.readText('assets/notes.json')`. For seeded persistent data, load writable `files/` first and fall back to bundled assets only when no saved state exists—asset-first loading discards visible persistence on every restart. `"filesystem":true` is not needed for ordinary `assets/`/sandboxed `files/`; it requests Android broad external storage.
 
 `writeText`/`writeBinary` return the saved path (or throw on JS wrapper failure); update the in-memory model only after save success, or restore it on failure. Treat imported JSON as untrusted: enforce total item count, per-field lengths/types, unique/stable IDs, and valid dates before replacing state, then persist transactionally. `pickText` already caps bytes, but parsed object counts/strings still require app bounds. Picker/save callbacks return on the owning frame thread; keep pending flags to prevent overlapping dialogs. Canvas form controls still require text sessions and capture/release semantics—file callbacks do not relax GUI invariants.
+
+On macOS/Linux, `openAtomicWrite` provides one staged writer per JS runtime. Write ArrayBuffer or typed-array blocks (max 16 MiB) with `writeBlock`; it returns false on I/O failure. `finishAtomicWrite(handle, true)` replaces the destination only after a successful sync and rename; `false` discards it. Both calls consume the writer, including on failure. Normal runtime teardown discards unfinished writes. Feature-detect on other targets; use `getError()` to report failures. Writes, including final sync, are synchronous; split long copies across frames.
 
 Fetch requires `app.json` policy and rejects disabled/denied/DNS/connect/TLS/invalid-URL cases; desktop socket read/write timeout is 30 s. UDP is polled once/frame. JS `pickText(callback,extension?)` explicitly accesses outside mounts via desktop dialog/browser picker/Android SAF (Downloads/cloud/SD, no broad permission): the optional extension filters pickers and is enforced on the returned name; result is `{name,text}` or error, one picker may be active, and the cap is 8 MiB. `saveText(name,text,callback)` opens Save As; Android uses `ACTION_CREATE_DOCUMENT`, not app-scoped `Android/data`.
 
@@ -575,6 +611,8 @@ sys.animation.requestFrame(frame);
 ```
 
 - Rectangles are physical pixels; `ui.dp(n)` converts dp, `ui.sp(n)` follows the text scale. `rows`/`columns(rect, sizes, gap)` take numbers, `{weight:n}`, or `{content:n}`; also `inset`, `split`, `scroll(id, rect, contentHeight, draw)`, `panel(rect, draw)`, `scope(id, draw)`.
+- Drag the default `scroll` thumb with a mouse or finger. Use `{accelerate:true}` for speed-based wheel/touch gain (up to 6x), or `{scrubber:trackRect, scrubberLabel?, scrubberColor?}` for an absolute-position track with keyboard/screen-reader control. A custom track replaces the default scrollbar without reserving its gutter; keep content hit areas clear of it.
+- `horizontalScrollbar(id, gutter, offset, viewportWidth, contentWidth)` draws a matching draggable thumb in a reserved gutter (typically 12 dp high) and returns the new horizontal pixel offset. Apply the offset when drawing your content.
 - Widgets: `button` (`primary`, `ghost`, `danger`, `icon: 'plus'`), `iconButton(id, icon, rect, {label})`, `menu`, `contextMenu`, `toggle`, `checkbox`, `radio`, `segmented`, `tabs`, `select`, `slider`, `field`, `inlineEdit`, `textArea(id, rect, {value}, {placeholder,label,maxLength,readOnly})` (multiline: wrap, scroll, selection, word moves, undo), `label`, `paragraph`, `richText`, `progress`, `spinner`, `skeleton`, `tooltip`, `toast`, `list` (returns `{selectedId, move, swipedId}`), `table(id, rect, {columns:[{key,label,width?,align?,sortable?}], rowCount, row:i=>obj, rowId:i=>id, selectedId, sort})` (virtualized; returns `{selectedId, activatedId, sort}`, app re-sorts), `tree(id, rect, [{id,label,children?,icon?,expanded?}], {selectedId})` (returns `{selectedId, activatedId, toggledId}`), `dialog`/`sheet` (return true when dismissed), `navigator(id, rect, stack, drawPage)` (returns true on back) with `shared(tag, rect, draw)`, `glass`, `layer`, `overlay`.
 - Icons: `ui.icon(nameOrPathData, rect, {color})`; built in: check close plus minus chevronLeft/Right/Up/Down arrowLeft/Right menu more search trash edit copy star heart home user info alert refresh sun moon folder file; `ui.registerIcon(name, d)` adds 24-unit SVG path data. Theme tokens `elevation` (3 shadow levels, `ui.shadow(rect, level)`) and `accentGradient` ([top, bottom] colors for accent fills).
 - Motion: `ui.spring(key, target)`, `ui.color(key, color)`, `ui.rect(key, rect)`, `ui.presence(key, visible, t => ...)`. Never hand-roll easing for widget states.
@@ -662,6 +700,8 @@ Transform/path: transform_save/restore/translate/rotate/rotate_around/scale, can
 SVG/window/input/log/math: svg_load/destroy/draw/get_width/get_height; window_get_width/height/display_density; input_get_mouse_x/y, input_get_mouse_button(0 left,1 middle,2 right), input_get_key_down(scancode), input_get_delta_time, input_get_total_time; log_int, log_float; sin, cos, sqrt, atan2(y,x).
 GL shaders: gl_create_program(vPtr,vLen,fPtr,fLen)->id, gl_destroy_program, gl_draw_fullscreen, gl_set_uniform_1i/1f/2f/3f/4f, gl_set_uniform_matrix3fv/4fv, gl_set_uniform_1iv/1fv/2fv/3fv/4fv.
 GL targets/3D: gl_create_render_target(w,h,depth)->id, gl_destroy_render_target, gl_resize_render_target, gl_draw_region(program,x,y,w,h,target), gl_bind_texture(program,namePtr,nameLen,rt,unit), gl_create_buffer, gl_buffer_data, gl_buffer_sub_data, gl_destroy_buffer, gl_create_texture_2d, gl_load_texture_2d, gl_update_texture_2d, gl_destroy_texture, gl_load_texture_cube, gl_create_vertex_layout, gl_destroy_vertex_layout, gl_set_attribute, gl_set_index_buffer, gl_bind_texture_2d, gl_bind_texture_cube, gl_draw_mesh, gl_get_attrib_location.
+
+Desktop Wasmtime asynchronous images: `gl_image_load_async(ptr,len,mode,maxWidth,maxHeight,maxBytes,maxPixels)->request` (mode 0 project assets, 1 files mount, 2 copied encoded bytes; zero options use defaults). `gl_image_status(request,resultPtr)->0|-1` writes 312 bytes: six little-endian i32 values (status 0 pending/1 complete/2 error, metadata available, width, height, source width, source height), then a 32-byte error code and 256-byte error message, both NUL-terminated. `gl_image_take_texture(request)->texture|0` transfers a successful texture once. `gl_image_release(request)->1|0` cancels or releases the record and destroys an unclaimed texture; release even after taking a texture. Eight records maximum. Poll status from guest frame logic; the host advances background work and uploads. Not available in browser-native WebAssembly.
 Audio: audio_start/stop/set_master_gain, audio_create_oscillator/destroy_oscillator, audio_oscillator_set_type/frequency/gain/detune/start/stop/set_envelope/note_on/note_off, audio_midi_to_freq. No audio buffer API in WASM.
 MIDI/RTP: midi_get_input_count/output_count, midi_open_output/close_output, midi_send_message, midi_send_raw, midi_note_on/off/control_change/program_change/pitch_bend. No MIDI input callbacks/device names/getType/getChannel/refresh. RTP: rtpmidi_create_session, rtpmidi_connect, rtpmidi_destroy_session, rtpmidi_send_message, rtpmidi_get_session_count; no receive callbacks.
 DB/files/UDP/network: db_open/close/execute/run/run_int/run_str/query_json/last_insert_id; files_list_json/read_text/read_binary/exists/is_directory/size (paths use `assets/` or `files/`); udp_bind/get_port/send/recv/close; network_fetch, network_fetch_status/status_code, response_body_len/response_body, response_headers_len/response_headers, response_url_len/response_url, error_len/error, network_fetch_release.

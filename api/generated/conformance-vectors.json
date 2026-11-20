@@ -47,6 +47,25 @@
     {
       "exports": {
         "javascript": [
+          "pause"
+        ],
+        "lua": [
+          "pause"
+        ]
+      },
+      "operation": "pause",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "() -> void",
+      "subsystem": "audio",
+      "test": "magneto_audio_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
           "isPlaying"
         ],
         "lua": [
@@ -2736,6 +2755,54 @@
     {
       "exports": {
         "javascript": [
+          "openAtomicWrite"
+        ]
+      },
+      "operation": "open_atomic_write",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(path: files/ virtual path in existing parent) -> writer|null",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "writeBlock"
+        ]
+      },
+      "operation": "write_block",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(writer, data: bytes) -> bool",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
+          "finishAtomicWrite"
+        ]
+      },
+      "operation": "finish_atomic_write",
+      "runtimes": [
+        "javascript",
+        "lua",
+        "wasmtime"
+      ],
+      "signature": "(writer, commit: bool) -> bool; consumes writer",
+      "subsystem": "file",
+      "test": "sqlite_file_runtime_conformance"
+    },
+    {
+      "exports": {
+        "javascript": [
           "pickText"
         ]
       },
@@ -2881,7 +2948,7 @@
         "lua",
         "wasmtime"
       ],
-      "signature": "() -> per-frame input snapshot containing mouse, pointer(s), modifiers, text/edit/composition, timing, frame count, and focus",
+      "signature": "() -> per-frame input snapshot containing mouse, pointer(s), pinch, modifiers, text/edit/composition, timing, frame count, and focus",
       "subsystem": "input_window",
       "test": "canvas_host_runtime_conformance"
     },

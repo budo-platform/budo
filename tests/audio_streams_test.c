@@ -200,10 +200,13 @@ static uint8_t *make_wav(int rate, int channels, int frames, size_t *size)
 static int64_t read_all(AudioStreamDecoder *decoder, int channels)
 {
     float block[2 * 1000];
+    char error[256] = "";
     int64_t total = 0;
     for (;;)
     {
-        int got = audio_stream_decoder_read(decoder, block, 1000, NULL, 0);
+        int got = audio_stream_decoder_read(decoder, block, 1000, error, sizeof(error));
+        if (got < 0)
+            fprintf(stderr, "Audio stream read failed: %s\n", error);
         assert(got >= 0);
         if (got == 0)
             break;
@@ -247,6 +250,70 @@ static void test_decoder_memory_resamples_and_seeks(void)
     assert(!audio_stream_decoder_open_memory((const uint8_t *)"hello", 5, 0, 2, error, sizeof(error)));
     assert(error[0]);
     free(wav);
+}
+
+static void test_decoder_opus(void)
+{
+    FILE *file = fopen(BUDO_OPUS_TEST_FILE, "rb");
+    assert(file);
+    assert(fseek(file, 0, SEEK_END) == 0);
+    long length = ftell(file);
+    assert(length > 0 && fseek(file, 0, SEEK_SET) == 0);
+    uint8_t *encoded = (uint8_t *)malloc((size_t)length);
+    assert(encoded && fread(encoded, 1, (size_t)length, file) == (size_t)length);
+    fclose(file);
+
+    char error[256] = "";
+    AudioDecodedData decoded = {0};
+    assert(audio_decode_memory(encoded, (size_t)length, &decoded, error, sizeof(error)));
+    assert(decoded.sample_rate == 48000 && decoded.channels == 2 && decoded.frame_count > 0);
+    audio_decoded_data_free(&decoded);
+
+    assert(audio_decode_file(BUDO_OPUS_TEST_FILE, &decoded, error, sizeof(error)));
+    assert(decoded.sample_rate == 48000 && decoded.channels == 2 && decoded.frame_count > 0);
+    audio_decoded_data_free(&decoded);
+
+    AudioStreamDecoder *decoder =
+        audio_stream_decoder_open_memory(encoded, (size_t)length, 0, 2, error, sizeof(error));
+    assert(decoder);
+    AudioStreamDecoderInfo info;
+    audio_stream_decoder_info(decoder, &info);
+    assert(info.ready && info.seekable && info.sample_rate == 48000 && info.channels == 2);
+    assert(read_all(decoder, 2) > 0);
+    audio_stream_decoder_close(decoder);
+
+    char dir[] = "/tmp/budo_opus_stream_XXXXXX";
+    assert(mkdtemp(dir));
+    char path[512];
+    snprintf(path, sizeof(path), "%s/tone.opus", dir);
+    file = fopen(path, "wb");
+    assert(file && fwrite(encoded, 1, (size_t)length, file) == (size_t)length);
+    fclose(file);
+    FileContext *files = file_create(dir);
+    assert(files);
+    FileNativeReference ref;
+    assert(file_native_open(files, "assets/tone.opus", &ref));
+    decoder = audio_stream_decoder_open_file(&ref, 0, 2, error, sizeof(error));
+    if (!decoder)
+        fprintf(stderr, "OPUS file stream decoder failed: %s\n", error);
+    assert(decoder);
+    float block[2 * 1000];
+    int got = audio_stream_decoder_read(decoder, block, 1000, error, sizeof(error));
+    if (got < 0)
+        fprintf(stderr, "OPUS file stream read failed: %s\n", error);
+    assert(got >= 0);
+    assert(read_all(decoder, 2) > 0);
+    audio_stream_decoder_close(decoder);
+    file_destroy(files);
+    unlink(path);
+    rmdir(dir);
+
+    decoder = audio_stream_decoder_create_push(0, 2);
+    assert(decoder);
+    assert(audio_stream_decoder_feed(decoder, encoded, (size_t)length, true, error, sizeof(error)));
+    assert(read_all(decoder, 2) > 0);
+    audio_stream_decoder_close(decoder);
+    free(encoded);
 }
 
 static void test_decoder_push_waits_for_bytes(void)
@@ -325,6 +392,7 @@ int main(void)
     test_adaptive_output();
     test_input_capture();
     test_decoder_memory_resamples_and_seeks();
+    test_decoder_opus();
     test_decoder_push_waits_for_bytes();
     test_decoder_file_reads_in_blocks();
     puts("audio_streams_test: ok");

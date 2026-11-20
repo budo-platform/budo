@@ -2,6 +2,8 @@
 
 #include "graphics/lua_canvas_bindings.h"
 #include "core/window.h"
+#include "graphics/image_scheduler.h"
+#include "file/file_wrapper.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -11,7 +13,241 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef BUDO_WEB
+#include "web/web_image.h"
+#endif
+
 #define lua_canvas_get_context(L) lua_canvas_graphics_context(L)
+
+typedef struct LuaImageRequest
+{
+    uint32_t id;
+    int callbacks;
+} LuaImageRequest;
+
+struct LuaImageBindings
+{
+    ImageScheduler *scheduler;
+    LuaImageRequest requests[8];
+};
+
+static LuaImageRequest *lua_image_find(struct LuaImageBindings *images, uint32_t id)
+{
+    for (int index = 0; index < 8; index++)
+        if (images->requests[index].id == id)
+            return &images->requests[index];
+    return NULL;
+}
+
+static size_t lua_image_option(lua_State *L, const char *name, lua_Integer limit)
+{
+    lua_getfield(L, 2, name);
+    size_t result = 0;
+    if (!lua_isnil(L, -1))
+    {
+        int valid = 0;
+        lua_Integer value = lua_tointegerx(L, -1, &valid);
+        if (lua_type(L, -1) != LUA_TNUMBER || !valid || value < 1 || value > limit)
+            luaL_error(L, "%s must be a positive integer no greater than %d", name, (int)limit);
+        result = (size_t)value;
+    }
+    lua_pop(L, 1);
+    return result;
+}
+
+static int lua_image_load(lua_State *L, bool from_buffer)
+{
+    LuaCanvasContext *ctx = lua_canvas_get_context(L);
+    if (!ctx)
+        return luaL_error(L, "Graphics context unavailable");
+    luaL_checktype(L, 1, LUA_TSTRING);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checktype(L, 3, LUA_TTABLE);
+    const char *names[] = {"onComplete", "onError", "onMetadata"};
+    for (int index = 0; index < 3; index++)
+    {
+        lua_getfield(L, 3, names[index]);
+        if (!lua_isfunction(L, -1) && !(index == 2 && lua_isnil(L, -1)))
+            return luaL_error(L, "%s must be a function", names[index]);
+        lua_pop(L, 1);
+    }
+    ImageAsyncOptions options = {0};
+    options.max_width = (int)lua_image_option(L, "maxWidth", 16384);
+    options.max_height = (int)lua_image_option(L, "maxHeight", 16384);
+    options.max_bytes = lua_image_option(L, "maxBytes", 64u * 1024u * 1024u);
+    options.max_pixels = lua_image_option(L, "maxPixels", IMAGE_MAX_PIXELS);
+    size_t length = 0;
+    const char *source = lua_tolstring(L, 1, &length);
+    char mounted_path[FILE_MAX_PATH];
+    if (!from_buffer)
+    {
+        if (length != strlen(source) || length > FILE_MAX_PATH - 8 || !file_path_is_valid(source, false))
+            return luaL_error(L, "Image path must be relative and cannot escape its mount");
+        lua_getfield(L, 2, "mount");
+        size_t mount_length = 0;
+        const char *mount = lua_isnil(L, -1) ? "assets" : lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &mount_length)
+                                                                                         : NULL;
+        if (!mount || (!lua_isnil(L, -1) && mount_length != strlen(mount)) ||
+            (strcmp(mount, "assets") != 0 && strcmp(mount, "files") != 0))
+            return luaL_error(L, "mount must be assets or files");
+        snprintf(mounted_path, sizeof(mounted_path), "%s/%s", mount, source);
+        lua_pop(L, 1);
+    }
+    if (!ctx->images)
+    {
+        struct LuaImageBindings *images = calloc(1, sizeof(*images));
+        if (!images)
+            return luaL_error(L, "Cannot allocate image requests");
+        images->scheduler = image_scheduler_create(ctx->image_files ? *ctx->image_files : NULL);
+        if (!images->scheduler)
+        {
+            free(images);
+            return luaL_error(L, "Cannot start image workers");
+        }
+        ctx->images = images;
+    }
+    struct LuaImageBindings *images = ctx->images;
+    LuaImageRequest *slot = lua_image_find(images, 0);
+    if (!slot)
+        return luaL_error(L, "Maximum of 8 active texture loads exceeded");
+    lua_pushvalue(L, 3);
+    int callbacks = luaL_ref(L, LUA_REGISTRYINDEX);
+    uint32_t request = from_buffer
+                           ? image_scheduler_load_buffer(images->scheduler, (const uint8_t *)source, length, &options)
+                           : image_scheduler_load_file(images->scheduler, mounted_path, &options);
+    if (!request)
+    {
+        luaL_unref(L, LUA_REGISTRYINDEX, callbacks);
+        return luaL_error(L, "%s", image_scheduler_error(images->scheduler));
+    }
+    slot->callbacks = callbacks;
+    slot->id = request;
+    lua_pushinteger(L, request);
+    return 1;
+}
+
+static int l_gl_load_texture_2d_async(lua_State *L) { return lua_image_load(L, false); }
+static int l_gl_load_texture_2d_from_buffer_async(lua_State *L) { return lua_image_load(L, true); }
+
+static int l_gl_cancel_texture_load(lua_State *L)
+{
+    LuaCanvasContext *ctx = lua_canvas_get_context(L);
+    int valid = 0;
+    lua_Integer number = lua_tointegerx(L, 1, &valid);
+    if (lua_type(L, 1) != LUA_TNUMBER || !valid || number < 1 || (uint64_t)number > UINT32_MAX)
+        return luaL_error(L, "Expected a positive texture-load request id");
+    LuaImageRequest *slot = ctx && ctx->images ? lua_image_find(ctx->images, (uint32_t)number) : NULL;
+    if (!slot)
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    image_scheduler_cancel(ctx->images->scheduler, ctx->window, slot->id);
+    luaL_unref(L, LUA_REGISTRYINDEX, slot->callbacks);
+    slot->id = 0;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static void lua_image_push_info(lua_State *L, const ImageAsyncInfo *info)
+{
+    lua_createtable(L, 0, 4);
+    lua_pushinteger(L, info->width);
+    lua_setfield(L, -2, "width");
+    lua_pushinteger(L, info->height);
+    lua_setfield(L, -2, "height");
+    lua_pushinteger(L, info->source_width);
+    lua_setfield(L, -2, "sourceWidth");
+    lua_pushinteger(L, info->source_height);
+    lua_setfield(L, -2, "sourceHeight");
+}
+
+void lua_image_poll(LuaCanvasContext *ctx)
+{
+    if (!ctx || !ctx->images)
+        return;
+    struct LuaImageBindings *images = ctx->images;
+    lua_State *L = ctx->L;
+    image_scheduler_begin_poll(images->scheduler);
+    ImageAsyncEvent event;
+    int texture;
+    for (int count = 0; count < 8 && image_scheduler_poll(images->scheduler, ctx->window, &event, &texture); count++)
+    {
+        LuaImageRequest *slot = lua_image_find(images, event.request);
+        if (!slot)
+        {
+            if (texture > 0)
+                window_gl_destroy_texture(ctx->window, texture);
+            continue;
+        }
+        lua_rawgeti(L, LUA_REGISTRYINDEX, slot->callbacks);
+        if (event.type != IMAGE_ASYNC_METADATA)
+        {
+            luaL_unref(L, LUA_REGISTRYINDEX, slot->callbacks);
+            slot->id = 0;
+        }
+        const char *name = event.type == IMAGE_ASYNC_METADATA ? "onMetadata" : event.type == IMAGE_ASYNC_ERROR ? "onError"
+                                                                                                               : "onComplete";
+        lua_pushstring(L, name);
+        lua_rawget(L, -2);
+        lua_remove(L, -2);
+        if (!lua_isfunction(L, -1))
+        {
+            lua_pop(L, 1);
+            continue;
+        }
+        int arguments = 1;
+        if (event.type == IMAGE_ASYNC_ERROR)
+        {
+            lua_createtable(L, 0, 2);
+            lua_pushstring(L, event.code);
+            lua_setfield(L, -2, "code");
+            lua_pushstring(L, event.message);
+            lua_setfield(L, -2, "message");
+        }
+        else
+        {
+            if (event.type == IMAGE_ASYNC_COMPLETE)
+            {
+                lua_pushinteger(L, texture);
+                arguments++;
+            }
+            lua_image_push_info(L, &event.info);
+        }
+        if (lua_pcall(L, arguments, 0, 0) != LUA_OK)
+        {
+            fprintf(stderr, "Lua image callback error: %s\n", lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+}
+
+bool lua_image_pending(LuaCanvasContext *ctx)
+{
+    return ctx && ctx->images && image_scheduler_pending(ctx->images->scheduler);
+}
+
+void lua_image_cleanup(LuaCanvasContext *ctx)
+{
+    if (!ctx || !ctx->images)
+        return;
+    struct LuaImageBindings *images = ctx->images;
+    image_scheduler_destroy(images->scheduler, ctx->window);
+    for (int index = 0; index < 8; index++)
+        if (images->requests[index].id)
+            luaL_unref(ctx->L, LUA_REGISTRYINDEX, images->requests[index].callbacks);
+    free(images);
+    ctx->images = NULL;
+}
+static int l_gl_is_async_texture_loading_available(lua_State *L)
+{
+#ifdef BUDO_WEB
+    lua_pushboolean(L, budo_web_image_available());
+#else
+    lua_pushboolean(L, 1);
+#endif
+    return 1;
+}
 
 static int l_gl_create_program(lua_State *L)
 {
@@ -946,6 +1182,10 @@ static const luaL_Reg gl_funcs[] = {
     {"createTexture2D", l_gl_create_texture_2d},
     {"loadTexture2D", l_gl_load_texture_2d},
     {"loadTexture2DFromBuffer", l_gl_load_texture_2d_from_buffer},
+    {"isAsyncTextureLoadingAvailable", l_gl_is_async_texture_loading_available},
+    {"loadTexture2DAsync", l_gl_load_texture_2d_async},
+    {"loadTexture2DFromBufferAsync", l_gl_load_texture_2d_from_buffer_async},
+    {"cancelTextureLoad", l_gl_cancel_texture_load},
     {"updateTexture2D", l_gl_update_texture_2d},
     {"destroyTexture", l_gl_destroy_texture},
     {"loadTextureCube", l_gl_load_texture_cube},

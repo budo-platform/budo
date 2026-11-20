@@ -35,7 +35,8 @@ int desktop_host_run(Window *window, InputState *input,
             application_driver_frame(driver, timestamp_ms,
                                      window_get_delta_time(window));
         }
-        window_present(window);
+        if (!application->should_present || application->should_present(application->context))
+            window_present(window);
     }
 
     return 0;

@@ -154,6 +154,7 @@ static void *init_js_file(void *opaque)
     ManagedRuntimeCommon *c = host->contexts;
     c->js_file_ctx = js_file_init(c->js_ctx->context, host->config->project_dir);
     host_publish_file(host, js_file_context(c->js_file_ctx));
+    c->js_graphic_ctx->image_files = &c->file_ctx;
     return c->js_file_ctx;
 }
 
@@ -226,7 +227,7 @@ static void *init_js_neural(void *opaque)
 
 static const ManagedSubsystemEntry js_subsystems[] = {
     MANAGED_SUBSYSTEM("JavaScript core", SUBSYSTEM_ROLE_CORE, MANAGED_FEATURE_NONE, init_js_core, NULL, managed_js_core_cleanup, false),
-    MANAGED_SUBSYSTEM("JavaScript canvas", SUBSYSTEM_ROLE_CANVAS, MANAGED_FEATURE_NONE, init_js_canvas, NULL, managed_js_canvas_cleanup, false),
+    MANAGED_SUBSYSTEM_BUSY("JavaScript canvas", SUBSYSTEM_ROLE_CANVAS, MANAGED_FEATURE_NONE, init_js_canvas, managed_js_image_poll, managed_js_canvas_cleanup, managed_js_image_pending, false),
     MANAGED_SUBSYSTEM_BUSY("JavaScript audio", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_AUDIO, init_js_audio, managed_js_audio_poll, managed_js_audio_cleanup, managed_js_audio_pending, true),
     MANAGED_SUBSYSTEM("JavaScript SQLite", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_NONE, init_js_sqlite, NULL, managed_js_sqlite_cleanup, true),
     MANAGED_SUBSYSTEM_BUSY("JavaScript file", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_NONE, init_js_file, managed_js_file_poll, managed_js_file_cleanup, managed_js_file_pending, true),
@@ -274,6 +275,7 @@ static void *init_lua_file(void *opaque)
     ManagedSubsystemHost *host = opaque;
     host_publish_file(host, lua_file_init(host->contexts->lua_ctx->L,
                                           host->config->project_dir));
+    host->contexts->lua_ctx->image_files = &host->contexts->file_ctx;
     return host->contexts->file_ctx;
 }
 
@@ -345,7 +347,7 @@ static void *init_lua_neural(void *opaque)
 #endif
 
 static const ManagedSubsystemEntry lua_subsystems[] = {
-    MANAGED_SUBSYSTEM("Lua canvas", SUBSYSTEM_ROLE_CANVAS, MANAGED_FEATURE_NONE, init_lua_canvas, NULL, managed_lua_canvas_cleanup, false),
+    MANAGED_SUBSYSTEM_BUSY("Lua canvas", SUBSYSTEM_ROLE_CANVAS, MANAGED_FEATURE_NONE, init_lua_canvas, managed_lua_image_poll, managed_lua_canvas_cleanup, managed_lua_image_pending, false),
     MANAGED_SUBSYSTEM("Lua audio", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_AUDIO, init_lua_audio, NULL, managed_lua_audio_cleanup, true),
     MANAGED_SUBSYSTEM("Lua SQLite", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_NONE, init_lua_sqlite, NULL, managed_lua_sqlite_cleanup, true),
     MANAGED_SUBSYSTEM("Lua file", SUBSYSTEM_ROLE_SERVICE, MANAGED_FEATURE_NONE, init_lua_file, NULL, managed_lua_file_cleanup, true),

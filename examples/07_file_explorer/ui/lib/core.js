@@ -1,4 +1,3 @@
-/// <reference path="../../budo.d.ts" />
 /** The UI context: frame lifecycle, hit testing, ids, motion state, layers,
  *  overlays, and drawing helpers. Widgets are installed on top of it. */
 
@@ -525,15 +524,16 @@ export function createUI(theme = {}) {
     }
 
     function end() {
-        // Overlays draw last, each above the previous, unclipped.
+        // Include overlays queued by other overlays, such as a select inside a dialog.
         const overlays = ctx.overlays;
-        ctx.overlays = [];
-        overlays.forEach((overlay, index) => {
+        for (let index = 0; index < overlays.length; index++) {
+            const overlay = overlays[index];
             ctx.z = index + 1;
             ctx.clip = null;
             ctx.scopes = overlay.scopes;
             overlay.draw();
-        });
+        }
+        ctx.overlays = [];
         ctx.z = 0;
         ctx.scopes = [];
         // Hover comes from last frame's widgets, so a press made right after

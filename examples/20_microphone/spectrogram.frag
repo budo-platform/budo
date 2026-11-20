@@ -4,8 +4,10 @@ precision highp float;
 // The spectrogram: one texture column per analysis, written in a ring.
 // Row 0 is the lowest frequency; values are levels from -90 dB (0) to 0 dB (1).
 uniform sampler2D u_spectrum;
+uniform sampler2D u_canvas;
 uniform float u_newest;  // the column written last
 uniform float u_columns;
+uniform float u_visibleColumns;
 uniform float u_rows;
 
 in vec2 v_texCoord;
@@ -28,7 +30,8 @@ vec3 palette(float t) {
 void main() {
     // The newest column on the right, the oldest on the left.
     int columns = int(u_columns);
-    int age = columns - 1 - min(int(v_texCoord.x * u_columns), columns - 1);
+    int visible = int(u_visibleColumns);
+    int age = visible - 1 - min(int(v_texCoord.x * u_visibleColumns), visible - 1);
     int column = (int(u_newest) - age + columns) % columns;
     // High frequencies at the top; blend between rows.
     float row = (1.0 - v_texCoord.y) * u_rows - 0.5;
@@ -36,5 +39,9 @@ void main() {
     int r1 = min(r0 + 1, int(u_rows) - 1);
     float a = texelFetch(u_spectrum, ivec2(column, r0), 0).r;
     float b = texelFetch(u_spectrum, ivec2(column, r1), 0).r;
-    fragColor = vec4(palette(mix(a, b, clamp(fract(row), 0.0, 1.0))), 1.0);
+    vec3 spectrum = palette(mix(a, b, clamp(fract(row), 0.0, 1.0)));
+    vec2 canvasSize = vec2(textureSize(u_canvas, 0));
+    vec2 canvasUV = vec2(gl_FragCoord.x, canvasSize.y - gl_FragCoord.y) / canvasSize;
+    vec4 label = texture(u_canvas, canvasUV);
+    fragColor = vec4(label.rgb + spectrum * (1.0 - label.a), 1.0);
 }

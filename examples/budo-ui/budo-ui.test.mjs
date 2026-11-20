@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createUI, Spring, springs, mixColors, themes } from './budo-ui.js';
+import { createUI, Spring, springs, mixColors, themes, withAlpha } from './ui/budo-ui.js';
+import * as entry from './budo-ui.js';
 import * as legacy from './ui-library.js';
 
 const noop = () => { };
@@ -345,6 +346,7 @@ function step(ui, draw, pointerState = pointer(-1, -1, false, false), dt = 1 / 6
 }
 
 test('ui-library.js still exports the library', () => {
+    assert.equal(entry.createUI, createUI);
     assert.equal(legacy.createUI, createUI);
 });
 
@@ -813,7 +815,7 @@ function keyFrame(ui, draw, keys = [], keyboard = {}, pointerState = pointer(900
     pressedKeys.clear();
     return result;
 }
-const TAB = 43, ENTER = 40, SPACE = 44, DOWN = 81, RIGHT = 79, END = 77;
+const TAB = 43, ENTER = 40, SPACE = 44, DOWN = 81, UP = 82, RIGHT = 79, HOME = 74, END = 77;
 
 test('Tab and Shift+Tab move the keyboard focus in draw order; Enter clicks', () => {
     const ui = reduced(createUI());
@@ -1083,6 +1085,246 @@ test('flinging a scroll area glides on; overscroll stretches and springs back', 
     pull(touch(100, 140, false, false));
     for (let i = 0; i < 60; i++) pull(touch(100, 140, false, false));
     assert.ok(Math.abs(shown) < 1, 'sprang back: ' + shown);
+});
+
+test('default scrollbar thumb follows the mouse without jumping on grab', () => {
+    const ui = createUI();
+    const viewport = { x: 10, y: 20, width: 200, height: 200 };
+    const frame = p => at(ui, 0, p, () => ui.scroll('s', viewport, 1000, noop));
+
+    frame(pointer(199, 25, false, false));
+    assert.equal(frame(pointer(199, 25, true, true)), 0, 'grabbing near the top does not center the thumb');
+    assert.equal(frame(pointer(100, 105, false, true)), 400, 'drag tracks instantly even outside the gutter');
+    assert.equal(frame(pointer(100, 300, false, true)), 800);
+    assert.equal(frame(pointer(100, 300, false, false)), 800);
+    assert.equal(frame(pointer(199, 215, true, true)), 800, 'the thumb can be grabbed again at the bottom');
+    assert.equal(frame(pointer(100, 0, false, true)), 0);
+});
+
+test('horizontal scrollbar matches the vertical thumb and maps drags to pixel offsets', () => {
+    const ui = reduced(createUI());
+    const gutter = { x: 0, y: 0, width: 200, height: 12 };
+    const vertical = { x: 0, y: 0, width: 12, height: 200 };
+    const rounds = [];
+    const drawRoundRect = sys.canvas.drawRoundRect;
+    sys.canvas.drawRoundRect = (...args) => rounds.push([fillColors.at(-1), ...args]);
+    let offset = 0;
+    let contentWidth = 1000;
+    const frame = p => at(ui, 0, p, () => {
+        offset = ui.horizontalScrollbar('horizontal', gutter, offset, 200, contentWidth);
+    });
+    try {
+        at(ui, 0, pointer(-1, -1, false, false), () => ui.scroll('vertical', vertical, 1000, noop));
+        const [color, x, y, w, h, rx, ry] = rounds.pop();
+        frame(pointer(-1, -1, false, false));
+        assert.deepEqual(rounds.pop(), [color, y, x, h, w, ry, rx], 'same color, shape and radius, rotated');
+        frame(pointer(5, 8, true, true));
+        assert.equal(offset, 0, 'grabbing the thumb preserves the offset');
+        frame(pointer(85, 100, false, true));
+        assert.equal(offset, 400, 'drag continues outside the gutter');
+        frame(pointer(85, 100, false, false));
+        frame(pointer(199, 8, true, true));
+        assert.equal(offset, 800, 'clicking the track can reach the end');
+        frame(pointer(199, 8, false, false));
+        rounds.length = 0;
+        contentWidth = 200;
+        frame(pointer(199, 8, false, false));
+        assert.equal(offset, 0);
+        assert.equal(rounds.length, 0, 'no scrollbar is painted when content fits');
+    } finally {
+        sys.canvas.drawRoundRect = drawRoundRect;
+    }
+});
+
+test('a nested default thumb captures touch without panning or flinging the parent', () => {
+    const ui = createUI();
+    const viewport = { x: 0, y: 0, width: 240, height: 260 };
+    let outer, inner;
+    const frame = p => at(ui, 0, p, () => {
+        outer = ui.scroll('outer', viewport, 1000, content => {
+            inner = ui.scroll('inner', { x: 10, y: content.y + 20, width: 200, height: 200 }, 1000, noop);
+        });
+    });
+
+    frame(touch(199, 25, false, false));
+    frame(touch(199, 25, true, true));
+    frame(touch(199, 105, false, true));
+    assert.deepEqual([outer, inner], [0, 400]);
+    frame(touch(199, 105, false, false));
+    assert.deepEqual([outer, inner], [0, 400]);
+});
+
+test('scroll scrubbers capture drags, jump immediately, and clamp when content shrinks', () => {
+    const ui = createUI();
+    const viewport = { x: 0, y: 0, width: 400, height: 400 };
+    const scrubber = { x: 356, y: 50, width: 44, height: 300 };
+    let contentHeight = 100400;
+    const frame = p => at(ui, 0, p, () => ui.scroll('s', viewport, contentHeight, content => {
+        assert.equal(content.width, viewport.width, 'custom track has no implicit gutter');
+    }, { scrubber }));
+    frame(touch(380, 200, false, false));
+    assert.equal(frame(touch(380, 200, true, true)), 50000);
+    assert.equal(frame(touch(500, 900, false, true)), 100000, 'capture persists outside the track');
+    assert.equal(frame(touch(500, -10, false, true)), 0);
+    assert.equal(frame(touch(380, 200, false, true)), 50000);
+    assert.equal(frame(touch(380, 200, false, false)), 50000, 'no content fling after scrubbing');
+    contentHeight = 600;
+    assert.equal(frame(touch(380, 200, false, false)), 200);
+    contentHeight = 400;
+    assert.equal(frame(touch(380, 200, false, false)), 0);
+});
+
+test('scrubber arrows keep focus, Tab leaves, and non-overflowing areas have no scrubber focus', () => {
+    const ui = reduced(createUI());
+    const viewport = { x: 0, y: 0, width: 300, height: 200 };
+    let contentHeight = 1200;
+    let offset = 0;
+    const draw = () => {
+        offset = ui.scroll('s', viewport, contentHeight, noop, {
+            scrubber: { x: 310, y: 0, width: 44, height: 200 },
+        });
+        ui.button('after', 'After', { x: 0, y: 220, width: 100, height: 40 });
+    };
+    keyFrame(ui, draw, [TAB]);
+    assert.equal(ui.keyFocus, 's:scrubber');
+    keyFrame(ui, draw, [DOWN]);
+    assert.equal(offset, 10);
+    assert.equal(ui.keyFocus, 's:scrubber');
+    keyFrame(ui, draw, [UP]);
+    assert.equal(offset, 0);
+    assert.equal(ui.keyFocus, 's:scrubber');
+    keyFrame(ui, draw, [END]);
+    assert.equal(offset, 1000);
+    keyFrame(ui, draw, [HOME]);
+    assert.equal(offset, 0);
+    keyFrame(ui, draw, [TAB]);
+    assert.equal(ui.keyFocus, 'after');
+    contentHeight = 200;
+    keyFrame(ui, draw, [TAB]);
+    assert.equal(ui.keyFocus, 'after');
+});
+
+test('scrubbers obey screen readers, use generic theme styling, and ignore input behind modals', () => {
+    withPlatform({ actions: [{ id: 's:scrubber', action: 'setValue', value: '750' }] }, calls => {
+        const ui = reduced(createUI());
+        const viewport = { x: 0, y: 0, width: 200, height: 200 };
+        const options = { scrubber: { x: 210, y: 0, width: 44, height: 200 } };
+        const draw = () => ui.scroll('s', viewport, 1200, noop, options);
+        fillColors.length = 0;
+        assert.equal(keyFrame(ui, draw), 750);
+        const node = calls.find(call => call[0] === 'update')[1][0];
+        assert.equal(node.role, 'slider');
+        assert.equal(node.label, 'Scroll position');
+        assert.equal(node.max, 1000);
+        assert.ok(fillColors.includes(withAlpha(ui.colors.ink, 0.25)));
+        assert.ok(fillColors.includes(withAlpha(ui.colors.ink, 0.69)));
+        withPlatform({ actions: [{ id: 's:scrubber', action: 'increment', value: '' }] }, () => {
+            assert.equal(keyFrame(ui, draw), 760);
+        });
+        withPlatform({ actions: [{ id: 's:scrubber', action: 'decrement', value: '' }] }, () => {
+            assert.equal(keyFrame(ui, draw), 750);
+        });
+        withPlatform({ actions: [{ id: 's:scrubber', action: 'setValue', value: 'Infinity' }] }, () => {
+            assert.equal(keyFrame(ui, draw), 750);
+        });
+        keyFrame(ui, () => { draw(); ui.dialog('modal', true, noop); });
+        withPlatform({ actions: [{ id: 's:scrubber', action: 'setValue', value: '0' }] }, () => {
+            let offset;
+            keyFrame(ui, () => {
+                offset = draw();
+                ui.dialog('modal', true, noop);
+            }, [], {}, pointer(230, 0, true, true));
+            assert.equal(offset, 750);
+        });
+    });
+});
+
+test('short and transformed scrubber tracks remain usable and custom colors and labels are honored', () => {
+    withPlatform({}, calls => {
+        const ui = reduced(createUI());
+        const viewport = { x: 0, y: 0, width: 200, height: 200 };
+        const scrubber = { x: 210, y: 20, width: 44, height: 20 };
+        const options = { scrubber, scrubberLabel: 'Photo position', scrubberColor: '#FFFFFF' };
+        const draw = () => ui.layer(viewport, { x: 10, y: 30, scale: 2 }, () => {
+            return ui.scroll('s', viewport, 1200, noop, options);
+        });
+        // The layer maps the track's local y=[20,40] to screen y=[-30,10].
+        const frame = y => {
+            let offset;
+            at(ui, 0, pointer(370, y, true, true), () => {
+                ui.layer(viewport, { x: 10, y: 30, scale: 2 }, () => {
+                    offset = ui.scroll('s', viewport, 1200, noop, options);
+                });
+            });
+            return offset;
+        };
+        keyFrame(ui, draw);
+        fillColors.length = 0;
+        assert.equal(frame(-20), 0);
+        assert.equal(frame(-10), 500);
+        assert.equal(frame(0), 1000);
+        assert.ok(fillColors.includes('#ffffff40'));
+        assert.ok(fillColors.includes('#ffffff'));
+        assert.ok(calls.filter(call => call[0] === 'update').at(-1)[1]
+            .some(node => node.label === 'Photo position'));
+    });
+});
+
+test('touch content scrolling continues when the finger crosses the scrubber', () => {
+    const ui = reduced(createUI());
+    const viewport = { x: 0, y: 0, width: 400, height: 400 };
+    const draw = () => ui.scroll('s', viewport, 2000, noop, {
+        scrubber: { x: 356, y: 50, width: 44, height: 300 },
+    });
+    at(ui, 0, touch(100, 300, true, true), draw);
+    assert.equal(at(ui, 0, touch(100, 280, false, true), draw), 20);
+    assert.equal(at(ui, 0, touch(380, 260, false, true), draw), 40);
+    assert.equal(at(ui, 0, touch(100, 240, false, true), draw), 60);
+});
+
+test('scroll acceleration preserves slow precision and density scaling and caps fast movement at 6x', () => {
+    function measure({ touch: touching = false, accelerate, dt = 1 / 60, density = 1, distance = 20, release = false } = {}) {
+        const ui = reduced(createUI());
+        const p = pointer(100 * density, 200 * density, true, true, touching ? 'touch' : 'mouse');
+        const viewport = { x: 0, y: 0, width: 400 * density, height: 400 * density };
+        const input = { pointer: p, mouse: { wheelY: 0 }, deltaTime: dt };
+        const frame = () => {
+            ui.begin(input, viewport);
+            const offset = ui.scroll('s', viewport, 100400 * density, noop, { accelerate });
+            ui.end();
+            return offset / density;
+        };
+        const saved = window.density;
+        window.density = density;
+        try {
+            frame();
+            p.pressed = false;
+            if (touching) p.y -= distance * density;
+            else input.mouse.wheelY = -distance;
+            const offset = frame();
+            if (!release) return offset;
+            p.down = false;
+            input.mouse.wheelY = 0;
+            return frame();
+        } finally {
+            window.density = saved;
+        }
+    }
+    for (const touching of [false, true]) {
+        const distance = touching ? 10 : 1;
+        const slow = measure({ touch: touching, accelerate: true, distance, dt: 1 / 20 });
+        assert.equal(slow, measure({ touch: touching, distance, dt: 1 / 20 }));
+        const fast = measure({ touch: touching, accelerate: true, distance, dt: 1 / 120 });
+        assert.ok(fast > slow);
+        assert.ok(Math.abs(fast - measure({ touch: touching, accelerate: true, distance, dt: 1 / 120, density: 3 })) < 1e-10);
+        assert.equal(measure({ touch: touching, distance, dt: 1 / 120 }), slow);
+        assert.equal(measure({ touch: touching, accelerate: false, distance, dt: 1 / 120 }), slow);
+    }
+    assert.equal(measure({ accelerate: true, distance: 100 }), 100 * 38 * 6);
+    assert.equal(measure({ touch: true, accelerate: true, distance: 20, dt: 1 / 60 }) * 2,
+        measure({ touch: true, accelerate: true, distance: 40, dt: 1 / 30 }));
+    assert.ok(measure({ touch: true, accelerate: true, release: true }) >
+        measure({ touch: true, release: true }), 'accelerated travel carries into release momentum');
 });
 
 test('swiping a list row far enough reports its swipe action', () => {

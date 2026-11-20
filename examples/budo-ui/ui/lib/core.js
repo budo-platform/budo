@@ -1,4 +1,3 @@
-/// <reference path="../../../budo.d.ts" />
 /** The UI context: frame lifecycle, hit testing, ids, motion state, layers,
  *  overlays, and drawing helpers. Widgets are installed on top of it. */
 

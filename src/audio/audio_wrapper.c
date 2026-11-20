@@ -214,6 +214,12 @@ void audio_stop(AudioContext *ctx)
         android_audio_stop(ctx->android_ctx);
 }
 
+void audio_pause(AudioContext *ctx)
+{
+    if (ctx && ctx->android_ctx)
+        android_audio_pause(ctx->android_ctx);
+}
+
 bool audio_is_playing(AudioContext *ctx)
 {
     return ctx && ctx->android_ctx ? android_audio_is_playing(ctx->android_ctx) : false;
@@ -812,6 +818,11 @@ void audio_stop(AudioContext *ctx)
         return;
     SDL_PauseAudioDevice(ctx->device, 1);
     ctx->playing = false;
+}
+
+void audio_pause(AudioContext *ctx)
+{
+    audio_stop(ctx);
 }
 
 bool audio_is_playing(AudioContext *ctx)

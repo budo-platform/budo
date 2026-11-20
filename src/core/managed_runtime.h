@@ -104,7 +104,7 @@ extern "C"
                                            ManagedRuntimeCommon *contexts,
                                            const ManagedFrameContext *frame);
 
-    void managed_runtime_frame(ManagedRuntimeKind kind,
+    bool managed_runtime_frame(ManagedRuntimeKind kind,
                                SubsystemRegistry *subsystems,
                                ManagedRuntimeCommon *contexts,
                                const ManagedFrameContext *frame,

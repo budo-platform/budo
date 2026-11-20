@@ -16,9 +16,10 @@ include(CMakeFindDependencyMacro)
 find_dependency(Threads REQUIRED)
 
 if(NOT TARGET SDL2::SDL2)
-  add_library(SDL2::SDL2 SHARED IMPORTED)
+  add_library(SDL2::SDL2 @BUDO_SDK_SDL_IMPORT_TYPE@ IMPORTED)
   set_target_properties(SDL2::SDL2 PROPERTIES
-    IMPORTED_LOCATION "${_BUDO_NATIVE_SDK_ROOT}/@BUDO_SDK_SDL_RELATIVE_PATH@")
+    IMPORTED_LOCATION "${_BUDO_NATIVE_SDK_ROOT}/@BUDO_SDK_SDL_RELATIVE_PATH@"
+    INTERFACE_LINK_LIBRARIES "@BUDO_SDK_SDL_LINK_LIBRARIES@")
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -65,11 +66,13 @@ function(budo_native_configure_application target)
       "Use a compatible compiler or select the matching SDK and recompile.")
   endif()
 @BUDO_NATIVE_APPLICATION_PLATFORM_SETTINGS@
-  add_custom_command(TARGET "${target}" POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-      "${_BUDO_NATIVE_SDK_ROOT}/@BUDO_SDK_SDL_RELATIVE_PATH@"
-      "$<TARGET_FILE_DIR:${target}>"
-    VERBATIM)
+  if(NOT "@BUDO_SDK_SDL_IMPORT_TYPE@" STREQUAL "STATIC")
+    add_custom_command(TARGET "${target}" POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${_BUDO_NATIVE_SDK_ROOT}/@BUDO_SDK_SDL_RELATIVE_PATH@"
+        "$<TARGET_FILE_DIR:${target}>"
+      VERBATIM)
+  endif()
 endfunction()
 
 check_required_components(BudoNative)

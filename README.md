@@ -30,7 +30,47 @@ curl -fL -o budo https://github.com/budo-platform/budo/releases/latest/download/
 chmod +x budo && ./budo help
 ```
 
-On Windows, unzip (budo-windows-x86_64.zip)[https://github.com/budo-platform/budo/releases/latest/download/budo-windows-x86_64.zip] and keep the DLLs next to budo.exe.
+On Windows, run [budo-windows-x86_64.exe](https://github.com/budo-platform/budo/releases/latest/download/budo-windows-x86_64.exe) directly. These downloads require a release published with the desktop packaging support.
+
+## Distribute a desktop app as one executable
+
+```bash
+budo package ./my-app self --name my-app -o ./MyApp
+budo package ./my-app linux --name my-app -o ./MyApp-linux
+budo package ./my-app macos --name my-app -o ./MyApp-macos
+budo package ./my-app windows --name my-app -o ./MyApp.exe
+```
+
+The project must have a managed Budo entry point (JavaScript, TypeScript, Lua,
+or WebAssembly). Budo embeds the directory as a gzip-compressed archive, including
+hidden files. Package only what you intend to distribute; symlinks, special
+files, non-ASCII names, and names invalid on Windows are rejected. Write the
+output outside the project so later packages don't include earlier builds.
+
+`self` reuses the running executable and doesn't need the network. A development
+build may depend on locally installed libraries; on Windows, `self` requires
+the standalone build. The other targets use `curl` to download and verify
+the runtime from the latest GitHub release (Linux x86-64, macOS Apple Silicon,
+Windows x64). The release must support desktop packaging. Use `--release TAG`
+to select a specific release.
+
+Linux and macOS Release builds strip the base runtime at link time, so
+packaging needs no `strip` tool. For a smaller local `self` package, use a
+Release rather than a debug build.
+
+Without `-o`, the output is named after the app ID, with `.exe` on Windows;
+existing files are not overwritten. macOS packages are not Developer ID signed
+or notarized.
+
+Run the result with no arguments to start the app. Explicit commands such as
+`--help` and `run` still work. Budo caches each payload version separately and
+keeps `sys.files` writes and relative SQLite databases in a shared `data/`
+directory under the app ID. Use the same `--name` for every upgrade, and use
+different IDs for unrelated apps. The ID defaults to the lowercased project
+directory name. The per-user root is `$XDG_DATA_HOME/budo/desktop-apps` on Linux
+(defaulting to `~/.local/share` for `$XDG_DATA_HOME`),
+`~/Library/Application Support/budo/desktop-apps` on macOS, and
+`%LOCALAPPDATA%\budo\desktop-apps` on Windows.
 
 ## Local build
 

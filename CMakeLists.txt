@@ -46,6 +46,14 @@ endif()
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
+option(BUDO_WINDOWS_STANDALONE "Link Windows Budo and its dependencies statically" OFF)
+if(BUDO_WINDOWS_STANDALONE)
+    if(NOT MSVC)
+        message(FATAL_ERROR "BUDO_WINDOWS_STANDALONE requires MSVC")
+    endif()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 if(MSVC)
     # /Zc:__cplusplus: report the real C++ standard (MSVC otherwise says
     # 199711L), which dependencies test, e.g. llama.cpp's u8"" handling under
@@ -95,6 +103,11 @@ elseif(WIN32)
     set(BUDO_NATIVE_COMPILER_REGEX "^MSVC$")
     set(BUDO_NATIVE_PLATFORM_BASELINE "Windows 10; MSVC v143; /MD")
     set(BUDO_NATIVE_APPLICATION_PLATFORM_SETTINGS "  set_property(TARGET \"\${target}\" PROPERTY MSVC_RUNTIME_LIBRARY \"MultiThreaded$<$<CONFIG:Debug>:Debug>DLL\")")
+    if(BUDO_WINDOWS_STANDALONE)
+        set(BUDO_NATIVE_COMPILER_FAMILY "MSVC v143 / static CRT")
+        set(BUDO_NATIVE_PLATFORM_BASELINE "Windows 10; MSVC v143; /MT")
+        set(BUDO_NATIVE_APPLICATION_PLATFORM_SETTINGS "  set_property(TARGET \"\${target}\" PROPERTY MSVC_RUNTIME_LIBRARY \"MultiThreaded$<$<CONFIG:Debug>:Debug>\")")
+    endif()
 else()
     set(BUDO_NATIVE_TARGET_TUPLE "linux-x86_64-gnu")
     set(BUDO_NATIVE_PROCESSOR_REGEX "^(x86_64|AMD64)$")
@@ -149,8 +162,8 @@ if(ENABLE_LLAMACPP)
     set(LLAMA_BUILD_MTMD OFF CACHE BOOL "" FORCE)
     set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
     set(GGML_CPU ON CACHE BOOL "" FORCE)
-    if(APPLE)
-        # Apple Clang has no OpenMP; ggml uses its own threads and Accelerate.
+    if(APPLE OR BUDO_WINDOWS_STANDALONE)
+        # Apple Clang has no OpenMP; standalone MSVC must not import vcomp.dll.
         set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
     endif()
     set(GGML_METAL ${APPLE} CACHE BOOL "" FORCE)
@@ -173,7 +186,7 @@ if(ENABLE_LLAMACPP)
     set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_SAVED} CACHE BOOL "Build shared libraries" FORCE)
 endif()
 
-# Decode-only audio file support (WAV, MP3, Ogg Vorbis, FLAC via miniaudio).
+# Decode-only audio file support via miniaudio and the bundled OPUS backend.
 FetchContent_Declare(
     miniaudio
     GIT_REPOSITORY ${BUDO_MINIAUDIO_GIT_REPOSITORY}
@@ -185,6 +198,9 @@ if(NOT miniaudio_POPULATED)
     message(STATUS "Downloading miniaudio...")
     FetchContent_MakeAvailable(miniaudio)
 endif()
+include("${CMAKE_SOURCE_DIR}/cmake/BudoOpus.cmake")
+set(BUDO_CODEC_DEPENDENCY_SOURCE_ROOT "${CMAKE_BINARY_DIR}/_deps")
+budo_add_opus_decode_backend()
 
 # Option to use system Skia or download
 option(USE_SYSTEM_SKIA "Use system-installed Skia instead of downloading" OFF)
@@ -522,7 +538,12 @@ if(NOT EXISTS "${WASMTIME_DIR}/include/wasmtime.h")
 endif()
 
 # Find Wasmtime library (prefer static to avoid dylib/rpath issues on install)
-if(WIN32)
+if(BUDO_WINDOWS_STANDALONE)
+    find_library(WASMTIME_STATIC_LIBRARY NAMES wasmtime
+        PATHS ${WASMTIME_DIR}/lib NO_DEFAULT_PATH REQUIRED)
+    set(WASMTIME_LIBRARY ${WASMTIME_STATIC_LIBRARY} ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt)
+    add_compile_definitions(LIBWASM_STATIC WASI_API_EXTERN=)
+elseif(WIN32)
     find_library(WASMTIME_LIBRARY NAMES wasmtime.dll.lib wasmtime
         PATHS ${WASMTIME_DIR}/lib
         NO_DEFAULT_PATH
@@ -545,6 +566,12 @@ endif()
 
 # Find SDL2
 find_package(SDL2 REQUIRED)
+if(BUDO_WINDOWS_STANDALONE)
+    if(NOT TARGET SDL2::SDL2-static OR NOT ZLIB_USE_STATIC_LIBS)
+        message(FATAL_ERROR "BUDO_WINDOWS_STANDALONE requires static SDL2 and ZLIB_USE_STATIC_LIBS=ON")
+    endif()
+    set(SDL2_LIBRARIES SDL2::SDL2-static)
+endif()
 
 # Budo includes SDL as <SDL2/SDL.h> (the Homebrew/distribution layout). The
 # official Windows development package puts the headers directly in include/,
@@ -558,6 +585,10 @@ if(SDL2_INCLUDE_DIRS)
         list(APPEND SDL2_INCLUDE_DIRS "${BUDO_SDL2_SHIM_DIR}")
         if(TARGET SDL2::SDL2)
             set_property(TARGET SDL2::SDL2 APPEND PROPERTY
+                INTERFACE_INCLUDE_DIRECTORIES "${BUDO_SDL2_SHIM_DIR}")
+        endif()
+        if(BUDO_WINDOWS_STANDALONE)
+            set_property(TARGET SDL2::SDL2-static APPEND PROPERTY
                 INTERFACE_INCLUDE_DIRECTORIES "${BUDO_SDL2_SHIM_DIR}")
         endif()
         message(STATUS "SDL2 headers exposed as <SDL2/...> from ${BUDO_SDL2_SHIM_DIR}")
@@ -575,9 +606,25 @@ if(MSVC)
     add_compile_definitions(_CRT_NONSTDC_NO_DEPRECATE)
 endif()
 
-get_target_property(BUDO_SDK_SDL_LIBRARY SDL2::SDL2 IMPORTED_LOCATION)
+if(BUDO_WINDOWS_STANDALONE)
+    set(BUDO_SDK_SDL_TARGET SDL2::SDL2-static)
+else()
+    set(BUDO_SDK_SDL_TARGET SDL2::SDL2)
+endif()
+get_target_property(BUDO_SDK_SDL_TYPE ${BUDO_SDK_SDL_TARGET} TYPE)
+if(BUDO_SDK_SDL_TYPE STREQUAL "STATIC_LIBRARY")
+    set(BUDO_SDK_SDL_IMPORT_TYPE STATIC)
+    get_target_property(BUDO_SDK_SDL_LINK_LIBRARIES ${BUDO_SDK_SDL_TARGET} INTERFACE_LINK_LIBRARIES)
+    if(NOT BUDO_SDK_SDL_LINK_LIBRARIES)
+        set(BUDO_SDK_SDL_LINK_LIBRARIES "")
+    endif()
+else()
+    set(BUDO_SDK_SDL_IMPORT_TYPE SHARED)
+    set(BUDO_SDK_SDL_LINK_LIBRARIES "")
+endif()
+get_target_property(BUDO_SDK_SDL_LIBRARY ${BUDO_SDK_SDL_TARGET} IMPORTED_LOCATION)
 if(NOT BUDO_SDK_SDL_LIBRARY)
-    get_target_property(BUDO_SDK_SDL_LIBRARY SDL2::SDL2 IMPORTED_LOCATION_RELEASE)
+    get_target_property(BUDO_SDK_SDL_LIBRARY ${BUDO_SDK_SDL_TARGET} IMPORTED_LOCATION_RELEASE)
 endif()
 if(NOT BUDO_SDK_SDL_LIBRARY AND SDL2_LIBRARIES)
     list(GET SDL2_LIBRARIES 0 BUDO_SDK_SDL_LIBRARY)
@@ -592,7 +639,7 @@ if(WIN32)
 else()
     set(BUDO_SDK_SDL_RELATIVE_PATH "lib/budo/deps/${BUDO_SDK_SDL_NAME}")
 endif()
-if(APPLE)
+if(APPLE AND NOT BUDO_SDK_SDL_IMPORT_TYPE STREQUAL "STATIC")
     execute_process(COMMAND otool -D "${BUDO_SDK_SDL_LIBRARY}"
         OUTPUT_VARIABLE BUDO_SDK_SDL_OTOOL OUTPUT_STRIP_TRAILING_WHITESPACE)
     string(REPLACE "\n" ";" BUDO_SDK_SDL_OTOOL_LINES "${BUDO_SDK_SDL_OTOOL}")
@@ -680,6 +727,10 @@ set(SOURCES
     src/graphics/js_canvas_bindings.c
     src/graphics/js_canvas_effects_bindings.c
     src/graphics/js_gl_bindings.c
+    src/graphics/js_image_bindings.c
+    src/graphics/image_async.c
+    src/graphics/image_upload.c
+    src/graphics/image_scheduler.c
     src/graphics/wasm_canvas_bindings.c
     src/graphics/wasm_canvas_effects_bindings.c
     src/graphics/wasm_gl_bindings.c
@@ -808,7 +859,7 @@ endif()
 # ==================================================
 # ONNX Runtime (optional — controlled by ENABLE_NEURAL)
 # ==================================================
-option(ENABLE_NEURAL "Enable ONNX Runtime neural inference API" ON)
+option(ENABLE_NEURAL "Enable ONNX Runtime neural inference API" OFF)
 
 if(ENABLE_NEURAL)
     set(ORT_VERSION "1.21.0")
@@ -915,18 +966,15 @@ add_custom_command(
 )
 
 # `budo init --template ui`: the budo-ui library under ui/ and a starter main.js.
-file(GLOB_RECURSE BUDO_UI_TEMPLATE_LIB CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/examples/budo-ui/lib/*.js")
+set(BUDO_UI_TEMPLATE_DIR "${CMAKE_SOURCE_DIR}/examples/budo-ui/ui")
+file(GLOB_RECURSE BUDO_UI_TEMPLATE_LIB LIST_DIRECTORIES false CONFIGURE_DEPENDS
+    "${BUDO_UI_TEMPLATE_DIR}/*")
 set(BUDO_UI_TEMPLATE_ENTRIES
-    "main.js=${CMAKE_SOURCE_DIR}/src/core/templates/ui/main.js"
-    "ui/budo-ui.js=${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.js"
-    "ui/README.md=${CMAKE_SOURCE_DIR}/examples/budo-ui/README.md")
+    "main.js=${CMAKE_SOURCE_DIR}/src/core/templates/ui/main.js")
 set(BUDO_UI_TEMPLATE_SOURCES
-    "${CMAKE_SOURCE_DIR}/src/core/templates/ui/main.js"
-    "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.js"
-    "${CMAKE_SOURCE_DIR}/examples/budo-ui/README.md")
+    "${CMAKE_SOURCE_DIR}/src/core/templates/ui/main.js")
 foreach(source IN LISTS BUDO_UI_TEMPLATE_LIB)
-    file(RELATIVE_PATH relative "${CMAKE_SOURCE_DIR}/examples/budo-ui" "${source}")
+    file(RELATIVE_PATH relative "${BUDO_UI_TEMPLATE_DIR}" "${source}")
     list(APPEND BUDO_UI_TEMPLATE_ENTRIES "ui/${relative}=${source}")
     list(APPEND BUDO_UI_TEMPLATE_SOURCES "${source}")
 endforeach()
@@ -934,7 +982,6 @@ add_custom_command(
     OUTPUT  "${GENERATED_DIR}/embedded_ui_template.h"
     COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_SOURCE_DIR}/cmake/embed_tree.py"
-        --shallower-references
         "embedded_ui_template"
         "${GENERATED_DIR}/embedded_ui_template.h"
         ${BUDO_UI_TEMPLATE_ENTRIES}
@@ -1142,6 +1189,7 @@ add_library(budo_desktop_host STATIC
     src/graphics/gl_render_target.c
     src/graphics/skia_wrapper.cpp
     src/graphics/image_loader.c
+    src/graphics/image_scaled.cpp
     src/graphics/gl_state_guard.c
     src/graphics/gpu_resource_state.c
     ${SKIA_SVG_SOURCES}
@@ -1149,6 +1197,10 @@ add_library(budo_desktop_host STATIC
     ${SKIA_PATHOPS_SOURCES}
 )
 add_library(budo::desktop_host ALIAS budo_desktop_host)
+if(APPLE)
+    target_sources(budo_desktop_host PRIVATE src/core/window_macos_pinch.m)
+    set_source_files_properties(src/core/window_macos_pinch.m PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+endif()
 set_target_properties(budo_desktop_host PROPERTIES EXPORT_NAME desktop_host)
 target_compile_features(budo_desktop_host PUBLIC c_std_11 cxx_std_20)
 target_link_libraries(budo_desktop_host PUBLIC budo_host_core)
@@ -1312,6 +1364,7 @@ list(REMOVE_ITEM SOURCES src/core/entry.c src/core/main.c)
 add_library(budo_managed_drivers STATIC ${SOURCES})
 add_library(budo::managed_drivers ALIAS budo_managed_drivers)
 target_link_libraries(budo_managed_drivers PRIVATE quickjs lua sqlite3 ZLIB::ZLIB)
+target_link_libraries(budo_managed_drivers PRIVATE budo_opusfile)
 if(ENABLE_LLAMACPP)
     target_compile_definitions(budo_managed_drivers PRIVATE
         BUDO_LLAMACPP
@@ -1345,8 +1398,11 @@ if(BUDO_ENABLE_ANDROID_PACKAGING)
     target_link_libraries(budo_managed_drivers PRIVATE budo_native_project_model)
 endif()
 if(WIN32 OR APPLE)
-    if(APPLE)
+    if(APPLE OR BUDO_WINDOWS_STANDALONE)
         set(OPENSSL_USE_STATIC_LIBS TRUE)
+        if(BUDO_WINDOWS_STANDALONE)
+            set(OPENSSL_MSVC_STATIC_RT TRUE)
+        endif()
         unset(OPENSSL_SSL_LIBRARY CACHE)
         unset(OPENSSL_CRYPTO_LIBRARY CACHE)
     endif()
@@ -1366,7 +1422,24 @@ add_executable(${PROJECT_NAME}
     src/core/entry.c
     src/core/main.c
     src/core/cli.c
+    src/core/desktop_package.c
     src/desktop/managed_desktop.c)
+# Strip the distribution runtime before it can have an app payload appended.
+if(APPLE)
+    target_link_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:Release>:LINKER:-S,-x>")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:Release>:LINKER:--strip-all>")
+endif()
+if(BUDO_GITHUB_REPOSITORY_OVERRIDE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        BUDO_PACKAGE_GITHUB_REPOSITORY="${BUDO_GITHUB_REPOSITORY_OVERRIDE}")
+elseif(BUDO_GITHUB_REPOSITORY)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        BUDO_PACKAGE_GITHUB_REPOSITORY="${BUDO_GITHUB_REPOSITORY}")
+endif()
+if(BUDO_WINDOWS_STANDALONE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE BUDO_WINDOWS_STANDALONE)
+endif()
 if(ENABLE_LLAMACPP)
     target_compile_definitions(${PROJECT_NAME} PRIVATE BUDO_LLAMACPP)
 endif()
@@ -1453,6 +1526,11 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    if(NOT WIN32 OR BUDO_WINDOWS_STANDALONE)
+        add_test(NAME desktop_package
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/tests/desktop_package_test.py $<TARGET_FILE:${PROJECT_NAME}>)
+    endif()
     add_test(NAME dependency_lock_consistency
         COMMAND ${CMAKE_COMMAND}
             -DBUDO_SOURCE_DIR=${CMAKE_SOURCE_DIR}
@@ -1726,7 +1804,12 @@ if(BUILD_TESTING)
         src/graphics/js_canvas_bindings.c
         src/graphics/js_canvas_effects_bindings.c
         src/graphics/js_core_bindings.c
-        src/graphics/js_gl_bindings.c)
+        src/graphics/js_gl_bindings.c
+        src/graphics/js_image_bindings.c
+        src/graphics/image_async.c
+        src/graphics/image_upload.c
+        src/graphics/image_scheduler.c
+        src/file/file_wrapper.c)
     target_include_directories(js_canvas_binding_state_test PRIVATE
         ${CMAKE_SOURCE_DIR}/src)
     target_compile_features(js_canvas_binding_state_test PRIVATE c_std_11)
@@ -1750,7 +1833,12 @@ if(BUILD_TESTING)
         src/graphics/js_canvas_bindings.c
         src/graphics/js_canvas_effects_bindings.c
         src/graphics/js_core_bindings.c
-        src/graphics/js_gl_bindings.c)
+        src/graphics/js_gl_bindings.c
+        src/graphics/js_image_bindings.c
+        src/graphics/image_async.c
+        src/graphics/image_upload.c
+        src/graphics/image_scheduler.c
+        src/file/file_wrapper.c)
     target_include_directories(js_runtime_load_test PRIVATE
         ${CMAKE_SOURCE_DIR}/src)
     target_compile_features(js_runtime_load_test PRIVATE c_std_11)
@@ -1977,6 +2065,9 @@ if(BUILD_TESTING)
             ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/audio ${miniaudio_SOURCE_DIR})
         target_compile_features(audio_streams_test PRIVATE c_std_11)
         target_link_libraries(audio_streams_test PRIVATE m Threads::Threads ${CMAKE_DL_LIBS})
+        target_link_libraries(audio_streams_test PRIVATE budo_opusfile)
+        target_compile_definitions(audio_streams_test PRIVATE
+            BUDO_OPUS_TEST_FILE="${miniaudio_SOURCE_DIR}/data/48000-stereo.opus")
         add_test(NAME audio_streams COMMAND audio_streams_test)
     endif()
 
@@ -2083,6 +2174,8 @@ if(BUILD_TESTING)
     # budo-ui behavior and draw-command snapshot tests (skipped without Node.js).
     find_program(BUDO_NODE_EXECUTABLE node)
     if(BUDO_NODE_EXECUTABLE)
+        add_test(NAME web_image_bridge
+            COMMAND "${BUDO_NODE_EXECUTABLE}" --test "${CMAKE_SOURCE_DIR}/tests/web_image_test.mjs")
         add_test(NAME budo_ui
             COMMAND "${BUDO_NODE_EXECUTABLE}" --test
                 "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.test.mjs"
@@ -2245,6 +2338,10 @@ if(BUILD_TESTING)
         tests/lua_canvas_binding_state_test.c
         src/graphics/lua_canvas_bindings.c
         src/graphics/lua_gl_bindings.c
+        src/graphics/image_async.c
+        src/graphics/image_upload.c
+        src/graphics/image_scheduler.c
+        src/file/file_wrapper.c
         src/graphics/lua_transform_bindings.c
         src/graphics/lua_canvas_effects_bindings.c
         src/graphics/color_util.c
@@ -2317,6 +2414,29 @@ if(BUILD_TESTING)
     target_compile_features(subsystem_queue_test PRIVATE c_std_11)
     target_link_libraries(subsystem_queue_test PRIVATE budo_host_core Threads::Threads)
     add_test(NAME subsystem_queue COMMAND subsystem_queue_test)
+
+    add_executable(image_async_test
+        tests/image_async_test.c
+        tests/image_scaled_test.cpp
+        src/graphics/image_async.c
+        src/file/file_wrapper.c)
+    target_include_directories(image_async_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party/stb ${SKIA_DIR})
+    target_compile_features(image_async_test PRIVATE c_std_11 cxx_std_20)
+    target_link_libraries(image_async_test PRIVATE Threads::Threads budo_desktop_host)
+    if(NOT WIN32)
+        target_link_libraries(image_async_test PRIVATE m)
+    endif()
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/test-data/image-async")
+    add_test(NAME image_async COMMAND image_async_test "${CMAKE_BINARY_DIR}/test-data/image-async")
+
+    add_executable(image_decode_benchmark tests/image_decode_benchmark.c)
+    target_include_directories(image_decode_benchmark PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(image_decode_benchmark PRIVATE budo_desktop_host)
+
+    add_executable(image_upload_test tests/image_upload_test.c src/graphics/image_upload.c src/graphics/image_scheduler.c)
+    target_include_directories(image_upload_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(image_upload_test PRIVATE c_std_11)
+    add_test(NAME image_upload COMMAND image_upload_test)
 
     add_executable(input_text_test
         tests/input_text_test.c
@@ -2682,10 +2802,12 @@ if(BUILD_TESTING)
             "-DTEST_ROOT=${NATIVE_INIT_GPU_DIR}"
             "-DTEMPLATE=gpu"
             -P "${CMAKE_SOURCE_DIR}/tests/verify_native_init.cmake")
-    # Examples that use budo-ui carry a copy in ui/ (projects cannot import
-    # outside their folder); scripts/sync-budo-ui.py refreshes them.
+    # Public and present private examples carry a copy in ui/ (projects cannot
+    # import outside their folder); scripts/sync-budo-ui.py refreshes them.
     add_test(NAME budo_ui_copies
         COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/sync-budo-ui.py" --check)
+    add_test(NAME budo_ui_sync
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/sync_budo_ui_test.py")
     add_test(NAME init_ui_template
         COMMAND ${CMAKE_COMMAND}
             "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"

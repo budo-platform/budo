@@ -405,7 +405,7 @@ static void test_wasm(const char *root)
 
     Raster raster;
     raster_init(&raster);
-    WasmCanvasContext *ctx = wasm_canvas_create(root);
+    WasmCanvasContext *ctx = wasm_canvas_create(root, NULL);
     assert(ctx);
     wasm_canvas_set_context(ctx, raster.canvas, NULL, NULL, SIZE, SIZE, 1.0f);
     if (!wasm_canvas_load_wat_file(ctx, path))

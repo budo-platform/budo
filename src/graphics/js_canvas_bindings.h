@@ -10,6 +10,8 @@
 
 typedef struct Window Window;
 typedef struct CanvasTexture CanvasTexture;
+typedef struct FileContext FileContext;
+typedef struct JsImageBindings JsImageBindings;
 
 #ifdef __cplusplus
 extern "C"
@@ -53,6 +55,8 @@ extern "C"
         int canvas_texture_capacity;
 
         BudoGraphicsActivation activation;
+        JsImageBindings *images;
+        FileContext **image_files;
     } JSGraphicContext;
 
     typedef struct JsGraphicFunction

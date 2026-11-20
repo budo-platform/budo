@@ -8,6 +8,9 @@
 
 #include <SDL2/SDL.h>
 #include "core/gl_desktop.h"
+#ifdef __APPLE__
+#include "window_macos_pinch.h"
+#endif
 
 #include "core/gl_present_state.inc"
 #include "graphics/gl_state_guard_gl.inc"
@@ -27,6 +30,9 @@ static bool immediate_bind_sampler_texture(Window *window, int program_id,
 struct Window
 {
     SDL_Window *sdl_window;
+#ifdef __APPLE__
+    MacOSPinchMonitor *pinch_monitor;
+#endif
     SDL_GLContext gl_context;
     CanvasTexture *default_canvas;
     SkiaCanvas *skia_gpu_canvas; 
@@ -438,6 +444,11 @@ Window *window_create(const WindowConfig *config)
 
     window->start_time = SDL_GetPerformanceCounter();
     window->last_frame_time = window->start_time;
+#ifdef __APPLE__
+    window->pinch_monitor = macos_pinch_install(window->sdl_window);
+    if (!window->pinch_monitor)
+        SDL_LogWarn(SDL_LOG_CATEGORY_INPUT, "Could not enable macOS trackpad pinch input");
+#endif
 
     return window;
 }
@@ -448,6 +459,10 @@ void window_destroy(Window *window)
 
     if (!window)
         return;
+
+#ifdef __APPLE__
+    macos_pinch_remove(window->pinch_monitor);
+#endif
 
     for (i = 0; i < MAX_GL_PROGRAMS; i++)
     {
@@ -748,6 +763,9 @@ bool window_poll_events(Window *window, InputState *input)
             (mod & KMOD_ALT) != 0,
             (mod & KMOD_GUI) != 0);
     }
+#ifdef __APPLE__
+    macos_pinch_drain(window->pinch_monitor, input, window->dpi_scale);
+#endif
 
     return !window->should_close;
 }

@@ -1,37 +1,24 @@
 #!/usr/bin/env python3
 """Embeds a set of files into a C header as a table of gzip-compressed entries.
 
-Usage: python3 embed_tree.py [--shallower-references] <var_name> <output_file> <dest=source>...
+Usage: python3 embed_tree.py <var_name> <output_file> <dest=source>...
 
 Generates a header with:
   static const EmbeddedTreeFile <var_name>[];   /* {path, data, len, uncompressed_len, is_gzip} */
   static const size_t           <var_name>_count;
 
---shallower-references drops one "../" from `/// <reference path="../...">`
-lines: the files are written one directory closer to budo.d.ts than their
-sources are (examples/budo-ui/lib/core.js becomes ui/lib/core.js).
+Source bytes are embedded unchanged.
 """
 
 import gzip
 import os
-import re
 import sys
-
-REFERENCE = re.compile(rb'^(/// <reference path=")\.\./', re.MULTILINE)
-
-
-def transform(data, shallower):
-    return REFERENCE.sub(rb"\1", data) if shallower else data
 
 
 def main():
     args = sys.argv[1:]
-    shallower = False
-    if args and args[0] == "--shallower-references":
-        shallower = True
-        args = args[1:]
     if len(args) < 3:
-        print(f"Usage: {sys.argv[0]} [--shallower-references] <var_name> <output_file> <dest=source>...",
+        print(f"Usage: {sys.argv[0]} <var_name> <output_file> <dest=source>...",
               file=sys.stderr)
         sys.exit(1)
     var_name, output_file, pairs = args[0], args[1], args[2:]
@@ -62,7 +49,7 @@ def main():
             print(f"Error: expected dest=source, got {pair!r}", file=sys.stderr)
             sys.exit(1)
         with open(source, "rb") as f:
-            original = transform(f.read(), shallower)
+            original = f.read()
         data = gzip.compress(original, mtime=0)
         total += len(original)
         name = f"{var_name}_{index}"

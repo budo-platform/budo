@@ -53,6 +53,15 @@ static int l_audio_stop(lua_State *L)
     return 0;
 }
 
+static int l_audio_pause(lua_State *L)
+{
+    (void)L;
+    ensure_lua_audio_ctx();
+    if (g_lua_audio_ctx)
+        audio_pause(g_lua_audio_ctx);
+    return 0;
+}
+
 static int l_audio_is_playing(lua_State *L)
 {
     ensure_lua_audio_ctx();
@@ -311,6 +320,7 @@ static const luaL_Reg audio_funcs[] = {
     
     {"start", l_audio_start},
     {"stop", l_audio_stop},
+    {"pause", l_audio_pause},
     {"isPlaying", l_audio_is_playing},
     {"setMasterGain", l_audio_set_master_gain},
     {"getMasterGain", l_audio_get_master_gain},

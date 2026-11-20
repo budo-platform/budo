@@ -285,7 +285,8 @@ static void sync_window_default_canvas_aliases(Window *window)
     window->canvas_fbo = (GLuint)window_canvas_texture_get_gl_framebuffer(window->default_canvas);
 }
 
-static void gl_draw_fullscreen_quad(Window *window, GLuint program, GLProgramSlot *slot, GLuint source_texture)
+static void gl_draw_fullscreen_quad(Window *window, GLuint program, GLProgramSlot *slot,
+                                    GLuint source_texture, int width, int height)
 {
     GLint sampler_loc;
     GLint resolution_loc;
@@ -303,7 +304,7 @@ static void gl_draw_fullscreen_quad(Window *window, GLuint program, GLProgramSlo
 
     resolution_loc = slot ? slot->resolution_loc : glGetUniformLocation(program, "u_resolution");
     if (resolution_loc >= 0)
-        glUniform2f(resolution_loc, (GLfloat)window->width, (GLfloat)window->height);
+        glUniform2f(resolution_loc, (GLfloat)width, (GLfloat)height);
 
     time_loc = slot ? slot->time_loc : glGetUniformLocation(program, "u_time");
     if (time_loc >= 0)
@@ -322,7 +323,8 @@ static void prepare_screen_from_canvas(Window *window, bool clear_depth)
 
     flush_skia_canvas_discarding_gl_state(window->skia_gpu_canvas);
     BUDO_GL_PREPARE_SCREEN_PRESENT(window->width, window->height);
-    gl_draw_fullscreen_quad(window, window->blit_program, NULL, window->canvas_texture);
+    gl_draw_fullscreen_quad(window, window->blit_program, NULL, window->canvas_texture,
+                            window->width, window->height);
 
     if (clear_depth)
     {
@@ -610,7 +612,8 @@ void window_present(Window *window)
 
     BUDO_GL_PREPARE_SCREEN_PRESENT(window->width, window->height);
 
-    gl_draw_fullscreen_quad(window, window->blit_program, NULL, window->canvas_texture);
+    gl_draw_fullscreen_quad(window, window->blit_program, NULL, window->canvas_texture,
+                            window->width, window->height);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, window->canvas_fbo);
@@ -731,7 +734,8 @@ bool window_gl_draw_fullscreen(Window *window, int program_id)
 
     flush_skia_canvas_discarding_gl_state(window->skia_gpu_canvas);
     BUDO_GL_PREPARE_SCREEN_PRESENT(window->width, window->height);
-    gl_draw_fullscreen_quad(window, slot->program, slot, window->canvas_texture);
+    gl_draw_fullscreen_quad(window, slot->program, slot, window->canvas_texture,
+                            window->width, window->height);
     window->screen_rendered_this_frame = true;
     return true;
 }
@@ -740,6 +744,8 @@ bool window_gl_draw_fullscreen_immediate(Window *window, int program_id, uint32_
 {
     GLProgramSlot *slot = NULL;
     GLuint program = 0;
+    GLint framebuffer;
+    GLint viewport[4];
 
     if (!window || !window->gl_initialized)
         return false;
@@ -769,9 +775,13 @@ bool window_gl_draw_fullscreen_immediate(Window *window, int program_id, uint32_
 
     if (source_texture == 0 && window->skia_gpu_canvas)
         flush_skia_canvas_preserving_gl_state(window->skia_gpu_canvas);
-    gl_draw_fullscreen_quad(window, program, slot,
-                            source_texture != 0 ? (GLuint)source_texture : window->canvas_texture);
-    window->screen_rendered_this_frame = true;
+
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    gl_draw_fullscreen_quad(window, program, slot, (GLuint)source_texture,
+                            viewport[2], viewport[3]);
+    if (framebuffer == 0)
+        window->screen_rendered_this_frame = true;
     return true;
 }
 

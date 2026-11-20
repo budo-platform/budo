@@ -72,7 +72,7 @@ endif()
 # ============================================================================
 include(FetchContent)
 
-# Decode-only audio file support (WAV, MP3, Ogg Vorbis, FLAC via miniaudio).
+# Decode-only audio file support via miniaudio and the bundled OPUS backend.
 set(miniaudio_SOURCE_DIR "${BUDO_ROOT}/build/_deps/miniaudio-src")
 if(NOT EXISTS "${miniaudio_SOURCE_DIR}/miniaudio.h")
     FetchContent_Declare(
@@ -84,6 +84,9 @@ if(NOT EXISTS "${miniaudio_SOURCE_DIR}/miniaudio.h")
     message(STATUS "Downloading miniaudio...")
     FetchContent_MakeAvailable(miniaudio)
 endif()
+include("${BUDO_ROOT}/cmake/BudoOpus.cmake")
+set(BUDO_CODEC_DEPENDENCY_SOURCE_ROOT "${BUDO_ROOT}/build/_deps")
+budo_add_opus_decode_backend()
 
 set(BUDO_QUICKJS_IMPL "${BUDO_QUICKJS_IMPL_DEFAULT}" CACHE STRING "QuickJS implementation: bellard or ng")
 set_property(CACHE BUDO_QUICKJS_IMPL PROPERTY STRINGS bellard ng)
@@ -322,6 +325,7 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/web/web_audio.c
     ${BUDO_ROOT}/src/web/web_midi.c
     ${BUDO_ROOT}/src/web/web_network.c
+    ${BUDO_ROOT}/src/web/web_image.c
     ${BUDO_ROOT}/src/web/web_magneto.c
     ${BUDO_ROOT}/src/web/web_device.c
     ${BUDO_ROOT}/src/device/device_service.c
@@ -353,6 +357,9 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/graphics/js_canvas_effects_bindings.c
     ${BUDO_ROOT}/src/graphics/js_core_bindings.c
     ${BUDO_ROOT}/src/graphics/js_gl_bindings.c
+    ${BUDO_ROOT}/src/graphics/js_image_bindings.c
+    ${BUDO_ROOT}/src/graphics/image_scheduler.c
+    ${BUDO_ROOT}/src/graphics/image_upload.c
     ${BUDO_ROOT}/src/graphics/lua_canvas_bindings.c
     ${BUDO_ROOT}/src/graphics/lua_gl_bindings.c
     ${BUDO_ROOT}/src/graphics/lua_transform_bindings.c
@@ -396,9 +403,37 @@ set(WEB_SOURCES
     ${BUDO_ROOT}/src/device/lua_device_bindings.c
 )
 
+add_library(budo_image_worker_decoder STATIC
+    ${BUDO_ROOT}/src/graphics/image_loader.c
+    ${BUDO_ROOT}/src/graphics/image_scaled.cpp)
+target_include_directories(budo_image_worker_decoder PRIVATE
+    ${BUDO_ROOT}/src ${BUDO_ROOT}/third_party/stb ${SKIA_WASM_DIR})
+target_compile_features(budo_image_worker_decoder PRIVATE c_std_11 cxx_std_20)
+target_compile_options(budo_image_worker_decoder PRIVATE -O2)
+set(IMAGE_WORKER_LIBRARIES "$<TARGET_FILE:skia>")
+foreach(IMAGE_WORKER_LIBRARY ${SKIA_EXTRA_LIBS})
+    list(APPEND IMAGE_WORKER_LIBRARIES "$<TARGET_FILE:${IMAGE_WORKER_LIBRARY}>")
+endforeach()
+
+set(IMAGE_WORKER_SCRIPT "${CMAKE_BINARY_DIR}/generated/budo-image-worker.js")
+add_custom_command(OUTPUT "${IMAGE_WORKER_SCRIPT}"
+    COMMAND "${CMAKE_CXX_COMPILER}" "$<TARGET_FILE:budo_image_worker_decoder>"
+        ${IMAGE_WORKER_LIBRARIES} -O2 --no-entry
+        -sMODULARIZE=1 -sEXPORT_NAME=BudoImageDecoder -sSINGLE_FILE=1 -sENVIRONMENT=worker
+        -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=536870912 -sSTACK_SIZE=1048576
+        -sEXPORTED_FUNCTIONS=_malloc,_free,_image_probe,_image_load_rgba8_scaled_from_memory,_image_resize_rgba8_row,_image_free
+        -sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAP32
+        --extern-post-js "${BUDO_ROOT}/src/web/web_image_worker.js" -o "${IMAGE_WORKER_SCRIPT}"
+    DEPENDS budo_image_worker_decoder skia ${SKIA_EXTRA_LIBS}
+        "${BUDO_ROOT}/src/web/web_image_worker.js"
+    VERBATIM)
+add_custom_target(web_image_worker DEPENDS "${IMAGE_WORKER_SCRIPT}")
+
 add_executable(budo ${WEB_SOURCES})
 
-add_dependencies(budo web_generated_files)
+add_dependencies(budo web_generated_files web_image_worker)
+set_property(TARGET budo APPEND PROPERTY LINK_DEPENDS
+    "${IMAGE_WORKER_SCRIPT}" "${BUDO_ROOT}/src/web/web_image.js")
 
 target_include_directories(budo PRIVATE
     ${BUDO_ROOT}/src
@@ -410,7 +445,7 @@ target_include_directories(budo PRIVATE
     ${WEB_GENERATED_DIR}
 )
 
-target_link_libraries(budo PRIVATE quickjs lua sqlite3 skia ${SKIA_SVG_LIB} ${SKIA_EXTRA_LIBS})
+target_link_libraries(budo PRIVATE quickjs lua sqlite3 skia budo_opusfile ${SKIA_SVG_LIB} ${SKIA_EXTRA_LIBS})
 
 # ── Advanced graphics surface ────────────────────────────────────────────
 # Web links full Skia-WASM (same skia_wrapper.cpp the desktop and Android
@@ -464,6 +499,8 @@ if(PROJECT_ASSET_DIR)
 endif()
 
 set(EM_LINK_FLAGS
+    "--embed-file" "${IMAGE_WORKER_SCRIPT}@/budo-image-worker.js"
+    "--pre-js" "${BUDO_ROOT}/src/web/web_image.js"
     "-sWASM=1"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sEXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\",\"stringToNewUTF8\"]"

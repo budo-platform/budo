@@ -118,6 +118,21 @@ int main(int argc, char **argv)
     assert(JS_GetRuntimeOpaque(canvas_a->runtime) == canvas_a);
     assert(JS_GetRuntimeOpaque(canvas_b->runtime) == canvas_b);
 
+    InputState input;
+    input_init(&input);
+    graphic_a->input = &input;
+    eval_direct(canvas_a, "if (sys.input.get().pinch !== null) throw Error('unexpected idle pinch');");
+    input_add_pinch(&input, 30, 45, 1.125);
+    input_set_mouse_wheel(&input, 0, -2);
+    eval_direct(canvas_a,
+                "const snapshot = sys.input.get();"
+                "if (snapshot.pinch.x !== 30 || snapshot.pinch.y !== 45 || snapshot.pinch.scale !== 1.125 ||"
+                "    snapshot.mouse.wheelY !== -2 || snapshot.pointer.down || snapshot.pointers.length)"
+                " throw Error('pinch changed pointer or scroll state');");
+    input_begin_frame(&input);
+    eval_direct(canvas_a, "if (sys.input.get().pinch !== null) throw Error('pinch leaked into the next frame');");
+    graphic_a->input = NULL;
+
     eval_direct(canvas_a,
                 "if (sys.canvas.measureText('Canvas workspace', 20) <= 0 || "
                 "sys.canvas.measureTextRect('Canvas workspace', 20).width <= 0) "

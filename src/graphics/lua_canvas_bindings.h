@@ -8,6 +8,7 @@
 #include "core/input.h"
 
 typedef struct Window Window;
+typedef struct FileContext FileContext;
 
 #ifdef __cplusplus
 extern "C"
@@ -27,6 +28,8 @@ extern "C"
 
         Window *window;
         char project_dir[1024];
+        FileContext **image_files;
+        struct LuaImageBindings *images;
 
         int width;
         int height;
@@ -59,6 +62,10 @@ extern "C"
     LuaCanvasContext *lua_canvas_context(void *state);
 
     LuaCanvasContext *lua_canvas_graphics_context(void *state);
+
+    void lua_image_poll(LuaCanvasContext *ctx);
+    bool lua_image_pending(LuaCanvasContext *ctx);
+    void lua_image_cleanup(LuaCanvasContext *ctx);
 
     LuaCanvasContext *lua_canvas_create(const char *project_dir);
 

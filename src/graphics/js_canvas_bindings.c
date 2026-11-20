@@ -1,6 +1,7 @@
 #include "graphics/js_canvas_bindings.h"
 #include "graphics/js_canvas_effects_bindings.h"
 #include "graphics/js_gl_bindings.h"
+#include "graphics/js_image_bindings.h"
 #include "graphics/js_tools.h"
 #include "graphics/color_util.h"
 #include "core/window.h"
@@ -2303,6 +2304,16 @@ static JSValue js_get_input(JSContext *ctx, JSValue this_val, int argc, JSValue 
     JS_SetPropertyStr(ctx, mouse, "rightPressed", JS_NewBool(ctx, input->mouse_buttons_pressed[INPUT_MOUSE_RIGHT]));
     JS_SetPropertyStr(ctx, obj, "mouse", mouse);
 
+    JSValue pinch = JS_NULL;
+    if (input->pinch_scale > 0.0)
+    {
+        pinch = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, pinch, "x", JS_NewInt32(ctx, input->pinch_x));
+        JS_SetPropertyStr(ctx, pinch, "y", JS_NewInt32(ctx, input->pinch_y));
+        JS_SetPropertyStr(ctx, pinch, "scale", JS_NewFloat64(ctx, input->pinch_scale));
+    }
+    JS_SetPropertyStr(ctx, obj, "pinch", pinch);
+
     JS_SetPropertyStr(ctx, obj, "pointer",
                       js_create_pointer_object(ctx,
                                                0,
@@ -2856,6 +2867,7 @@ void js_graphic_set_frame_context(JSGraphicContext *graphic_ctx, SkiaCanvas *can
 
 void js_graphic_destroy(JSGraphicContext *ctx)
 {
+    js_image_cleanup(ctx);
     if (ctx->input)
         input_text_stop(ctx->input);
 

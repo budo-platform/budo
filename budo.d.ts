@@ -84,6 +84,8 @@ interface InputState {
   pointer: Pointer;
   pointers: Pointer[];
   mouse: Mouse;
+  /** macOS trackpad magnification this frame, or null. Coordinates are physical pixels; scale > 1 zooms in. */
+  pinch: { x: number; y: number; scale: number } | null;
   keyboard: Keyboard;
     /** Layout-aware UTF-8 text committed since the previous frame. */
     text: string;
@@ -242,6 +244,38 @@ interface ParagraphMetrics {
     lines: number;
 }
 
+interface TextureLoadOptions {
+    /** File-source mount, default assets (the project root). Path omits the mount prefix. Ignored for buffer sources. */
+    mount?: "assets" | "files";
+    /** Output bounds in pixels; aspect ratio is preserved and images are never enlarged. */
+    maxWidth?: number;
+    maxHeight?: number;
+    /** Encoded-byte limit, default 24 MiB, maximum 64 MiB. */
+    maxBytes?: number;
+    /** Source-pixel limit, default and maximum 24 million. Each axis is also limited to 16384. */
+    maxPixels?: number;
+}
+
+interface TextureLoadInfo {
+    readonly width: number;
+    readonly height: number;
+    readonly sourceWidth: number;
+    readonly sourceHeight: number;
+}
+
+interface TextureLoadError {
+    readonly code: string;
+    readonly message: string;
+}
+
+interface TextureLoadCallbacks {
+    /** Delivered before completion; does not guarantee that pixel decoding will succeed. */
+    onMetadata?(info: TextureLoadInfo): void;
+    /** Receives ownership of a normal texture handle; release it with sys.gl.destroyTexture. */
+    onComplete(textureId: number, info: TextureLoadInfo): void;
+    onError(error: TextureLoadError): void;
+}
+
 interface CanvasTextureCanvas {
     /** Clear this offscreen canvas texture. */
     clear(color?: Color): void;
@@ -346,6 +380,18 @@ interface SysGL {
 
   /** Decode PNG/JPG image bytes from an ArrayBuffer or TypedArray and upload them as a 2D texture. */
   loadTexture2DFromBuffer(buffer: ArrayBuffer | ArrayBufferView): number;
+
+  /** Queue a worker-backed image load and bounded graphics-thread upload. Returns a cancellable request id, not a texture. Project-relative paths default to the assets mount. Browser VFS reads are chunked on the host. */
+  loadTexture2DAsync(path: string, options: TextureLoadOptions, callbacks: TextureLoadCallbacks): number;
+
+  /** Copy encoded bytes and queue worker decoding. Completion receives a normal texture id. Available on native and supported browser hosts. */
+  loadTexture2DFromBufferAsync(buffer: ArrayBuffer | ArrayBufferView, options: TextureLoadOptions, callbacks: TextureLoadCallbacks): number;
+
+  /** Cancel an active load without waiting or invoking further callbacks. False after completion or previous cancellation. */
+  cancelTextureLoad(requestId: number): boolean;
+
+  /** True for native worker loading or available browser Worker/WebAssembly/Blob URL capabilities. Worker startup may still fail. */
+  isAsyncTextureLoadingAvailable(): boolean;
 
   /** Decode six image buffers (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
   loadTextureCubeFromBuffer(faces: [ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView]): number;
@@ -953,7 +999,10 @@ interface SysAudio {
   /** Stop the audio context. */
   stop(): void;
 
-  /** Check whether audio is currently playing. */
+  /** Pause audio output; `start()` resumes. On Android with `background_audio`, the media notification stays and shows Play (like its Pause button); elsewhere, same as `stop()`. */
+  pause(): void;
+
+  /** Check whether audio is currently playing. On Android with `background_audio`, false while the system holds playback paused (notification Pause, audio focus loss): call `start()` from a user action to resume. */
   isPlaying(): boolean;
 
   /** Set master output gain. Clamped to 0.0–1.0. Default is 0.5. */
@@ -995,10 +1044,10 @@ interface SysAudio {
   /** Trigger the release phase of the envelope. */
   noteOff(oscId: number): void;
 
-  /** Load a WAV, MP3, Ogg Vorbis, or FLAC asset into an audio buffer. Returns a buffer ID, or -1 on failure. */
+  /** Load a WAV, MP3, Ogg Vorbis, Opus, or FLAC asset into an audio buffer. Returns a buffer ID, or -1 on failure. */
   loadBuffer(path: string): number;
 
-  /** Decode WAV, MP3, Ogg Vorbis, or FLAC bytes from an ArrayBuffer into an audio buffer. Returns a buffer ID, or -1 on failure. */
+  /** Decode WAV, MP3, Ogg Vorbis, Opus, or FLAC bytes from an ArrayBuffer into an audio buffer. Returns a buffer ID, or -1 on failure. */
   loadBufferFromBuffer(buffer: ArrayBuffer): number;
 
   /** Create an audio buffer. Returns a buffer ID. */
@@ -1037,7 +1086,7 @@ interface SysAudio {
   /** Stop recording and close an input stream. */
   closeInput(stream: number): void;
 
-  /** Open a WAV, MP3, Ogg Vorbis, or FLAC decoder on an assets/... or files/... path (read in blocks: any size, seekable) or on bytes in memory. Returns a decoder handle, or -1 (see getError). */
+  /** Open a WAV, MP3, Ogg Vorbis, Opus, or FLAC decoder on an assets/... or files/... path (read in blocks: any size, seekable) or on bytes in memory. Returns a decoder handle, or -1 (see getError). */
   openDecoder(source: string | ArrayBuffer | ArrayBufferView, options?: AudioDecoderOptions): number;
 
   /** Create a push decoder that decodes bytes the app feeds (from block reads, the network, ...). It reads straight through: no seeking, no duration. Returns a decoder handle. */
@@ -1245,6 +1294,15 @@ interface SysFiles {
 
   /** Close a file opened with openRead. */
   closeRead(handle: number): void;
+
+  /** macOS/Linux JS only. Stage a replacement under files/ in an existing directory. One writer per runtime. Returns null on I/O failure; see getError(). */
+  openAtomicWrite?(path: string): number | null;
+
+  /** Append one ArrayBuffer or typed-array block (at most 16 MiB). False on I/O failure. */
+  writeBlock?(handle: number, data: ArrayBuffer | Exclude<ArrayBufferView, DataView>): boolean;
+
+  /** Commit via atomic rename or discard. Either consumes the handle; false on I/O failure. */
+  finishAtomicWrite?(handle: number, commit: boolean): boolean;
 
   /** Write UTF-8 text to a files/... path, creating parents and replacing any existing file. assets/... is read-only. Returns the absolute saved path. On web this triggers a browser download. Throws on error. */
   writeText(path: string, text: string): string;

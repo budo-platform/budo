@@ -24,6 +24,16 @@
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
+#include "extras/decoders/libopus/miniaudio_libopus.c"
+
+static ma_decoder_config audio_decoder_config(int channels, int sample_rate)
+{
+    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, (ma_uint32)channels,
+                                                       (ma_uint32)sample_rate);
+    config.ppCustomBackendVTables = &ma_decoding_backend_libopus;
+    config.customBackendCount = 1;
+    return config;
+}
 
 static bool audio_decode_from_decoder(ma_decoder *decoder, const char *label,
                                       AudioDecodedData *out, char *error, int error_size)
@@ -100,7 +110,7 @@ bool audio_decode_file(const char *path, AudioDecodedData *out, char *error, int
         return false;
     }
 
-    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 0);
+    ma_decoder_config config = audio_decoder_config(2, 0);
     ma_decoder decoder;
     ma_result result = ma_decoder_init_file(path, &config, &decoder);
     if (result != MA_SUCCESS)
@@ -130,7 +140,7 @@ bool audio_decode_memory(const uint8_t *data, size_t size, AudioDecodedData *out
         return false;
     }
 
-    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 0);
+    ma_decoder_config config = audio_decoder_config(2, 0);
     ma_decoder decoder;
     ma_result result = ma_decoder_init_memory(data, size, &config, &decoder);
     if (result != MA_SUCCESS)
@@ -191,6 +201,107 @@ struct AudioStreamDecoder
     bool input_ended;
 };
 
+typedef struct
+{
+    ma_libopus decoder;
+    ma_read_proc on_read;
+    ma_seek_proc on_seek;
+    void *read_seek_user_data;
+    AudioStreamDecoder *stream;
+    ma_int64 cursor;
+} AudioCallbackOpusBackend;
+
+static ma_int64 audio_callback_opus_cursor(const AudioStreamDecoder *stream)
+{
+    return (ma_int64)(stream->source == DECODER_FILE ? stream->file_cursor : stream->cursor);
+}
+
+static ma_result audio_callback_opus_read(void *user_data, void *buffer, size_t size, size_t *read)
+{
+    AudioCallbackOpusBackend *backend = (AudioCallbackOpusBackend *)user_data;
+    ma_result result = backend->on_read(backend->read_seek_user_data, buffer, size, read);
+    if (result == MA_SUCCESS)
+        backend->cursor = audio_callback_opus_cursor(backend->stream);
+    return result;
+}
+
+static ma_result audio_callback_opus_seek(void *user_data, ma_int64 offset, ma_seek_origin origin)
+{
+    AudioCallbackOpusBackend *backend = (AudioCallbackOpusBackend *)user_data;
+    ma_result result = backend->on_seek(backend->read_seek_user_data, offset, origin);
+    if (result == MA_SUCCESS)
+        backend->cursor = audio_callback_opus_cursor(backend->stream);
+    return result;
+}
+
+static ma_result audio_callback_opus_tell(void *user_data, ma_int64 *cursor)
+{
+    AudioCallbackOpusBackend *backend = (AudioCallbackOpusBackend *)user_data;
+    *cursor = backend->cursor;
+    return MA_SUCCESS;
+}
+
+static ma_result audio_callback_opus_init(void *user_data, ma_read_proc on_read, ma_seek_proc on_seek,
+                                          ma_tell_proc on_tell, void *read_seek_user_data,
+                                          const ma_decoding_backend_config *config,
+                                          const ma_allocation_callbacks *allocation_callbacks,
+                                          ma_data_source **out_backend)
+{
+    AudioStreamDecoder *stream = (AudioStreamDecoder *)user_data;
+    (void)on_tell;
+    if (!stream || (stream->source != DECODER_FILE && stream->source != DECODER_PUSH) ||
+        !on_read || !on_seek)
+        return MA_INVALID_ARGS;
+
+    AudioCallbackOpusBackend *backend =
+        (AudioCallbackOpusBackend *)ma_malloc(sizeof(*backend), allocation_callbacks);
+    if (!backend)
+        return MA_OUT_OF_MEMORY;
+    memset(backend, 0, sizeof(*backend));
+    backend->on_read = on_read;
+    backend->on_seek = on_seek;
+    backend->read_seek_user_data = read_seek_user_data;
+    backend->stream = stream;
+    backend->cursor = audio_callback_opus_cursor(stream);
+
+    ma_result result = ma_libopus_init(audio_callback_opus_read, audio_callback_opus_seek,
+                                       audio_callback_opus_tell, backend,
+                                       config, allocation_callbacks, &backend->decoder);
+    if (result != MA_SUCCESS)
+    {
+        ma_free(backend, allocation_callbacks);
+        return result;
+    }
+
+    *out_backend = (ma_data_source *)&backend->decoder;
+    return MA_SUCCESS;
+}
+
+static void audio_callback_opus_uninit(void *user_data, ma_data_source *backend,
+                                       const ma_allocation_callbacks *allocation_callbacks)
+{
+    (void)user_data;
+    ma_libopus *opus = (ma_libopus *)backend;
+    ma_libopus_uninit(opus, allocation_callbacks);
+    ma_free(opus, allocation_callbacks);
+}
+
+static ma_decoding_backend_vtable audio_callback_opus_vtable = {
+    audio_callback_opus_init,
+    NULL,
+    NULL,
+    NULL,
+    audio_callback_opus_uninit};
+static ma_decoding_backend_vtable *audio_callback_opus_backends[] = {
+    &audio_callback_opus_vtable};
+
+static void audio_use_callback_opus_backend(ma_decoder_config *config, AudioStreamDecoder *stream)
+{
+    config->ppCustomBackendVTables = audio_callback_opus_backends;
+    config->customBackendCount = 1;
+    config->pCustomBackendUserData = stream;
+}
+
 static void decoder_error(char *error, int error_size, const char *message, ma_result result)
 {
     if (error && error_size > 0)
@@ -240,10 +351,23 @@ static ma_result push_on_read(ma_decoder *decoder, void *out, size_t size, size_
 static ma_result push_on_seek(ma_decoder *decoder, ma_int64 offset, ma_seek_origin origin)
 {
     AudioStreamDecoder *stream = (AudioStreamDecoder *)decoder->pUserData;
-    if (origin == ma_seek_origin_end)
+    int64_t base;
+    if (origin == ma_seek_origin_start)
+        base = 0;
+    else if (origin == ma_seek_origin_current)
+        base = (int64_t)stream->cursor;
+    else if (stream->input_ended && stream->base <= (uint64_t)INT64_MAX &&
+             stream->length <= (uint64_t)INT64_MAX - stream->base)
+        base = (int64_t)(stream->base + stream->length);
+    else
         return MA_NOT_IMPLEMENTED;
-    int64_t target = (origin == ma_seek_origin_start ? 0 : (int64_t)stream->cursor) + offset;
-    if (target < (int64_t)stream->base || target > (int64_t)(stream->base + stream->length))
+    if ((offset > 0 && base > INT64_MAX - offset) ||
+        (offset < 0 && base < INT64_MIN - offset))
+        return MA_INVALID_ARGS;
+    int64_t target = base + offset;
+    if (stream->base > (uint64_t)INT64_MAX ||
+        stream->base + stream->length > (uint64_t)INT64_MAX ||
+        target < (int64_t)stream->base || target > (int64_t)(stream->base + stream->length))
         return MA_INVALID_OPERATION;
     stream->cursor = (uint64_t)target;
     return MA_SUCCESS;
@@ -266,7 +390,7 @@ static AudioStreamDecoder *decoder_new(DecoderSource source, int sample_rate, in
 
 static ma_decoder_config decoder_config(const AudioStreamDecoder *stream)
 {
-    return ma_decoder_config_init(ma_format_f32, (ma_uint32)stream->channels, (ma_uint32)stream->sample_rate);
+    return audio_decoder_config(stream->channels, stream->sample_rate);
 }
 
 static void decoder_adopt_format(AudioStreamDecoder *stream)
@@ -294,10 +418,11 @@ AudioStreamDecoder *audio_stream_decoder_open_file(void *file_native_reference, 
     }
     stream->file = *file;
     ma_decoder_config config = decoder_config(stream);
+    audio_use_callback_opus_backend(&config, stream);
     ma_result result = ma_decoder_init(file_on_read, file_on_seek, stream, &config, &stream->decoder);
     if (result != MA_SUCCESS)
     {
-        decoder_error(error, error_size, "not a decodable audio file (WAV, MP3, Ogg Vorbis, FLAC)", result);
+        decoder_error(error, error_size, "not a decodable audio file (WAV, MP3, Ogg Vorbis, Opus, FLAC)", result);
         file_native_close(&stream->file);
         free(stream);
         return NULL;
@@ -329,7 +454,7 @@ AudioStreamDecoder *audio_stream_decoder_open_memory(const uint8_t *data, size_t
     ma_result result = ma_decoder_init_memory(stream->memory, size, &config, &stream->decoder);
     if (result != MA_SUCCESS)
     {
-        decoder_error(error, error_size, "not decodable audio data (WAV, MP3, Ogg Vorbis, FLAC)", result);
+        decoder_error(error, error_size, "not decodable audio data (WAV, MP3, Ogg Vorbis, Opus, FLAC)", result);
         free(stream->memory);
         free(stream);
         return NULL;
@@ -408,11 +533,12 @@ static bool push_try_init(AudioStreamDecoder *stream, char *error, int error_siz
     if (!push_can_decode(stream))
         return false;
     ma_decoder_config config = decoder_config(stream);
+    audio_use_callback_opus_backend(&config, stream);
     stream->cursor = stream->base;
     ma_result result = ma_decoder_init(push_on_read, push_on_seek, stream, &config, &stream->decoder);
     if (result != MA_SUCCESS)
     {
-        decoder_error(error, error_size, "not decodable audio data (WAV, MP3, Ogg Vorbis, FLAC)", result);
+        decoder_error(error, error_size, "not decodable audio data (WAV, MP3, Ogg Vorbis, Opus, FLAC)", result);
         return false;
     }
     stream->initialized = true;

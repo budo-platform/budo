@@ -88,7 +88,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 40,
+      "operationCount": 41,
       "platformDifferences": {
         "android": {
           "details": [
@@ -109,7 +109,7 @@
       "runtimes": {
         "javascript": {
           "constantExportCount": 5,
-          "exportCount": 45,
+          "exportCount": 46,
           "namespace": "sys.audio",
           "omittedOperations": [],
           "platforms": [
@@ -120,7 +120,7 @@
         },
         "lua": {
           "constantExportCount": 5,
-          "exportCount": 30,
+          "exportCount": 31,
           "namespace": "sys.audio",
           "omittedOperations": [
             "get_sample_rate",
@@ -150,6 +150,7 @@
           "exportCount": 15,
           "namespace": "env",
           "omittedOperations": [
+            "pause",
             "is_playing",
             "get_master_gain",
             "load_buffer",
@@ -754,12 +755,12 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 17,
+      "operationCount": 20,
       "platformDifferences": {},
       "runtimes": {
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 24,
+          "exportCount": 27,
           "namespace": [
             "sys.files",
             "sys.assets"
@@ -780,6 +781,9 @@
           ],
           "omittedOperations": [
             "append_binary",
+            "open_atomic_write",
+            "write_block",
+            "finish_atomic_write",
             "pick_text",
             "save_text",
             "open_read",
@@ -802,6 +806,9 @@
             "write_text",
             "write_binary",
             "append_binary",
+            "open_atomic_write",
+            "write_block",
+            "finish_atomic_write",
             "pick_text",
             "save_text",
             "get_error",
@@ -853,7 +860,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 53,
+      "operationCount": 61,
       "platformDifferences": {
         "android": {
           "details": [
@@ -871,7 +878,7 @@
         },
         "web": {
           "details": [
-            "Managed JavaScript and Lua expose their complete registered GL tables through the web host.",
+            "Managed JavaScript and Lua expose their registered GL tables through the web host. Async textures use two Blob Workers with an embedded standalone STB WebAssembly decoder, host-authorized chunked VFS reads, and the shared graphics-thread upload scheduler. Worker/WebAssembly/Blob URL capabilities and worker-compatible CSP are required; no main-thread decode fallback or cross-origin isolation is required.",
             "Browser-native WebAssembly exposes only program creation, fullscreen draw, two scalar uniforms, mat4 arrays, buffer create/upload, vertex-layout create/configuration, and mesh draw.",
             "Browser-native WebAssembly omits destruction, render targets, textures, cubemaps, most uniforms, buffer sub-data, vertex-layout destruction, and attribute lookup.",
             "Wasmtime and browser-WASM use the same name for several imports but browser-WASM implements a strict subset and copies guest data through temporary Emscripten allocations."
@@ -910,6 +917,14 @@
             "create_texture_2d",
             "load_texture_2d",
             "load_texture_2d_from_buffer",
+            "load_texture_2d_async",
+            "load_texture_2d_from_buffer_async",
+            "cancel_texture_load",
+            "async_texture_loading_available",
+            "wasmtime_image_load_async",
+            "wasmtime_image_status",
+            "wasmtime_image_take_texture",
+            "wasmtime_image_release",
             "load_texture_cube",
             "load_texture_cube_from_buffer",
             "update_texture_2d",
@@ -934,13 +949,17 @@
         },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 50,
+          "exportCount": 54,
           "namespace": [
             "sys.gl",
             "sys.gl.screen"
           ],
           "omittedOperations": [
             "buffer_data",
+            "wasmtime_image_load_async",
+            "wasmtime_image_status",
+            "wasmtime_image_take_texture",
+            "wasmtime_image_release",
             "bind_texture_2d_immediate",
             "bind_texture_cube_immediate"
           ],
@@ -952,7 +971,7 @@
         },
         "lua": {
           "constantExportCount": 0,
-          "exportCount": 44,
+          "exportCount": 48,
           "namespace": "sys.gl",
           "omittedOperations": [
             "draw_fullscreen",
@@ -961,6 +980,10 @@
             "bind_canvas_texture",
             "program_texture",
             "buffer_data",
+            "wasmtime_image_load_async",
+            "wasmtime_image_status",
+            "wasmtime_image_take_texture",
+            "wasmtime_image_release",
             "bind_texture_2d",
             "bind_texture_cube",
             "draw_mesh"
@@ -973,7 +996,7 @@
         },
         "wasmtime": {
           "constantExportCount": 0,
-          "exportCount": 43,
+          "exportCount": 47,
           "namespace": "env",
           "omittedOperations": [
             "draw_fullscreen",
@@ -983,6 +1006,10 @@
             "bind_render_target_texture",
             "bind_canvas_texture",
             "program_texture",
+            "load_texture_2d_async",
+            "load_texture_2d_from_buffer_async",
+            "cancel_texture_load",
+            "async_texture_loading_available",
             "bind_texture_2d",
             "bind_texture_cube",
             "draw_mesh"
@@ -995,8 +1022,8 @@
       "stateOwnership": {
         "browser_wasm": "The web bridge copies guest strings and byte/float ranges into Emscripten memory for C wrappers; the WebAppState Window owns the resulting GL resources.",
         "javascript": "Window owns app-created GL programs, targets, buffers, textures, and vertex layouts and resets them with the app runtime.",
-        "lua": "Lua exposes numeric resource ids only; all calls use the active LuaCanvasContext's borrowed Window, which owns and resets app-created GL resources.",
-        "wasmtime": "Wasmtime exposes numeric resource ids and reads strings/buffers from the guest memory export; the borrowed Window owns the underlying GL resources."
+        "lua": "LuaCanvasContext owns async requests and registry callback references; the borrowed Window owns completed GL resources and resets them with the runtime.",
+        "wasmtime": "WasmCanvasContext owns bounded async image request records and unclaimed textures; guest buffers are copied or revalidated per call. The borrowed Window owns transferred GL resources."
       },
       "typescript": {},
       "unsupportedRuntimes": {}
@@ -1044,7 +1071,7 @@
             "Managed JavaScript and Lua expose the complete snapshot, key, IME, dimensions, and density tables on web.",
             "Browser-native WebAssembly exposes only width, height, mouse x/y, and mouse-button state; Wasmtime additionally exposes density, key-down, delta time, and total time.",
             "Browser-native mouse-button validation accepts the host INPUT_MOUSE_MAX range, while Wasmtime explicitly accepts only indices 0 through 2.",
-            "Managed snapshots include mouse, unified pointer, active pointers, modifiers, committed text, replacement edits, composition state, timing, frame count, and focus."
+            "Managed snapshots include mouse, unified pointer, active pointers, modifiers, committed text, replacement edits, composition state, timing, frame count, and focus. Desktop macOS also publishes per-frame trackpad pinch (physical-pixel x/y and a multiplicative scale) independently of scroll and touch."
           ],
           "source": "src/web/web_main.c"
         }

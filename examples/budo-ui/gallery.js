@@ -2,7 +2,7 @@
  *  by the snapshot tests (budo-ui.snapshots.test.mjs), so it has no side
  *  effects at import and keeps its state in one object. */
 
-import { ICONS } from './lib/icons.js';
+import { ICONS } from './ui/budo-ui.js';
 
 export const SECTIONS = ['Inputs', 'Choices', 'Feedback', 'Overlays', 'Text', 'Data', 'Icons', 'Surfaces', 'Motion'];
 

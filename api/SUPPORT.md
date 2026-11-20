@@ -6,15 +6,15 @@ Do not edit manually.
 | Subsystem | Operations | JavaScript | Lua | Wasmtime | Browser WASM |
 |---|---:|---|---|---|---|
 | `accessibility` | 4 | desktop, android, web (4) | desktop, android, web (4) | desktop (4) | - |
-| `audio` | 40 | desktop, android, web (45) | desktop, android, web (30) | desktop (15) | unsupported |
+| `audio` | 41 | desktop, android, web (46) | desktop, android, web (31) | desktop (15) | unsupported |
 | `canvas` | 54 | desktop, android, web (41) | desktop, android, web (41) | desktop (48) | web (30) |
 | `canvas_texture` | 29 | desktop, android, web (29) | unsupported | unsupported | unsupported |
 | `capabilities` | 6 | desktop, android, web (6) | desktop, android, web (6) | desktop (6) | - |
 | `console` | 3 | desktop, android, web (1) | desktop, android, web (1) | desktop (2) | unsupported |
 | `device` | 6 | desktop, android, web (6) | desktop, android, web (6) | desktop (6) | web (6) |
 | `drawing_resources` | 17 | desktop, android, web (17) | desktop, android, web (17) | desktop (15) | web (5) |
-| `file` | 17 | desktop, android, web (24) | desktop, android, web (16) | desktop (6) | unsupported |
-| `gl` | 53 | desktop, android, web (50) | desktop, android, web (44) | desktop (43) | web (11) |
+| `file` | 20 | desktop, android, web (27) | desktop, android, web (16) | desktop (6) | unsupported |
+| `gl` | 61 | desktop, android, web (54) | desktop, android, web (48) | desktop (47) | web (11) |
 | `input_window` | 14 | desktop, android, web (9) | desktop, android, web (9) | desktop (9) | web (5) |
 | `llamacpp` | 4 | desktop, android (4) | desktop, android (4) | unsupported | unsupported |
 | `magneto` | 8 | desktop, android, web (8) | desktop, android, web (8) | desktop (13) | unsupported |

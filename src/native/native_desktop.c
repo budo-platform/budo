@@ -60,7 +60,7 @@ int budo_native_desktop_main(int argc, char **argv)
 {
     const BudoApplication *descriptor;
     NativeDesktopApplication application;
-    DesktopHostApplication desktop_application;
+    DesktopHostApplication desktop_application = {0};
     WindowConfig window_config;
     Window *window;
     InputState input;

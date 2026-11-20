@@ -103,7 +103,7 @@
                 "Managed JavaScript and Lua expose the complete snapshot, key, IME, dimensions, and density tables on web.",
                 "Browser-native WebAssembly exposes only width, height, mouse x/y, and mouse-button state; Wasmtime additionally exposes density, key-down, delta time, and total time.",
                 "Browser-native mouse-button validation accepts the host INPUT_MOUSE_MAX range, while Wasmtime explicitly accepts only indices 0 through 2.",
-                "Managed snapshots include mouse, unified pointer, active pointers, modifiers, committed text, replacement edits, composition state, timing, frame count, and focus."
+                "Managed snapshots include mouse, unified pointer, active pointers, modifiers, committed text, replacement edits, composition state, timing, frame count, and focus. Desktop macOS also publishes per-frame trackpad pinch (physical-pixel x/y and a multiplicative scale) independently of scroll and touch."
             ]
         },
         "android": {
@@ -123,7 +123,7 @@
     "operations": [
         {
             "name": "input_snapshot",
-            "signature": "() -> per-frame input snapshot containing mouse, pointer(s), modifiers, text/edit/composition, timing, frame count, and focus",
+            "signature": "() -> per-frame input snapshot containing mouse, pointer(s), pinch, modifiers, text/edit/composition, timing, frame count, and focus",
             "binding_symbols": {
                 "javascript": "js_get_input",
                 "lua": "l_input_get"

@@ -45,9 +45,10 @@ Each phase ships on its own. Status: **done** (this pass), *next*, or later.
 
 ### 0. Foundations — done
 
-- Folder `examples/budo-ui`, entry `budo-ui.js`, implementation split into
-  modules under `lib/` (math, color, motion, theme, layout, core, widgets).
-  `ui-library.js` re-exports the entry for existing imports.
+- Distributable folder `examples/budo-ui/ui`, entry `ui/budo-ui.js`,
+  implementation split into modules under `ui/lib/` (math, color, motion,
+  theme, layout, core, widgets). The demo, tests, and snapshots stay outside.
+  Root `budo-ui.js` and `ui-library.js` re-export the entry for existing imports.
 - Density-aware sizes: theme sizes (`font`, `row`, `radius`, `gap`, ...) are
   density-independent pixels; widgets scale them by the display density.
   `ui.dp(n)` converts app constants. Desktop density is 1, so nothing changes

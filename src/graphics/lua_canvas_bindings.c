@@ -1186,6 +1186,18 @@ static int l_input_get(lua_State *L)
     lua_setfield(L, -2, "rightPressed");
     lua_setfield(L, -2, "mouse");
 
+    if (input->pinch_scale > 0.0)
+    {
+        lua_newtable(L);
+        lua_pushinteger(L, input->pinch_x);
+        lua_setfield(L, -2, "x");
+        lua_pushinteger(L, input->pinch_y);
+        lua_setfield(L, -2, "y");
+        lua_pushnumber(L, input->pinch_scale);
+        lua_setfield(L, -2, "scale");
+        lua_setfield(L, -2, "pinch");
+    }
+
     int touch_count = input_touch_count(input);
     lua_push_pointer(L, 0, input->mouse_x, input->mouse_y,
                      input->mouse_dx, input->mouse_dy,
@@ -1488,7 +1500,7 @@ static int l_animation_cancel_frame(lua_State *L)
     return 0;
 }
 
- static int l_transform_save(lua_State *state)
+static int l_transform_save(lua_State *state)
 {
     LuaCanvasContext *context = lua_canvas_graphics_context(state);
     if (context && context->canvas)
@@ -1733,6 +1745,7 @@ void lua_canvas_destroy(LuaCanvasContext *ctx)
     if (ctx->input)
         input_text_stop(ctx->input);
 
+    lua_image_cleanup(ctx);
     lua_State *L = (lua_State *)ctx->L;
     if (L)
     {

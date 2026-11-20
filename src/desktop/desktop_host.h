@@ -22,6 +22,8 @@ extern "C"
         bool (*keep_running)(void *context);
 
         double (*idle_ms)(void *context);
+        
+        bool (*should_present)(void *context);
     } DesktopHostApplication;
 
     int desktop_host_run(Window *window, InputState *input,

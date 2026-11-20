@@ -1,0 +1,5 @@
+{
+  "name": "Fullscreen Immediate Regression",
+  "package_name": "com.budo.test.fullscreen_immediate",
+  "fullscreen": true
+}

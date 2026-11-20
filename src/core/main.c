@@ -26,6 +26,21 @@ int budo_cli_main(int argc, char **argv)
     if (!budo_cli_parse(argc, argv, &options))
         return 1;
 
+    char bundled_project[BUDO_PACKAGE_PATH_SIZE], bundled_data[BUDO_PACKAGE_PATH_SIZE];
+    if (argc == 1)
+    {
+        int bundled = desktop_package_prepare(bundled_project, bundled_data);
+        if (bundled < 0)
+            return 1;
+        if (bundled > 0)
+        {
+            options.command = BUDO_CMD_RUN;
+            options.run.target = bundled_project;
+            options.run.file_root = bundled_data;
+            options.run.sqlite_root = bundled_data;
+        }
+    }
+
     switch (options.command)
     {
     case BUDO_CMD_HELP:
@@ -55,6 +70,9 @@ int budo_cli_main(int argc, char **argv)
 
     case BUDO_CMD_COMPILE:
         return native_compile_project(options.project_dir, &options.compile);
+
+    case BUDO_CMD_PACKAGE:
+        return desktop_package(options.project_dir, &options.package);
 
     case BUDO_CMD_NATIVE_CACHE_INSPECT:
         return native_compile_cache_inspect(options.cache_json);

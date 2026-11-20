@@ -192,6 +192,7 @@ void budo_web_managed_shutdown(void)
         return;
 
     g_state.managed_shutdown_called = true;
+    g_state.finished = true;
     managed_runtime_shutdown(&g_state.subsystems);
     g_state.common_contexts.js_ctx = NULL;
     g_state.common_contexts.lua_ctx = NULL;
@@ -219,11 +220,18 @@ EM_JS(void, js_web_install_managed_pagehide, (void), {
         return;
     Module._budoManagedPagehideInstalled = true;
     var shutdownCalled = false;
-    addEventListener('pagehide', function() {
+    function shutdown() {
         if (shutdownCalled)
             return;
         shutdownCalled = true;
         Module._budo_web_managed_shutdown();
+    }
+    addEventListener('pagehide', shutdown, {once: true});
+    var canvas = document.getElementById('canvas');
+    if (canvas) canvas.addEventListener('webglcontextlost', function() {
+        shutdown();
+        Module.budoExitStatus = 1;
+        dispatchEvent(new CustomEvent('budoexit', {detail: {code: 1}}));
     }, {once: true});
 });
 
@@ -524,7 +532,9 @@ void budo_web_wasm_canvas_save_layer(int alpha, int has_bounds, float x, float y
     SkiaRect bounds = {x, y, x + w, y + h};
     if (canvas)
         skia_canvas_save_layer(canvas, has_bounds ? &bounds : NULL,
-                               (uint8_t)(alpha < 0 ? 0 : alpha > 255 ? 255 : alpha), backdrop_blur);
+                               (uint8_t)(alpha < 0 ? 0 : alpha > 255 ? 255
+                                                                     : alpha),
+                               backdrop_blur);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -1374,18 +1384,21 @@ static EM_BOOL frame_tick(double timestamp_ms, void *user_data)
     ManagedFrameContext frame = web_frame_context(state);
     window_begin_frame(state->window, window_get_time(state->window));
 
+    bool should_present;
     if (state->runtime_kind == MANAGED_RUNTIME_WEBASSEMBLY)
     {
         
         if (state->common_contexts.net_ctx)
             network_async_poll(state->common_contexts.net_ctx);
-        if (budo_animation_wait_due(&state->wasm_wait, &state->input, frame.width, frame.height, timestamp_ms))
+        should_present = budo_animation_wait_due(&state->wasm_wait, &state->input,
+                                                 frame.width, frame.height, timestamp_ms);
+        if (should_present)
             js_web_wasm_frame(timestamp_ms);
     }
     else
     {
-        managed_runtime_frame(state->runtime_kind, &state->subsystems,
-                              &state->common_contexts, &frame, timestamp_ms);
+        should_present = managed_runtime_frame(state->runtime_kind, &state->subsystems,
+                                               &state->common_contexts, &frame, timestamp_ms);
     }
 
     if (web_exit_requested(state, &exit_code))
@@ -1394,7 +1407,8 @@ static EM_BOOL frame_tick(double timestamp_ms, void *user_data)
         return EM_FALSE;
     }
 
-    window_present(state->window);
+    if (should_present)
+        window_present(state->window);
 
     input_begin_frame(&state->input);
 

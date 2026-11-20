@@ -53,6 +53,8 @@ extern "C"
 
     FileContext *file_create(const char *root_dir);
 
+    FileContext *file_clone(const FileContext *source);
+
     void file_destroy(FileContext *ctx);
 
     bool file_has_root(FileContext *ctx);
@@ -107,6 +109,14 @@ extern "C"
 
     bool file_append_binary(FileContext *ctx, const char *rel_path,
                             const uint8_t *data, size_t len);
+
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+    typedef struct FileAtomicWriter FileAtomicWriter;
+    FileAtomicWriter *file_atomic_writer_open(FileContext *ctx, const char *path);
+    bool file_atomic_writer_write(FileAtomicWriter *writer, const uint8_t *data, size_t len);
+    
+    bool file_atomic_writer_finish(FileAtomicWriter *writer, bool commit);
+#endif
 
     const char *file_get_last_write_path(FileContext *ctx);
 

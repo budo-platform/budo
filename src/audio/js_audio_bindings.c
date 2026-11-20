@@ -105,6 +105,19 @@ JS_AUDIO_CALLBACK(js_audio_stop)
     return JS_UNDEFINED;
 }
 
+JS_AUDIO_CALLBACK(js_audio_pause)
+{
+    (void)this_val;
+    (void)argc;
+    (void)argv;
+    JS_AUDIO_CONTEXT();
+    if (g_audio_ctx)
+    {
+        audio_pause(g_audio_ctx);
+    }
+    return JS_UNDEFINED;
+}
+
 JS_AUDIO_CALLBACK(js_audio_is_playing)
 {
     (void)this_val;
@@ -1044,6 +1057,7 @@ static const JsAudioFunction js_audio_funcs[] = {
     
     {"start", 0, js_audio_start},
     {"stop", 0, js_audio_stop},
+    {"pause", 0, js_audio_pause},
     {"isPlaying", 0, js_audio_is_playing},
     {"setMasterGain", 1, js_audio_set_master_gain},
     {"getMasterGain", 0, js_audio_get_master_gain},

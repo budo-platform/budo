@@ -45,6 +45,9 @@ void budo_cli_print_usage(const char *program_name)
             "                                  main.wasm → main.wat.\n"
             "  compile <DIRECTORY|FILE> [opts] Compile a trusted native C project using\n"
             "                                  the matching local Budo SDK.\n"
+            "  package <DIRECTORY> <self|linux|macos|windows>\n"
+            "          [--name ID] [--release TAG] [-o FILE]\n"
+            "                                  Embed a managed app in a Budo executable.\n"
             "  cache native inspect [--json]  Inspect the native executable cache.\n"
             "  cache native clean --all      Remove native executable cache entries.\n"
             "  cache sdk inspect [--json]     Inspect verified downloaded SDKs.\n"
@@ -277,6 +280,32 @@ bool budo_cli_parse(int argc, char **argv, BudoCliOptions *config)
         strcmp(first, "-v") == 0)
     {
         config->command = BUDO_CMD_VERSION;
+        return true;
+    }
+
+    if (strcmp(first, "package") == 0)
+    {
+        config->command = BUDO_CMD_PACKAGE;
+        if (argc < 4 || !argv[2][0] || argv[2][0] == '-')
+        {
+            fprintf(stderr, "Usage: %s package <DIRECTORY> <self|linux|macos|windows>"
+                            " [--name ID] [--release TAG] [-o FILE]\n", argv[0]);
+            return false;
+        }
+        config->project_dir = argv[2];
+        config->package.platform = argv[3];
+        for (int i = 4; i < argc; ++i)
+        {
+            const char *flag = argv[i];
+            const char **slot = !strcmp(flag, "--name") ? &config->package.name
+                              : !strcmp(flag, "--release") ? &config->package.release
+                              : !strcmp(flag, "-o") ? &config->package.output : NULL;
+            if (!slot || *slot || !(*slot = take_option_value(argc, argv, &i)) || !**slot)
+            {
+                fprintf(stderr, "Error: invalid or repeated package option '%s'\n", flag);
+                return false;
+            }
+        }
         return true;
     }
 

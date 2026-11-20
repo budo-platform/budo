@@ -39,6 +39,8 @@ extern "C"
 
     void audio_stop(AudioContext *ctx);
 
+    void audio_pause(AudioContext *ctx);
+
     bool audio_is_playing(AudioContext *ctx);
 
     void audio_set_master_gain(AudioContext *ctx, float gain);

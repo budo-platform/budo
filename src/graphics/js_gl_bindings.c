@@ -1,5 +1,10 @@
 #include "graphics/js_canvas_bindings.h"
 #include "graphics/js_gl_bindings.h"
+
+#ifdef BUDO_WEB
+#include "web/web_image.h"
+#endif
+#include "graphics/js_image_bindings.h"
 #include "core/window.h"
 
 #include <stdint.h>
@@ -18,6 +23,33 @@ static JSValue js_throw_window_error(JSContext *ctx, JSGraphicContext *graphic_c
         window_gl_get_error(graphic_ctx->window))
         message = window_gl_get_error(graphic_ctx->window);
     return JS_ThrowInternalError(ctx, "%s", message);
+}
+
+static JSValue js_gl_load_texture_2d_async(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
+{
+    JSGraphicContext *graphics = js_graphic_context(ctx, func_data);
+    return graphics ? js_image_load(ctx, graphics, argc, argv, false) : JS_EXCEPTION;
+}
+
+static JSValue js_gl_load_texture_2d_from_buffer_async(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
+{
+    JSGraphicContext *graphics = js_graphic_context(ctx, func_data);
+    return graphics ? js_image_load(ctx, graphics, argc, argv, true) : JS_EXCEPTION;
+}
+
+static JSValue js_gl_cancel_texture_load(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
+{
+    JSGraphicContext *graphics = js_graphic_context(ctx, func_data);
+    return graphics ? js_image_cancel(ctx, graphics, argc, argv) : JS_EXCEPTION;
+}
+
+static JSValue js_gl_is_async_texture_loading_available(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
+{
+#ifdef BUDO_WEB
+    return JS_NewBool(ctx, budo_web_image_available());
+#else
+    return JS_TRUE;
+#endif
 }
 
 static const uint8_t *js_get_buffer_bytes(JSContext *ctx, JSValue val,
@@ -1646,6 +1678,10 @@ static const JsGraphicFunction js_sys_gl_funcs[] = {
     {"createTexture2D", 4, js_gl_create_texture_2d},
     {"loadTexture2D", 1, js_gl_load_texture_2d},
     {"loadTexture2DFromBuffer", 1, js_gl_load_texture_2d_from_buffer},
+    {"loadTexture2DAsync", 3, js_gl_load_texture_2d_async},
+    {"loadTexture2DFromBufferAsync", 3, js_gl_load_texture_2d_from_buffer_async},
+    {"cancelTextureLoad", 1, js_gl_cancel_texture_load},
+    {"isAsyncTextureLoadingAvailable", 0, js_gl_is_async_texture_loading_available},
     {"loadTextureCube", 1, js_gl_load_texture_cube},
     {"loadTextureCubeFromBuffer", 1, js_gl_load_texture_cube_from_buffer},
     {"updateTexture2D", 6, js_gl_update_texture_2d},

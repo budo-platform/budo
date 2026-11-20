@@ -368,6 +368,22 @@ doc = /** Bind a CanvasTexture's flushed GL texture to a sampler uniform in a sh
 sig = (buffer: ArrayBuffer | ArrayBufferView): number
 doc = /** Decode PNG/JPG image bytes from an ArrayBuffer or TypedArray and upload them as a 2D texture. */
 
+[gl.loadTexture2DAsync]
+sig = (path: string, options: TextureLoadOptions, callbacks: TextureLoadCallbacks): number
+doc = /** Queue a worker-backed image load and bounded graphics-thread upload. Returns a cancellable request id, not a texture. Project-relative paths default to the assets mount. Browser VFS reads are chunked on the host. */
+
+[gl.loadTexture2DFromBufferAsync]
+sig = (buffer: ArrayBuffer | ArrayBufferView, options: TextureLoadOptions, callbacks: TextureLoadCallbacks): number
+doc = /** Copy encoded bytes and queue worker decoding. Completion receives a normal texture id. Available on native and supported browser hosts. */
+
+[gl.cancelTextureLoad]
+sig = (requestId: number): boolean
+doc = /** Cancel an active load without waiting or invoking further callbacks. False after completion or previous cancellation. */
+
+[gl.isAsyncTextureLoadingAvailable]
+sig = (): boolean
+doc = /** True for native worker loading or available browser Worker/WebAssembly/Blob URL capabilities. Worker startup may still fail. */
+
 [gl.loadTextureCubeFromBuffer]
 sig = (faces: [ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView, ArrayBuffer | ArrayBufferView]): number
 doc = /** Decode six image buffers (order: +X, -X, +Y, -Y, +Z, -Z) and upload them as a cubemap. */
@@ -474,9 +490,13 @@ doc = /** Start the audio context. */
 sig = (): void
 doc = /** Stop the audio context. */
 
+[audio.pause]
+sig = (): void
+doc = /** Pause audio output; `start()` resumes. On Android with `background_audio`, the media notification stays and shows Play (like its Pause button); elsewhere, same as `stop()`. */
+
 [audio.isPlaying]
 sig = (): boolean
-doc = /** Check whether audio is currently playing. */
+doc = /** Check whether audio is currently playing. On Android with `background_audio`, false while the system holds playback paused (notification Pause, audio focus loss): call `start()` from a user action to resume. */
 
 [audio.setMasterGain]
 sig = (gain: number): void
@@ -536,11 +556,11 @@ doc = /** Create an audio buffer. Returns a buffer ID. */
 
 [audio.loadBuffer]
 sig = (path: string): number
-doc = /** Load a WAV, MP3, Ogg Vorbis, or FLAC asset into an audio buffer. Returns a buffer ID, or -1 on failure. */
+doc = /** Load a WAV, MP3, Ogg Vorbis, Opus, or FLAC asset into an audio buffer. Returns a buffer ID, or -1 on failure. */
 
 [audio.loadBufferFromBuffer]
 sig = (buffer: ArrayBuffer): number
-doc = /** Decode WAV, MP3, Ogg Vorbis, or FLAC bytes from an ArrayBuffer into an audio buffer. Returns a buffer ID, or -1 on failure. */
+doc = /** Decode WAV, MP3, Ogg Vorbis, Opus, or FLAC bytes from an ArrayBuffer into an audio buffer. Returns a buffer ID, or -1 on failure. */
 
 [audio.setBufferData]
 sig = (bufferId: number, samples: number[], offset?: number): void
@@ -588,7 +608,7 @@ doc = /** Stop recording and close an input stream. */
 
 [audio.openDecoder]
 sig = (source: string | ArrayBuffer | ArrayBufferView, options?: AudioDecoderOptions): number
-doc = /** Open a WAV, MP3, Ogg Vorbis, or FLAC decoder on an assets/... or files/... path (read in blocks: any size, seekable) or on bytes in memory. Returns a decoder handle, or -1 (see getError). */
+doc = /** Open a WAV, MP3, Ogg Vorbis, Opus, or FLAC decoder on an assets/... or files/... path (read in blocks: any size, seekable) or on bytes in memory. Returns a decoder handle, or -1 (see getError). */
 
 [audio.createDecoder]
 sig = (options?: AudioDecoderOptions): number
@@ -910,6 +930,18 @@ doc = /** Write binary data to a files/... path, creating parents and replacing 
 [file.appendBinary]
 sig = (path: string, data: ArrayBuffer | ArrayBufferView): string
 doc = /** Append binary data to a files/... path, creating it and its parents when needed. assets/... is read-only. Returns the absolute saved path. Throws on error. */
+
+[file.openAtomicWrite]
+sig = ?(path: string): number | null
+doc = /** macOS/Linux JS only. Stage a replacement under files/ in an existing directory. One writer per runtime. Returns null on I/O failure; see getError(). */
+
+[file.writeBlock]
+sig = ?(handle: number, data: ArrayBuffer | Exclude<ArrayBufferView, DataView>): boolean
+doc = /** Append one ArrayBuffer or typed-array block (at most 16 MiB). False on I/O failure. */
+
+[file.finishAtomicWrite]
+sig = ?(handle: number, commit: boolean): boolean
+doc = /** Commit via atomic rename or discard. Either consumes the handle; false on I/O failure. */
 
 [file.exists]
 sig = (path: string): boolean

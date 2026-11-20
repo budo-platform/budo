@@ -7,6 +7,7 @@
 #include "file/js_file_bindings.h"
 #include "file/lua_file_bindings.h"
 #include "graphics/js_canvas_bindings.h"
+#include "graphics/js_image_bindings.h"
 #include "graphics/lua_canvas_bindings.h"
 #ifdef BUDO_LLAMACPP
 #include "llamacpp/js_llamacpp_bindings.h"
@@ -74,6 +75,10 @@ BUDO_DEFINE_CLEANUP_ADAPTER(managed_device_cleanup,
 
 BUDO_DEFINE_POLL_ADAPTER(managed_js_midi_poll,
                          JsMidiContext, js_midi_poll)
+BUDO_DEFINE_POLL_ADAPTER(managed_js_image_poll,
+                         JSGraphicContext, js_image_poll)
+BUDO_DEFINE_POLL_ADAPTER(managed_lua_image_poll,
+                         LuaCanvasContext, lua_image_poll)
 BUDO_DEFINE_POLL_ADAPTER(managed_js_audio_poll,
                          JsAudioContext, js_audio_poll)
 BUDO_DEFINE_POLL_ADAPTER(managed_lua_midi_poll,
@@ -98,6 +103,8 @@ BUDO_DEFINE_POLL_ADAPTER(managed_lua_network_poll,
     }
 
 BUDO_DEFINE_PENDING_ADAPTER(managed_js_network_pending, JsNetworkContext, js_network_has_pending_work)
+BUDO_DEFINE_PENDING_ADAPTER(managed_js_image_pending, JSGraphicContext, js_image_pending)
+BUDO_DEFINE_PENDING_ADAPTER(managed_lua_image_pending, LuaCanvasContext, lua_image_pending)
 BUDO_DEFINE_PENDING_ADAPTER(managed_lua_network_pending, LuaNetworkContext, lua_network_has_pending_work)
 BUDO_DEFINE_PENDING_ADAPTER(managed_js_midi_pending, JsMidiContext, js_midi_has_pending_work)
 BUDO_DEFINE_PENDING_ADAPTER(managed_js_audio_pending, JsAudioContext, js_audio_has_pending_work)

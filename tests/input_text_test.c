@@ -58,6 +58,17 @@ int main(void)
     const char *expected = "azerty \xC3\xA9";
 
     input_init(&input);
+    input_set_mouse_position(&input, 2, 4);
+    input_set_mouse_wheel(&input, -1, 3);
+    input_add_pinch(&input, 10, 20, 1.25);
+    input_add_pinch(&input, 11, 21, 1.2);
+    input_add_pinch(&input, 99, 99, -0.5);
+    if (check(input.pinch_scale == 1.5 && input.pinch_x == 11 && input.pinch_y == 21 &&
+                  input.event_count == 4 && input.mouse_x == 2 && input.mouse_y == 4 &&
+                  input.mouse_wheel_x == -1 && input.mouse_wheel_y == 3 &&
+                  input_touch_count(&input) == 0 && !input.mouse_buttons[INPUT_MOUSE_LEFT],
+              "pinch must combine independently of mouse, touch and scroll"))
+        return 1;
     input_append_text(&input, "azerty ");
     input_append_codepoint(&input, 0x00E9);
 
@@ -69,6 +80,9 @@ int main(void)
         return 1;
 
     input_begin_frame(&input);
+    if (check(input.pinch_scale == 0.0 && input.event_count == 0,
+              "pinch was not cleared for the next frame"))
+        return 1;
     if (check(input.text_length == 0 && input.text[0] == '\0',
               "committed text was not reset for the next frame"))
         return 1;

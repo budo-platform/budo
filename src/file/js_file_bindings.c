@@ -61,6 +61,10 @@ struct JsFileContext
         FileNativeReference file;
         uint64_t position;
     } readers[FILE_READER_CAPACITY];
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+    FileAtomicWriter *writer;
+    uint32_t writer_handle;
+#endif
 };
 
 typedef struct JsFileBridgeSlot
@@ -570,7 +574,8 @@ static JSValue check_path(JSContext *ctx, const char *method, int argc,
         return JS_EXCEPTION;
     bool writable = strcmp(method, "writeText") == 0 ||
                     strcmp(method, "writeBinary") == 0 ||
-                    strcmp(method, "appendBinary") == 0;
+                    strcmp(method, "appendBinary") == 0 ||
+                    strcmp(method, "openAtomicWrite") == 0;
     if (!file_virtual_path_is_valid(*out_path, allow_empty, writable))
     {
         JS_FreeCString(ctx, *out_path);
@@ -889,6 +894,81 @@ JS_FILE_CALLBACK(js_file_close_read)
     return JS_UNDEFINED;
 }
 
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+JS_FILE_CALLBACK(js_file_open_atomic_write)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    if (state->writer)
+        return JS_ThrowTypeError(ctx, "files.openAtomicWrite: a write is already active");
+    const char *path;
+    JSValue err = check_path(ctx, "openAtomicWrite", argc, argv, 1, false, &path);
+    if (JS_IsException(err))
+        return err;
+    state->writer = file_atomic_writer_open(file_ctx, path);
+    JS_FreeCString(ctx, path);
+    if (!state->writer)
+        return JS_NULL;
+    if (++state->writer_handle == 0)
+        ++state->writer_handle;
+    return JS_NewUint32(ctx, state->writer_handle);
+}
+
+static bool matching_writer(JSContext *ctx, JsFileContext *state, JSValueConst handle)
+{
+    double id;
+    return state->writer && JS_IsNumber(handle) && JS_ToFloat64(ctx, &id, handle) == 0 &&
+           id == (double)state->writer_handle;
+}
+
+JS_FILE_CALLBACK(js_file_write_block)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    (void)file_ctx;
+    if (argc != 2 || !matching_writer(ctx, state, argv[0]))
+        return JS_ThrowTypeError(ctx, "files.writeBlock(handle, bytes): invalid arguments or writer");
+    size_t size = 0, offset = 0;
+    JSValue buffer = JS_UNDEFINED;
+    if (!JS_IsArrayBuffer(argv[1]))
+    {
+        size_t bytes_per_element;
+        buffer = JS_GetTypedArrayBuffer(ctx, argv[1], &offset, &size, &bytes_per_element);
+        if (JS_IsException(buffer))
+            return buffer;
+    }
+    size_t buffer_size = 0;
+    uint8_t *data = JS_GetArrayBuffer(ctx, &buffer_size, JS_IsUndefined(buffer) ? argv[1] : buffer);
+    if (JS_IsUndefined(buffer))
+        size = buffer_size;
+    if (!data || offset > buffer_size || size > buffer_size - offset)
+    {
+        JS_FreeValue(ctx, buffer);
+        return JS_ThrowTypeError(ctx, "files.writeBlock: invalid buffer");
+    }
+    if (size > FILE_READ_MAX_BLOCK)
+    {
+        JS_FreeValue(ctx, buffer);
+        return JS_ThrowRangeError(ctx, "files.writeBlock: block exceeds 16 MiB");
+    }
+    bool ok = file_atomic_writer_write(state->writer, data + offset, size);
+    JS_FreeValue(ctx, buffer);
+    return JS_NewBool(ctx, ok);
+}
+
+JS_FILE_CALLBACK(js_file_finish_atomic_write)
+{
+    (void)this_val;
+    JS_FILE_STATE();
+    (void)file_ctx;
+    if (argc != 2 || !matching_writer(ctx, state, argv[0]) || !JS_IsBool(argv[1]))
+        return JS_ThrowTypeError(ctx, "files.finishAtomicWrite(handle, commit): invalid arguments or writer");
+    bool ok = file_atomic_writer_finish(state->writer, JS_ToBool(ctx, argv[1]));
+    state->writer = NULL;
+    return JS_NewBool(ctx, ok);
+}
+#endif
+
 JS_FILE_CALLBACK(js_file_exists)
 {
     (void)this_val;
@@ -1192,6 +1272,11 @@ static const JsFileFunction js_file_funcs[] = {
     {"seek", 2, js_file_seek},
     {"getReadInfo", 1, js_file_get_read_info},
     {"closeRead", 1, js_file_close_read},
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+    {"openAtomicWrite", 1, js_file_open_atomic_write},
+    {"writeBlock", 2, js_file_write_block},
+    {"finishAtomicWrite", 2, js_file_finish_atomic_write},
+#endif
     {"writeText", 2, js_file_write_text},
     {"writeBinary", 2, js_file_write_binary},
     {"appendBinary", 2, js_file_append_binary},
@@ -1244,6 +1329,13 @@ static void js_file_ctx_free(JSRuntime *runtime, void *opaque, void *pointer)
     while (subsystem_queue_try_pop(&state->completions, &completion))
         file_completion_free(&completion);
     subsystem_queue_destroy(&state->completions);
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+    if (state->writer)
+    {
+        file_atomic_writer_finish(state->writer, false);
+        state->writer = NULL;
+    }
+#endif
     file_destroy(state->file_ctx);
     free(state);
 }

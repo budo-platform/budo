@@ -57,7 +57,7 @@ globalThis.sys = {
     animation: { requestFrame: () => { } },
 };
 
-const { createUI, themes } = await import('./budo-ui.js');
+const { createUI, themes } = await import('./ui/budo-ui.js');
 const { createGalleryState, drawGallery, SECTIONS } = await import('./gallery.js');
 
 /** Draw `frames` frames of the gallery and return the last frame's calls. */

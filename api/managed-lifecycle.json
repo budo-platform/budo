@@ -36,11 +36,13 @@
       ]
     },
     "poll": {
+      "JavaScript canvas": "managed_js_image_poll",
       "JavaScript file": "managed_js_file_poll",
       "JavaScript llama.cpp": "managed_js_llamacpp_poll",
       "JavaScript network": "managed_js_network_poll",
       "JavaScript UDP": "js_udp_poll_adapter",
       "JavaScript MIDI": "managed_js_midi_poll",
+      "Lua canvas": "managed_lua_image_poll",
       "Lua llama.cpp": "managed_lua_llamacpp_poll",
       "Lua network": "managed_lua_network_poll",
       "Lua UDP": "lua_udp_poll_adapter",

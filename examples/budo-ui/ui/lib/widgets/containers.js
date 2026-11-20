@@ -6,7 +6,8 @@ import { springs } from '../motion.js';
 
 /** @typedef {import('../layout.js').Rect} Rect */
 /** @typedef {{ ratio?: number, min?: number, max?: number, vertical?: boolean }} SplitOptions */
-/** @typedef {{ touchScroll?: boolean, followEnd?: boolean, radius?: number, dragThreshold?: number }} ScrollOptions
+/** @typedef {{ touchScroll?: boolean, followEnd?: boolean, radius?: number, dragThreshold?: number,
+ *   scrubber?: Rect, scrubberLabel?: string, scrubberColor?: import('../color.js').Color, accelerate?: boolean }} ScrollOptions
  *  `dragThreshold` (dp, default 7): how far a finger moves before a touch scrolls instead of tapping. */
 /** @typedef {{ id: string, title: string, subtitle?: string, depth?: number,
  *   kind?: 'group' | 'item', groupId?: string, height?: number,
@@ -17,6 +18,8 @@ import { springs } from '../motion.js';
 /** @typedef {{ selectedId: string | null, actionId: string | null,
  *   move: { fromId: string, toId: string } | null, swipedId: string | null }} ListResult */
 
+const KEY_DOWN = 81, KEY_UP = 82, KEY_LEFT = 80, KEY_RIGHT = 79, KEY_HOME = 74, KEY_END = 77;
+
 /** @param {any} ui @param {any} ctx */
 export function install(ui, ctx) {
     const t = () => ctx.theme;
@@ -26,11 +29,13 @@ export function install(ui, ctx) {
     const offsets = new Map();
     /** @type {Map<string, number>} */
     const scrollLimits = new Map();
-    /** @type {Map<string, { pointerId: number, lastY: number, startY: number, dragging: boolean }>} */
+    /** @type {Map<string, { pointerId: number, lastY: number, startY: number, dragging: boolean, velocity: number }>} */
     const scrollGestures = new Map();
     /** @type {Map<string, { sourceId: string, startY: number, grabY: number, moved: boolean }>} */
     /** @type {Map<string, number>} offsets as drawn last frame */
     const shownOffsets = new Map();
+    /** @type {{ id: string, pointerId: number, grab: number } | null} */
+    let thumbDrag = null;
     const listDrags = new Map();
     /** @type {Map<string, { itemId: string, startX: number, startY: number, mode: 'swipe' | 'scroll' | null, slide: number }>} */
     const swipes = new Map();
@@ -67,8 +72,84 @@ export function install(ui, ctx) {
             Math.max(1, length)), options.min || 0.2, options.max || 0.8));
     }
 
-    /** Vertical scroll area: wheel scrolling glides, touch drags follow the
-     *  finger. Clips drawing and hit tests; `draw(content, offset)` gets the
+    /** @param {string} id @param {Rect} lane @param {Rect} hoverArea @param {number} offset
+     *  @param {number} viewport @param {number} limit @param {boolean} horizontal @param {string} [label] */
+    function scrollbar(id, lane, hoverArea, offset, viewport, limit, horizontal, label) {
+        const key = ctx.fullId(id);
+        const pointer = ctx.input.pointer;
+        const blocked = ctx.modalOpen && ctx.z === 0;
+        const length = horizontal ? lane.width : lane.height;
+        const visible = limit > 0 && viewport > 0 && length > 0 && (horizontal ? lane.height : lane.width) > 0;
+        if (thumbDrag && (ctx.active !== thumbDrag.id || !pointer.down || pointer.id !== thumbDrag.pointerId ||
+            (thumbDrag.id === key && (blocked || !visible)))) thumbDrag = null;
+        if (!visible) return { offset, dragging: false, draw: () => {} };
+
+        const size = Math.max(Math.min(ctx.px(24), length / 2), length * viewport / (viewport + limit));
+        const travel = length - size;
+        const position = value => travel * clamp(value / limit, 0, 1);
+        const segment = value => horizontal
+            ? { ...lane, x: lane.x + position(value), width: size }
+            : { ...lane, y: lane.y + position(value), height: size };
+        let hovered = false, dragging = false, focused = false;
+        if (!blocked) {
+            const overThumb = ctx.inside(segment(offset));
+            const state = ctx.interact(id, lane, {
+                cursor: overThumb || thumbDrag?.id === key ? (horizontal ? 'ew-resize' : 'ns-resize') : null,
+                a11y: label ? { role: 'slider', label, min: 0, max: limit, rangeValue: offset,
+                    value: Math.round(100 * offset / limit) + '%' } : undefined,
+            });
+            hovered = state.hovered && overThumb;
+            focused = state.focused;
+            if (label && !state.held) {
+                const action = state.action;
+                if (action?.action === 'increment' || (focused && ctx.keyPressed(KEY_RIGHT))) offset += limit / 20;
+                if (action?.action === 'decrement' || (focused && ctx.keyPressed(KEY_LEFT))) offset -= limit / 20;
+                if (action?.action === 'setValue' && Number.isFinite(Number(action.value))) offset = Number(action.value);
+                if (focused && ctx.keyPressed(KEY_HOME)) offset = 0;
+                if (focused && ctx.keyPressed(KEY_END)) offset = limit;
+                offset = clamp(offset, 0, limit);
+            }
+            if (state.held && travel > 0) {
+                const screen = ctx.toScreen({ ...lane, width: 1, height: 1 });
+                const point = horizontal ? (pointer.x - screen.x) / screen.width : (pointer.y - screen.y) / screen.height;
+                if (pointer.pressed && (hovered || horizontal)) {
+                    thumbDrag = { id: key, pointerId: pointer.id, grab: hovered ? point - position(offset) : size / 2 };
+                }
+                if (thumbDrag?.id === key) {
+                    offset = limit * clamp((point - thumbDrag.grab) / travel, 0, 1);
+                    dragging = true;
+                }
+            }
+        }
+        return { offset, dragging, draw(value) {
+            const thumb = segment(value);
+            const thickness = Math.min(ctx.px(4), horizontal ? lane.height : lane.width);
+            if (horizontal) {
+                thumb.y += lane.height - Math.min(ctx.px(6), lane.height);
+                thumb.height = thickness;
+            } else {
+                thumb.x += lane.width - Math.min(ctx.px(6), lane.width);
+                thumb.width = thickness;
+            }
+            ctx.fill(thumb, ctx.colorAt(key + '#color', dragging || hovered || focused ? t().accent
+                : ctx.inside(hoverArea) || ctx.inside(lane) ? t().muted : t().border), thickness / 2);
+        } };
+    }
+
+    /** Draw a horizontal scrollbar in a reserved gutter and return the new offset.
+     *  @param {string} id @param {Rect} gutter @param {number} offset
+     *  @param {number} viewportWidth @param {number} contentWidth
+     *  @param {{ label?: string, hoverArea?: Rect }} [options] */
+    function horizontalScrollbar(id, gutter, offset, viewportWidth, contentWidth, options = {}) {
+        const limit = Math.max(0, contentWidth - viewportWidth);
+        const bar = scrollbar(id + ':thumb', gutter, options.hoverArea || gutter,
+            clamp(offset, 0, limit), viewportWidth, limit, true, options.label || 'Horizontal scroll');
+        bar.draw(bar.offset);
+        return bar.offset;
+    }
+
+    /** Vertical scroll area with a draggable thumb, gliding wheel scrolling,
+     *  and touch panning. Clips drawing and hit tests; `draw(content, offset)` gets the
      *  translated content rectangle. Returns the current offset.
      *  @param {string} id @param {Rect} rect @param {number} contentHeight
      *  @param {(content: Rect, offset: number) => void} draw @param {ScrollOptions} [options] */
@@ -82,11 +163,65 @@ export function install(ui, ctx) {
         let target = options.followEnd && previousTarget >= previousLimit - 2 ? limit
             : stretching ? previousTarget : clamp(previousTarget, 0, limit);
         let follow = false;
+        const track = options.scrubber;
+        // The default thumb can be grabbed anywhere within its reserved gutter.
+        const gutter = limit > 0 && !track ? Math.min(rect.width, ctx.px(12)) : 0;
+        const thumbHeight = track ? Math.min(ctx.px(44), track.height / 2) : 0;
+        let scrubbing = false;
+        let scrubberState = null;
+        if (track && limit < previousLimit && (shownOffsets.get(key) || 0) > limit) {
+            target = clamp(target, 0, limit);
+            follow = true;
+        }
         // An open modal blocks scrolling of the content below it.
         const blocked = ctx.modalOpen && ctx.z === 0;
-        if (!blocked && ctx.inside(rect)) target = clamp(target - (input.mouse?.wheelY || 0) * ctx.px(38), 0, limit);
-        if (!blocked && input.pointer.type === 'touch' && options.touchScroll !== false) {
-            if (input.pointer.pressed && ctx.inside(rect))
+        if (!blocked && ctx.inside(rect)) {
+            const wheel = input.mouse?.wheelY || 0;
+            const speed = Math.abs(wheel) / Math.max(ctx.dt, 1 / 240);
+            const gain = options.accelerate ? 1 + clamp((speed - 90) / 90, 0, 5) : 1;
+            target = clamp(target - wheel * ctx.px(38) * gain, 0, limit);
+        }
+        if (!blocked && track && limit > 0) {
+            scrubberState = ctx.interact(id + ':scrubber', track, {
+                cursor: 'ns-resize',
+                a11y: {
+                    role: 'slider', label: options.scrubberLabel || 'Scroll position', min: 0, max: limit,
+                    rangeValue: clamp(target, 0, limit), value: Math.round(100 * clamp(target, 0, limit) / limit) + '%',
+                },
+            });
+            const previous = target;
+            const action = scrubberState.action;
+            if (action?.action === 'increment') target += limit / 100;
+            if (action?.action === 'decrement') target -= limit / 100;
+            if (action?.action === 'setValue' && Number.isFinite(Number(action.value))) target = Number(action.value);
+            if (scrubberState.focused) {
+                ctx.arrowsTaken = true;
+                if (ctx.keyPressed(KEY_DOWN)) target += limit / 100;
+                if (ctx.keyPressed(KEY_UP)) target -= limit / 100;
+                if (ctx.keyPressed(KEY_HOME)) target = 0;
+                if (ctx.keyPressed(KEY_END)) target = limit;
+            }
+            if (scrubberState.held) {
+                const screen = ctx.toScreen({ ...track, height: 1 });
+                const pointerY = (input.pointer.y - screen.y) / screen.height;
+                target = limit * (pointerY - thumbHeight / 2) / Math.max(Number.EPSILON, track.height - thumbHeight);
+            }
+            target = clamp(target, 0, limit);
+            scrubbing = scrubberState.held || target !== previous;
+            if (scrubbing) {
+                scrollGestures.delete(key);
+                follow = true;
+            }
+        }
+        const bar = scrollbar(id + ':thumb', { ...rect, x: rect.x + rect.width - gutter, width: gutter },
+            rect, shownOffsets.get(key) ?? target, rect.height, limit, false);
+        if (bar.dragging) {
+            target = bar.offset;
+            scrubbing = follow = true;
+        }
+        // A parent scroll area must not pan while a nested thumb owns the touch.
+        if (!blocked && !scrubbing && !thumbDrag && input.pointer.type === 'touch' && options.touchScroll !== false) {
+            if (input.pointer.pressed && ctx.inside(rect) && !(track && ctx.inside(track)))
                 scrollGestures.set(key, { pointerId: input.pointer.id, lastY: input.pointer.y, startY: input.pointer.y,
                     dragging: false, velocity: 0 });
             const gesture = scrollGestures.get(key);
@@ -98,9 +233,12 @@ export function install(ui, ctx) {
                         const delta = gesture.lastY - input.pointer.y;
                         const outside = target < 0 || target > limit;
                         const stretch = rect.height * 0.3;
-                        target = clamp(target + delta * (outside ? 0.4 : 1), -stretch, limit + stretch);
+                        const speed = Math.abs(delta) / Math.max(ctx.dt, 1 / 240);
+                        const gain = options.accelerate && !outside ? 1 + clamp((speed - ctx.px(300)) / ctx.px(700), 0, 5) : 1;
+                        const travel = delta * gain;
+                        target = clamp(target + travel * (outside ? 0.4 : 1), -stretch, limit + stretch);
                         // Velocity in px/s, smoothed over the last few frames.
-                        gesture.velocity = gesture.velocity * 0.6 + (delta / Math.max(ctx.dt, 1 / 240)) * 0.4;
+                        gesture.velocity = gesture.velocity * 0.6 + (travel / Math.max(ctx.dt, 1 / 240)) * 0.4;
                         ctx.active = null;
                         follow = true;
                     }
@@ -118,11 +256,13 @@ export function install(ui, ctx) {
         } else scrollGestures.delete(key);
         // Keyboard focus moved into this area: scroll the widget into view.
         if (ctx.reveal && ctx.reveal.scroll === key) {
-            const view = ctx.toScreen(rect), margin = ctx.px(12), widget = ctx.reveal.rect;
-            const shown = shownOffsets.get(key) ?? target;
-            if (widget.y < view.y + margin) target = clamp(shown - (view.y + margin - widget.y), 0, limit);
-            else if (widget.y + widget.height > view.y + view.height - margin)
-                target = clamp(shown + widget.y + widget.height - (view.y + view.height - margin), 0, limit);
+            if (!scrubbing || track) {
+                const view = ctx.toScreen(rect), margin = ctx.px(12), widget = ctx.reveal.rect;
+                const shown = shownOffsets.get(key) ?? target;
+                if (widget.y < view.y + margin) target = clamp(shown - (view.y + margin - widget.y), 0, limit);
+                else if (widget.y + widget.height > view.y + view.height - margin)
+                    target = clamp(shown + widget.y + widget.height - (view.y + view.height - margin), 0, limit);
+            }
             ctx.reveal = null;
         }
         offsets.set(key, target);
@@ -133,9 +273,6 @@ export function install(ui, ctx) {
         const stretch = rect.height * 0.3;
         const offset = clamp(ctx.springAt(key + '#offset', target, springs.snappy, { precision: 0.25 }), -stretch, limit + stretch);
         shownOffsets.set(key, offset);
-        // When the content overflows, keep a gutter for the scrollbar so it
-        // never covers the content.
-        const gutter = limit > 0 ? ctx.px(12) : 0;
         const clip = ctx.pushClip(rect, options.radius === undefined ? ctx.px(t().radius) : options.radius);
         ctx.scrollStack.push(key);
         try {
@@ -145,12 +282,19 @@ export function install(ui, ctx) {
             ctx.popClip(clip);
         }
         if (limit > 0) {
-            const thumb = Math.max(ctx.px(24), rect.height * rect.height / contentHeight);
-            const hovered = ctx.inside(rect);
-            ctx.fill({
-                x: rect.x + rect.width - ctx.px(6), y: rect.y + (rect.height - thumb) * offset / limit,
-                width: ctx.px(4), height: thumb
-            }, ctx.colorAt(key + '#thumb', hovered ? t().muted : t().border), ctx.px(2));
+            if (track) {
+                const color = options.scrubberColor === undefined ? t().ink : options.scrubberColor;
+                const active = scrubberState?.held || scrubberState?.hovered || scrubberState?.focused;
+                ctx.fill({
+                    x: track.x + track.width / 2 - ctx.px(2), y: track.y + thumbHeight / 2,
+                    width: ctx.px(4), height: Math.max(0, track.height - thumbHeight),
+                }, withAlpha(color, 0.25), ctx.px(2));
+                ctx.fill({
+                    x: track.x + track.width / 2 - ctx.px(5),
+                    y: track.y + (track.height - thumbHeight) * clamp(offset / limit, 0, 1),
+                    width: ctx.px(10), height: thumbHeight,
+                }, withAlpha(color, active ? 1 : 0.69), ctx.px(5));
+            } else bar.draw(offset);
         }
         return offset;
     }
@@ -378,5 +522,5 @@ export function install(ui, ctx) {
         return result;
     }
 
-    Object.assign(ui, { split, scroll, list });
+    Object.assign(ui, { split, scroll, horizontalScrollbar, list });
 }

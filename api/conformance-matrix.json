@@ -114,7 +114,12 @@
                 "gl_state_guard",
                 "gpu_resource_state",
                 "gpu_boundary_invariants",
-                "native_gpu_contract"
+                "native_gpu_contract",
+                "lua_canvas_binding_state",
+                "wasm_canvas_binding_state",
+                "image_async",
+                "image_upload",
+                "web_image_bridge"
             ],
             "reason": "GL behavior is backend- and pixel-sequence-dependent; shared state restoration and resource identity are checked structurally and through native/backend tests."
         },

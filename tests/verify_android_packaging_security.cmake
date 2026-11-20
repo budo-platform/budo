@@ -106,6 +106,105 @@ string(FIND "${gradle}" [=[versionName = "1.2\"\$tag\\end"]=] found)
 if(found EQUAL -1)
     message(FATAL_ERROR "Escaped Gradle versionName is missing")
 endif()
+foreach(unexpected IN ITEMS "BudoAudioService" "FOREGROUND_SERVICE" "WAKE_LOCK" "budo.background_audio")
+    string(FIND "${manifest}" "${unexpected}" found)
+    if(NOT found EQUAL -1)
+        message(FATAL_ERROR "Default app unexpectedly enables background audio: ${unexpected}")
+    endif()
+endforeach()
+
+set(default_res "${app_root}/android/app/src/main/res")
+foreach(resource IN ITEMS
+        "mipmap-anydpi-v26/ic_launcher.xml"
+        "mipmap-anydpi-v26/ic_launcher_round.xml"
+        "drawable/ic_launcher_foreground.xml"
+        "values/ic_launcher_background.xml")
+    if(NOT EXISTS "${default_res}/${resource}")
+        message(FATAL_ERROR "Default launcher icon resource is missing: ${resource}")
+    endif()
+endforeach()
+
+write_managed_fixture(custom_icon [=[{"name":"Custom icon","icon":"icon.svg"}]=])
+file(WRITE "${fixture_root}/custom_icon/icon.svg"
+    [=[<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108"><path fill="#ff0000" d="M0 0h108v108H0z"/></svg>]=])
+clear_android_build_cache()
+execute_process(
+    COMMAND "${BUDO_EXECUTABLE}" android-apk "${fixture_root}/custom_icon" --no-build
+    RESULT_VARIABLE icon_result
+    OUTPUT_VARIABLE icon_output
+    ERROR_VARIABLE icon_error)
+if(NOT icon_result EQUAL 0)
+    message(FATAL_ERROR "Custom icon staging failed:\n${icon_output}\n${icon_error}")
+endif()
+staged_android_app_root(icon_root)
+set(icon_res "${icon_root}/android/app/src/main/res")
+foreach(resource IN ITEMS ic_launcher ic_launcher_round)
+    file(READ "${icon_res}/mipmap-anydpi-v26/${resource}.xml" icon_xml)
+    foreach(expected IN ITEMS
+            [=[<background android:drawable="@android:color/transparent"/>]=]
+            [=[<foreground android:drawable="@mipmap/ic_launcher_foreground"/>]=])
+        string(FIND "${icon_xml}" "${expected}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "Custom launcher icon lacks: ${expected}")
+        endif()
+    endforeach()
+endforeach()
+foreach(density IN ITEMS mdpi hdpi xhdpi xxhdpi xxxhdpi)
+    set(mipmap "${icon_res}/mipmap-${density}")
+    foreach(resource IN ITEMS ic_launcher ic_launcher_round ic_launcher_foreground)
+        if(NOT EXISTS "${mipmap}/${resource}.png")
+            message(FATAL_ERROR "Generated launcher icon is missing: ${mipmap}/${resource}.png")
+        endif()
+    endforeach()
+    file(SHA256 "${mipmap}/ic_launcher.png" launcher_sha)
+    file(SHA256 "${mipmap}/ic_launcher_round.png" round_sha)
+    if(NOT launcher_sha STREQUAL round_sha)
+        message(FATAL_ERROR "Round launcher icon differs from the app icon")
+    endif()
+endforeach()
+if(EXISTS "${icon_res}/drawable/ic_launcher_foreground.xml")
+    message(FATAL_ERROR "Custom launcher icon retained the default foreground")
+endif()
+
+foreach(enabled IN ITEMS true false)
+    write_managed_fixture(background_audio
+        "{\"package_name\":\"dev.budo.backgroundaudio\",\"background_audio\":${enabled},\"permissions\":[\"FOREGROUND_SERVICE\"]}")
+    clear_android_build_cache()
+    execute_process(
+        COMMAND "${BUDO_EXECUTABLE}" android-apk "${fixture_root}/background_audio" --no-build
+        RESULT_VARIABLE background_result
+        OUTPUT_VARIABLE background_output
+        ERROR_VARIABLE background_error)
+    if(NOT background_result EQUAL 0)
+        message(FATAL_ERROR "Background audio staging failed:\n${background_output}\n${background_error}")
+    endif()
+    staged_android_app_root(background_root)
+    file(READ "${background_root}/android/app/src/main/AndroidManifest.xml" background_manifest)
+    foreach(expected IN ITEMS
+            [=[android:name=".BudoAudioService"]=]
+            [=[android:foregroundServiceType="mediaPlayback"]=]
+            [=[android:name="budo.background_audio" android:value="true"]=]
+            [=[android:enableOnBackInvokedCallback="true"]=]
+            "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+            "android.permission.WAKE_LOCK")
+        string(FIND "${background_manifest}" "${expected}" found)
+        if(enabled AND found EQUAL -1)
+            message(FATAL_ERROR "Enabled background audio manifest lacks: ${expected}")
+        elseif(NOT enabled AND NOT found EQUAL -1)
+            message(FATAL_ERROR "Disabled background audio manifest contains: ${expected}")
+        endif()
+    endforeach()
+    string(REGEX MATCHALL [=[android.permission.FOREGROUND_SERVICE"]=] foreground_permissions "${background_manifest}")
+    list(LENGTH foreground_permissions foreground_permission_count)
+    if(NOT foreground_permission_count EQUAL 1)
+        message(FATAL_ERROR "Foreground service permission was duplicated")
+    endif()
+    file(READ "${background_root}/android/app/src/main/cpp/android_audio.c" background_native)
+    string(FIND "${background_native}" "Java_dev_budo_backgroundaudio_BudoAudioService_nativeSetPlaybackGain" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "Background audio JNI bridge was not renamed")
+    endif()
+endforeach()
 
 write_managed_fixture(inferred_package [=[{
   "name": "Terrain Physics"

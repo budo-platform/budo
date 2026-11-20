@@ -22,17 +22,28 @@
 bool fs_make_temp_dir(const char *prefix, char *out, size_t out_size)
 {
     const char *base = getenv("TMPDIR");
+    if (!base || !base[0])
+#ifdef _WIN32
+        base = getenv("TEMP");
+    if (!base || !base[0])
+        base = getenv("TMP");
+#else
+        base = "/tmp";
+#endif
+    return fs_make_temp_dir_at(base, prefix, out, out_size);
+}
+
+bool fs_make_temp_dir_at(const char *base, const char *prefix, char *out, size_t out_size)
+{
     size_t base_length;
     int written;
 
-    if (!prefix || !out || out_size == 0)
+    if (!base || !base[0] || !prefix || !out || out_size == 0)
     {
         errno = EINVAL;
         return false;
     }
     out[0] = '\0';
-    if (!base || base[0] == '\0')
-        base = "/tmp";
     base_length = strlen(base);
     while (base_length > 1 && base[base_length - 1] == '/')
         base_length--;
@@ -45,7 +56,7 @@ bool fs_make_temp_dir(const char *prefix, char *out, size_t out_size)
         return false;
     }
 #ifdef _WIN32
-    if (!_mktemp(out) || _mkdir(out) != 0)
+    if (_mktemp_s(out, out_size) != 0 || _mkdir(out) != 0)
 #else
     if (!mkdtemp(out))
 #endif

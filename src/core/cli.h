@@ -5,6 +5,7 @@
 
 #include "core/android_package.h"
 #include "core/budo_init.h"
+#include "core/desktop_package.h"
 #include "native/native_compile.h"
 
 #ifdef __cplusplus
@@ -16,6 +17,7 @@ extern "C"
     {
         BUDO_CMD_RUN, 
         BUDO_CMD_COMPILE,
+        BUDO_CMD_PACKAGE,
         BUDO_CMD_NATIVE_CACHE_INSPECT,
         BUDO_CMD_NATIVE_CACHE_CLEAN,
         BUDO_CMD_NATIVE_SDK_CACHE_INSPECT,
@@ -44,6 +46,7 @@ extern "C"
         bool vsync;
         bool watch;
         const char *file_root; 
+        const char *sqlite_root; 
     } BudoRunOptions;
 
     typedef struct BudoCliOptions
@@ -53,6 +56,7 @@ extern "C"
         BudoRunOptions run;
         BudoInitOptions init;
         NativeCompileOptions compile;
+        DesktopPackageOptions package;
         bool cache_json; 
         const char *cache_android_package; 
         const char *web_export_output;

@@ -1,6 +1,7 @@
 #include "managed_runtime.h"
 
 #include "graphics/skia_wrapper.h"
+#include "graphics/js_image_bindings.h"
 #if !defined(BUDO_WEB) && !defined(BUDO_ANDROID)
 #include "graphics/wasm_canvas_bindings.h"
 #define BUDO_MANAGED_WASMTIME 1
@@ -120,7 +121,7 @@ static void runtime_call_animation(ManagedRuntimeKind kind,
 }
 
 static BudoAnimationWait *runtime_animation_wait(ManagedRuntimeKind kind,
-                                                const ManagedRuntimeCommon *contexts)
+                                                 const ManagedRuntimeCommon *contexts)
 {
     switch (kind)
     {
@@ -145,6 +146,13 @@ double managed_runtime_idle_ms(ManagedRuntimeKind kind,
     if (!contexts || !runtime_has_animation(kind, contexts))
         return -1.0;
     double idle = budo_animation_wait_remaining(runtime_animation_wait(kind, contexts), timestamp_ms);
+    if (idle > 16.0 && ((kind == MANAGED_RUNTIME_JAVASCRIPT && js_image_pending(contexts->js_graphic_ctx)) ||
+                        (kind == MANAGED_RUNTIME_LUA && lua_image_pending(contexts->lua_ctx))
+#ifdef BUDO_MANAGED_WASMTIME
+                        || (kind == MANAGED_RUNTIME_WEBASSEMBLY && wasm_canvas_image_pending(contexts->wasm_ctx))
+#endif
+                            ))
+        idle = 16.0;
     
     if (idle >= 0.0 && kind == MANAGED_RUNTIME_JAVASCRIPT)
     {
@@ -184,7 +192,7 @@ static bool runtime_is_loaded(ManagedRuntimeKind kind,
     return false;
 }
 
-void managed_runtime_frame(ManagedRuntimeKind kind,
+bool managed_runtime_frame(ManagedRuntimeKind kind,
                            SubsystemRegistry *subsystems,
                            ManagedRuntimeCommon *contexts,
                            const ManagedFrameContext *frame,
@@ -192,16 +200,21 @@ void managed_runtime_frame(ManagedRuntimeKind kind,
 {
     if (!subsystems || !contexts || !frame || !frame->canvas ||
         !frame->window || !frame->input || !runtime_is_loaded(kind, contexts))
-        return;
+        return true;
 
     managed_runtime_set_frame_context(kind, contexts, frame);
     subsystem_registry_poll(subsystems);
-    if (runtime_has_animation(kind, contexts) &&
-        budo_animation_wait_due(runtime_animation_wait(kind, contexts), frame->input,
-                                frame->width, frame->height, timestamp_ms))
+    bool waiting_for_input = false;
+    if (runtime_has_animation(kind, contexts))
     {
-        skia_canvas_clear(frame->canvas, SKIA_COLOR_WHITE);
-        runtime_call_animation(kind, contexts, timestamp_ms);
+        waiting_for_input = !budo_animation_wait_due(runtime_animation_wait(kind, contexts),
+                                                     frame->input, frame->width, frame->height,
+                                                     timestamp_ms);
+        if (!waiting_for_input)
+        {
+            skia_canvas_clear(frame->canvas, SKIA_COLOR_WHITE);
+            runtime_call_animation(kind, contexts, timestamp_ms);
+        }
     }
     if (kind == MANAGED_RUNTIME_JAVASCRIPT)
     {
@@ -211,6 +224,7 @@ void managed_runtime_frame(ManagedRuntimeKind kind,
         if (js_audio_has_pending_work(contexts->js_audio_ctx))
             js_audio_poll(contexts->js_audio_ctx);
     }
+    return !waiting_for_input;
 }
 
 void managed_runtime_set_graphics_activation(ManagedRuntimeKind kind,

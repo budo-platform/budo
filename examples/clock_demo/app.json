@@ -1,5 +1,5 @@
 {
-    "name": "Clock Demo",
+    "name": "Clock",
     "description": "Analog clock example rendered with Budo canvas drawing APIs.",
     "icon": "icon.svg",
     "screenshots": [

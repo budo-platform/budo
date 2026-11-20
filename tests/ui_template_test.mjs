@@ -4,10 +4,14 @@
 //   node tests/ui_template_test.mjs <project directory>
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const project = resolve(process.argv[2] || '.');
+const config = JSON.parse(readFileSync(join(project, 'jsconfig.json'), 'utf8'));
+assert.ok(config.include.includes('**/*.js'), 'project configuration includes UI modules');
+assert.ok(config.include.includes('budo.d.ts'), 'project configuration loads runtime declarations');
 let calls = [];
 let pending = null;
 let input = null;

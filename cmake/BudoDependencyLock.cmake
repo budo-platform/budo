@@ -10,6 +10,13 @@ set(BUDO_QUICKJS_NG_GIT_TAG "3c8f3d68953955950074c41c6e4d999562ae82a7")
 set(BUDO_MINIAUDIO_GIT_REPOSITORY "https://github.com/mackron/miniaudio.git")
 set(BUDO_MINIAUDIO_GIT_TAG "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d")
 
+set(BUDO_OGG_GIT_REPOSITORY "https://github.com/xiph/ogg.git")
+set(BUDO_OGG_GIT_TAG "06a5e0262cdc28aa4ae6797627a783b5010440f0")
+set(BUDO_OPUS_GIT_REPOSITORY "https://github.com/xiph/opus.git")
+set(BUDO_OPUS_GIT_TAG "31b4b36284394b66a4c9d7352991aa977dfc8bc1")
+set(BUDO_OPUSFILE_GIT_REPOSITORY "https://github.com/xiph/opusfile.git")
+set(BUDO_OPUSFILE_GIT_TAG "6dfd29e7adb87f2e193575fc3fa88cbf1a0b27df")
+
 set(BUDO_LLAMACPP_GIT_REPOSITORY "https://github.com/ggml-org/llama.cpp.git")
 set(BUDO_LLAMACPP_GIT_TAG "571d0d540df04f25298d0e159e520d9fc62ed121")
 
@@ -68,8 +75,8 @@ set(BUDO_GITHUB_REPOSITORY "")
 # build Android packaging into the GitHub binaries. Its URL is the GitHub
 # secret BUDO_ANDROID_PACK_URL; this hash pins its contents. Updated by
 # `make android-pack` (see export-to-public/android-ci-build.md).
-set(BUDO_ANDROID_PACK_COMMIT "e3eaf5a3d268466c7ad6ab0977336f83dbc96730")
-set(BUDO_ANDROID_PACK_SHA256 "97aa8c71c0c51660226c67998e8b38bd61da0d5e866ec1273378cb877abc5416")
+set(BUDO_ANDROID_PACK_COMMIT "37b53b3f44aae5fc83e3fb975db24feabfe0d44d")
+set(BUDO_ANDROID_PACK_SHA256 "4ee71b9d39f50e4a6ba1436c9354504424fa775d31125965f51b30141c298ce2")
 
 set(BUDO_STB_GIT_REPOSITORY "https://github.com/nothings/stb.git")
 set(BUDO_STB_GIT_TAG "f0569113c93ad095470c54bf34a17b36646bbbb5")
@@ -106,6 +113,9 @@ function(budo_report_dependency_lock consumer)
     foreach(commit_var
             BUDO_QUICKJS_NG_GIT_TAG
             BUDO_MINIAUDIO_GIT_TAG
+            BUDO_OGG_GIT_TAG
+            BUDO_OPUS_GIT_TAG
+            BUDO_OPUSFILE_GIT_TAG
             BUDO_LLAMACPP_GIT_TAG
             BUDO_SKIA_DESKTOP_GIT_TAG
             BUDO_SKIA_WEB_GIT_TAG
@@ -145,7 +155,9 @@ function(budo_report_dependency_lock consumer)
     message(STATUS
         "Budo dependency lock v${BUDO_DEPENDENCY_LOCK_VERSION} (${consumer}): "
         "QuickJS=${BUDO_QUICKJS_IMPL_DEFAULT}@${BUDO_QUICKJS_NG_GIT_TAG}; "
-        "miniaudio=${BUDO_MINIAUDIO_GIT_TAG}; llama.cpp=${BUDO_LLAMACPP_GIT_TAG}; "
+        "miniaudio=${BUDO_MINIAUDIO_GIT_TAG}; Ogg=${BUDO_OGG_GIT_TAG}; "
+        "Opus=${BUDO_OPUS_GIT_TAG}; opusfile=${BUDO_OPUSFILE_GIT_TAG}; "
+        "llama.cpp=${BUDO_LLAMACPP_GIT_TAG}; "
         "Lua=${BUDO_LUA_VERSION}; "
         "SQLite=${BUDO_SQLITE_VERSION}; ONNX Runtime=${BUDO_ONNXRUNTIME_VERSION}; "
         "Wasmtime=${BUDO_WASMTIME_VERSION}")

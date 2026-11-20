@@ -29,6 +29,7 @@ SNAPSHOT_OUTS=(
     "$PROJECT_ROOT/examples-playground/3d_cube/budo.d.ts"
     "$PROJECT_ROOT/examples/sound-instrument/budo.d.ts"
     "$PROJECT_ROOT/examples/07_file_explorer/budo.d.ts"
+    "$PROJECT_ROOT/examples-private/gallery/budo.d.ts"
 )
 CHECK_ONLY=false
 if [[ "${1:-}" == "--check" ]]; then
@@ -259,6 +260,8 @@ interface InputState {
   pointer: Pointer;
   pointers: Pointer[];
   mouse: Mouse;
+  /** macOS trackpad magnification this frame, or null. Coordinates are physical pixels; scale > 1 zooms in. */
+  pinch: { x: number; y: number; scale: number } | null;
   keyboard: Keyboard;
     /** Layout-aware UTF-8 text committed since the previous frame. */
     text: string;
@@ -415,6 +418,38 @@ interface ParagraphMetrics {
     height: number;
     /** Number of lines. */
     lines: number;
+}
+
+interface TextureLoadOptions {
+    /** File-source mount, default assets (the project root). Path omits the mount prefix. Ignored for buffer sources. */
+    mount?: "assets" | "files";
+    /** Output bounds in pixels; aspect ratio is preserved and images are never enlarged. */
+    maxWidth?: number;
+    maxHeight?: number;
+    /** Encoded-byte limit, default 24 MiB, maximum 64 MiB. */
+    maxBytes?: number;
+    /** Source-pixel limit, default and maximum 24 million. Each axis is also limited to 16384. */
+    maxPixels?: number;
+}
+
+interface TextureLoadInfo {
+    readonly width: number;
+    readonly height: number;
+    readonly sourceWidth: number;
+    readonly sourceHeight: number;
+}
+
+interface TextureLoadError {
+    readonly code: string;
+    readonly message: string;
+}
+
+interface TextureLoadCallbacks {
+    /** Delivered before completion; does not guarantee that pixel decoding will succeed. */
+    onMetadata?(info: TextureLoadInfo): void;
+    /** Receives ownership of a normal texture handle; release it with sys.gl.destroyTexture. */
+    onComplete(textureId: number, info: TextureLoadInfo): void;
+    onError(error: TextureLoadError): void;
 }
 
 interface CanvasTextureCanvas {

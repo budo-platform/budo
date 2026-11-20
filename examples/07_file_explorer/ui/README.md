@@ -1,20 +1,22 @@
 # Budo UI
 
 An immediate-mode UI toolkit for Budo canvas apps, with motion built in. The
-app describes the UI every frame; the library animates between frames. Run the
-demo with `./build/budo examples/budo-ui`, and see [ROADMAP.md](ROADMAP.md) for
-where it is going.
+app describes the UI every frame; the library animates between frames.
 
 Start a project with it using `budo init my-app --template ui`: the library goes
 to `my-app/ui/` (import `./ui/budo-ui.js`), next to a starter `main.js`.
-Examples in this repository that use it (`examples/07_file_explorer`) carry the
-same `ui/` copy; `scripts/sync-budo-ui.py` refreshes those copies after a
-library change, and CTest fails when one is stale.
+To add the toolkit to an existing project, copy the complete
+`examples/budo-ui/ui/` directory from the Budo repository. The directory is
+self-contained at runtime; it needs no path rewriting or build step.
+
+For editor types, include the app's `budo.d.ts` and `**/*.js` in its
+`jsconfig.json` (or `tsconfig.json` for TypeScript apps). `budo init` already
+configures this. Declaration loading belongs to the project, not the library.
 
 ## A simple UI stays simple
 
 ```js
-import { createUI } from './budo-ui.js';
+import { createUI } from './ui/budo-ui.js';
 
 const ui = createUI();
 const name = { value: '' };
@@ -53,6 +55,8 @@ scale, the toggle's sliding thumb, and the field's focus ring all animate.
   density-independent.
 - **Draw back to front.** When widgets overlap, the one drawn last gets the
   pointer. `ui.overlay(draw)` draws above everything (menus, popovers, toasts).
+  Overlays queued while drawing another overlay are rendered in the same frame,
+  above their parent, so dropdowns inside dialogs work normally.
 - **One theme.** `createUI(overrides)` merges tokens with `themes.light`;
   `ui.setTheme(themes.dark)` switches theme and every color animates there.
   Besides colors and sizes, `elevation` sets the three shadow levels and
@@ -128,6 +132,43 @@ or for shaky hands.
 `ui.textWidth(text)` or `ui.buttonWidth(label)`: they get their natural size
 and shrink together when the space runs out.
 
+### Long scroll areas
+
+Drag the default scrollbar thumb with a mouse or finger to scroll immediately.
+For horizontal scrolling, reserve a 12 dp gutter below the viewport and pass
+its rectangle to `ui.horizontalScrollbar(id, gutter, offset, viewportWidth,
+contentWidth)`. Use the returned pixel offset when drawing your content. The
+bar uses the same thumb style as the vertical scrollbar and hides when the
+content fits. It also supports track clicks and keyboard adjustment.
+
+`scroll` also accepts opt-in `accelerate: true` and `scrubber: rect` options.
+Acceleration keeps slow movement unchanged and increases fast wheel/touch
+movement up to 6x, including touch-release momentum. Wheel gain starts above
+90 wheel units/s and reaches 6x at 540; touch gain starts above 300 dp/s and
+reaches 6x at 3800 dp/s. Speed uses the frame delta, floored at 1/240 s.
+Leaving the option off preserves ordinary scrolling.
+
+The scrubber replaces the default scrollbar with an absolute-position track:
+press or drag to jump immediately, without spring lag. Its thumb is at most
+44 dp high, or half the track height on short tracks. Tab focuses it;
+Up/Down move by 1% without moving focus, Home/End reach the ends, and screen
+readers can increment, decrement, or set the offset in physical pixels.
+With no overflow, the scrubber is hidden and not focusable.
+
+```js
+ui.scroll('photos', viewport, contentHeight, drawPhotos, {
+    accelerate: true,
+    scrubber: track,
+    scrubberLabel: 'Photo position', // default: "Scroll position"
+    scrubberColor: '#FFFFFF',       // default: theme ink
+});
+```
+
+Track coordinates are physical canvas pixels, in the same coordinate system as
+the viewport. Place it beside the viewport or reserve its hit area in your
+content: a custom track has no implicit scrollbar gutter. The default scrollbar
+still reserves 12 dp when content overflows.
+
 ## Keyboard and gestures
 
 - Tab and Shift+Tab move the keyboard focus through the widgets in draw
@@ -150,17 +191,6 @@ and shrink together when the space runs out.
 - Touch scrolling carries momentum and stretches past the ends; list rows
   with a `swipe` action slide away (the list returns `swipedId`); sheets drag
   down to dismiss; dragging from a navigator's left edge previews going back.
-
-## Gallery and snapshots
-
-`gallery.js` draws every widget (the demo's "Gallery" view). The snapshot
-tests draw each gallery section with a recording canvas and compare the draw
-calls with `snapshots/*.json`, so any visual change shows up as a diff:
-
-```sh
-node --test examples/budo-ui/budo-ui.snapshots.test.mjs
-UPDATE_SNAPSHOTS=1 node --test examples/budo-ui/budo-ui.snapshots.test.mjs   # accept changes
-```
 
 Lists animate on their own: rows glide to new positions when items are
 inserted, removed, filtered, or reordered, and new rows fade in. With
@@ -216,18 +246,14 @@ budo-ui follows the platform without any code in the app:
 
 ## Files
 
-- `budo-ui.js`: the entry point; `ui-library.js` re-exports it for older imports.
+- `budo-ui.js`: the entry point.
 - `lib/core.js`: frame lifecycle, hit testing, ids, motion state, layers, overlays.
 - `lib/platform.js`: preferences, cursors, accessibility, haptics, frame scheduling.
 - `lib/icons.js`: the built-in icons and `icon`/`registerIcon`.
 - `lib/focus.js`: keyboard focus, focus ring, focus traps.
 - `lib/widgets/`: `basic.js`, `containers.js`, `text.js`, `textarea.js`, `data.js`, `select.js`, `content.js`,
   `choices.js`, `overlays.js`, `feedback.js`, `navigation.js`.
-- `gallery.js` and `snapshots/`: the widget gallery and its draw-command snapshots.
 - `lib/motion.js`, `lib/color.js`, `lib/theme.js`, `lib/layout.js`, `lib/math.js`.
-- `budo-ui.test.mjs`, `budo-ui.snapshots.test.mjs`: run with `node --test` (CTest runs both).
-- `main.js`: the demo (themes, select, list reordering, wrapped notes, a
-  skeleton-then-gradient preview, a frosted toast, reduced motion).
 
 Gradients, rounded clips, layers, paragraphs, and icons need a Budo runtime
 with `sys.canvas.setGradient`, `clipRoundRect`, `saveLayer`, `drawParagraph`,

@@ -326,6 +326,42 @@
             }
         },
         {
+            "name": "open_atomic_write",
+            "wrapper_symbol": "file_atomic_writer_open",
+            "signature": "(path: files/ virtual path in existing parent) -> writer|null",
+            "exports": {
+                "javascript": {
+                    "name": "openAtomicWrite",
+                    "namespace": "sys.files",
+                    "signature": "(path: string) -> number|null (macOS/Linux only)"
+                }
+            }
+        },
+        {
+            "name": "write_block",
+            "wrapper_symbol": "file_atomic_writer_write",
+            "signature": "(writer, data: bytes) -> bool",
+            "exports": {
+                "javascript": {
+                    "name": "writeBlock",
+                    "namespace": "sys.files",
+                    "signature": "(handle: number, data: ArrayBuffer|TypedArray, at most 16 MiB) -> boolean (macOS/Linux only)"
+                }
+            }
+        },
+        {
+            "name": "finish_atomic_write",
+            "wrapper_symbol": "file_atomic_writer_finish",
+            "signature": "(writer, commit: bool) -> bool; consumes writer",
+            "exports": {
+                "javascript": {
+                    "name": "finishAtomicWrite",
+                    "namespace": "sys.files",
+                    "signature": "(handle: number, commit: boolean) -> boolean (macOS/Linux only)"
+                }
+            }
+        },
+        {
             "name": "pick_text",
             "signature": "(callback, extension?: string) -> bool",
             "binding_symbols": {

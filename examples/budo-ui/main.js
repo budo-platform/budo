@@ -1,4 +1,4 @@
-import { createUI, themes, withAlpha } from './budo-ui.js';
+import { createUI, themes, withAlpha } from './ui/budo-ui.js';
 import { createGalleryState, drawGallery } from './gallery.js';
 
 const ui = createUI();

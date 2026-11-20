@@ -10,6 +10,7 @@
 #include "core/input.h"
 #include "file/file_wrapper.h"
 #include "network/udp_wrapper.h"
+#include "graphics/image_scheduler.h"
 
 typedef struct Window Window;
 
@@ -19,8 +20,9 @@ extern "C"
 #endif
 
     typedef struct WasmCanvasContext WasmCanvasContext;
+    typedef struct WasmImageBindingState WasmImageBindingState;
 
-    WasmCanvasContext *wasm_canvas_create(const char *project_dir);
+    WasmCanvasContext *wasm_canvas_create(const char *project_dir, const char *sqlite_dir);
 
     SkiaCanvas *wasm_canvas_current_canvas(WasmCanvasContext *ctx);
     
@@ -60,6 +62,17 @@ extern "C"
     void wasm_canvas_network_poll(WasmCanvasContext *ctx);
 
     FileContext *wasm_canvas_file_context(WasmCanvasContext *ctx);
+
+    ImageScheduler *wasm_canvas_image_scheduler(WasmCanvasContext *ctx);
+    WasmImageBindingState **wasm_canvas_image_state_slot(WasmCanvasContext *ctx);
+    uint32_t wasm_canvas_image_load(WasmCanvasContext *ctx, const char *path,
+                                    const uint8_t *bytes, size_t length,
+                                    const ImageAsyncOptions *options);
+    int wasm_canvas_image_status(WasmCanvasContext *ctx, uint32_t request, uint8_t *output);
+    int wasm_canvas_image_take(WasmCanvasContext *ctx, uint32_t request);
+    bool wasm_canvas_image_release(WasmCanvasContext *ctx, uint32_t request);
+    void wasm_canvas_image_poll(WasmCanvasContext *ctx);
+    bool wasm_canvas_image_pending(WasmCanvasContext *ctx);
 
     bool wasm_canvas_load_wat_file(WasmCanvasContext *ctx, const char *filename);
 

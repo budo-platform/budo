@@ -1,0 +1,9 @@
+{
+  "name": "Text Editor",
+  "description": "Light text editor demo",
+  "author": "Unknown",
+  "version": "1.0.0",
+  "screenshots": [
+    "screenshot.png"
+  ]
+}

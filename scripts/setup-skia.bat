@@ -82,8 +82,8 @@ goto sync_deps
 REM Generate build files
 echo Generating build files...
 REM Arguments go in args.gn, which avoids nesting GN string quotes in --args.
-REM /MD: Budo and its other dependencies use the DLL C runtime; cl.exe
-REM defaults to the static one (/MT), and the two cannot be linked together.
+REM Match Budo's CRT; the standalone release build uses /MT.
+if not defined BUDO_SKIA_MSVC_RUNTIME set BUDO_SKIA_MSVC_RUNTIME=/MD
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 (
     echo is_official_build=true
@@ -98,7 +98,7 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
     echo skia_enable_pdf=false
     echo skia_enable_skottie=false
     echo skia_enable_skshaper=false
-    echo extra_cflags = [ "/MD" ]
+    echo extra_cflags = [ "%BUDO_SKIA_MSVC_RUNTIME%" ]
 ) > "%BUILD_DIR%\args.gn"
 bin\gn gen "%BUILD_DIR%" || exit /b 1
 

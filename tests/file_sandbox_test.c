@@ -125,10 +125,33 @@ int main(void)
         }
     }
     assert(saw_directory_symlink);
+    int asset_count = listing->count;
+    file_list_free(listing);
+    for (int attempt = 0; attempt < 3; attempt++)
+    {
+        listing = file_list(ctx, "assets");
+        assert(listing && listing->count == asset_count);
+        file_list_free(listing);
+    }
+
+    listing = file_list(ctx, "files");
+    assert(listing);
+    int files_count = listing->count;
     file_list_free(listing);
 
     snprintf(path, sizeof(path), "%s/files-only.txt", write_root);
     write_host_file(path, "files", 5);
+    for (int attempt = 0; attempt < 3; attempt++)
+    {
+        listing = file_list(ctx, "files");
+        assert(listing && listing->count == files_count + 1);
+        bool saw_new_file = false;
+        for (int index = 0; index < listing->count; index++)
+            if (strcmp(listing->entries[index].name, "files-only.txt") == 0)
+                saw_new_file = true;
+        assert(saw_new_file);
+        file_list_free(listing);
+    }
     assert(file_is_file_at(ctx, FILE_ROOT_FILES, "files-only.txt"));
     assert(!file_is_file_at(ctx, FILE_ROOT_ASSETS, "files-only.txt"));
 

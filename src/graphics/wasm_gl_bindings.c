@@ -3,12 +3,287 @@
 #include "graphics/wasm_canvas_bindings.h"
 #include "core/window.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <wasm.h>
 
 #define MAX_WASM_STRING 512
 #define CANVAS_CALLBACK_CONTEXT ((WasmCanvasContext *)env)
 #define WASM_GL_WINDOW wasm_canvas_current_window(CANVAS_CALLBACK_CONTEXT)
+
+const uint8_t *wasm_canvas_read_bytes(WasmCanvasContext *ctx, int32_t pointer, int32_t length)
+{
+    return wasm_canvas_guest_bytes(ctx, pointer, length);
+}
+
+typedef struct WasmImageRequest
+{
+    uint32_t id;
+    int status;
+    bool metadata;
+    ImageAsyncInfo info;
+    int texture;
+    char code[32];
+    char message[256];
+} WasmImageRequest;
+
+struct WasmImageBindingState
+{
+    ImageScheduler *scheduler;
+    WasmImageRequest requests[8];
+};
+
+static WasmImageBindingState *wasm_image_state(WasmCanvasContext *ctx)
+{
+    WasmImageBindingState **slot = wasm_canvas_image_state_slot(ctx);
+    return slot ? *slot : NULL;
+}
+
+ImageScheduler *wasm_canvas_image_scheduler(WasmCanvasContext *ctx)
+{
+    WasmImageBindingState **slot = wasm_canvas_image_state_slot(ctx);
+    if (!slot)
+        return NULL;
+    if (!*slot)
+    {
+        WasmImageBindingState *state = calloc(1, sizeof(*state));
+        if (!state)
+            return NULL;
+        state->scheduler = image_scheduler_create(wasm_canvas_file_context(ctx));
+        if (!state->scheduler)
+        {
+            free(state);
+            return NULL;
+        }
+        *slot = state;
+    }
+    return (*slot)->scheduler;
+}
+
+static WasmImageRequest *wasm_image_find(WasmCanvasContext *ctx, uint32_t request)
+{
+    WasmImageBindingState *state = wasm_image_state(ctx);
+    if (state)
+        for (int index = 0; index < 8; index++)
+            if (state->requests[index].id == request)
+                return &state->requests[index];
+    return NULL;
+}
+
+uint32_t wasm_canvas_image_load(WasmCanvasContext *ctx, const char *path,
+                                const uint8_t *bytes, size_t length,
+                                const ImageAsyncOptions *options)
+{
+    ImageScheduler *scheduler = wasm_canvas_image_scheduler(ctx);
+    if (!scheduler)
+    {
+        wasm_canvas_set_error(ctx, "Cannot start image workers");
+        return 0;
+    }
+    WasmImageRequest *slot = wasm_image_find(ctx, 0);
+    if (!slot)
+    {
+        wasm_canvas_set_error(ctx, "Maximum of 8 image request records exceeded");
+        return 0;
+    }
+    uint32_t request = path ? image_scheduler_load_file(scheduler, path, options)
+                            : image_scheduler_load_buffer(scheduler, bytes, length, options);
+    if (!request)
+    {
+        wasm_canvas_set_error(ctx, image_scheduler_error(scheduler));
+        return 0;
+    }
+    slot->id = request;
+    return request;
+}
+
+static void wasm_image_write_i32(uint8_t *output, uint32_t value)
+{
+    output[0] = (uint8_t)value;
+    output[1] = (uint8_t)(value >> 8);
+    output[2] = (uint8_t)(value >> 16);
+    output[3] = (uint8_t)(value >> 24);
+}
+
+int wasm_canvas_image_status(WasmCanvasContext *ctx, uint32_t request, uint8_t *output)
+{
+    WasmImageRequest *slot = request ? wasm_image_find(ctx, request) : NULL;
+    if (!slot || !output)
+        return -1;
+    memset(output, 0, 312);
+    wasm_image_write_i32(output, (uint32_t)slot->status);
+    wasm_image_write_i32(output + 4, slot->metadata ? 1 : 0);
+    wasm_image_write_i32(output + 8, (uint32_t)slot->info.width);
+    wasm_image_write_i32(output + 12, (uint32_t)slot->info.height);
+    wasm_image_write_i32(output + 16, (uint32_t)slot->info.source_width);
+    wasm_image_write_i32(output + 20, (uint32_t)slot->info.source_height);
+    memcpy(output + 24, slot->code, sizeof(slot->code));
+    memcpy(output + 56, slot->message, sizeof(slot->message));
+    return 0;
+}
+
+int wasm_canvas_image_take(WasmCanvasContext *ctx, uint32_t request)
+{
+    WasmImageRequest *slot = request ? wasm_image_find(ctx, request) : NULL;
+    if (!slot || slot->status != 1)
+        return 0;
+    int texture = slot->texture;
+    slot->texture = 0;
+    return texture;
+}
+
+bool wasm_canvas_image_release(WasmCanvasContext *ctx, uint32_t request)
+{
+    WasmImageRequest *slot = request ? wasm_image_find(ctx, request) : NULL;
+    if (!slot)
+        return false;
+    Window *window = wasm_canvas_current_window(ctx);
+    if (!slot->status)
+        image_scheduler_cancel(wasm_image_state(ctx)->scheduler, window, request);
+    if (slot->texture > 0)
+        window_gl_destroy_texture(window, slot->texture);
+    memset(slot, 0, sizeof(*slot));
+    return true;
+}
+
+void wasm_canvas_image_poll(WasmCanvasContext *ctx)
+{
+    WasmImageBindingState *state = wasm_image_state(ctx);
+    if (!state)
+        return;
+    Window *window = wasm_canvas_current_window(ctx);
+    if (!window)
+        return;
+    image_scheduler_begin_poll(state->scheduler);
+    ImageAsyncEvent event;
+    int texture;
+    for (int count = 0; count < 8 && image_scheduler_poll(state->scheduler, window, &event, &texture); count++)
+    {
+        WasmImageRequest *slot = wasm_image_find(ctx, event.request);
+        if (!slot)
+        {
+            if (texture > 0)
+                window_gl_destroy_texture(window, texture);
+            continue;
+        }
+        if (event.type == IMAGE_ASYNC_METADATA)
+        {
+            slot->metadata = true;
+            slot->info = event.info;
+        }
+        else if (event.type == IMAGE_ASYNC_COMPLETE)
+        {
+            slot->info = event.info;
+            slot->texture = texture;
+            slot->status = 1;
+        }
+        else
+        {
+            slot->status = 2;
+            snprintf(slot->code, sizeof(slot->code), "%s", event.code ? event.code : "image.decode_failed");
+            snprintf(slot->message, sizeof(slot->message), "%s", event.message);
+        }
+    }
+}
+
+bool wasm_canvas_image_pending(WasmCanvasContext *ctx)
+{
+    WasmImageBindingState *state = wasm_image_state(ctx);
+    return state && image_scheduler_pending(state->scheduler);
+}
+
+void wasm_image_binding_state_destroy(WasmImageBindingState *state, Window *window)
+{
+    if (!state)
+        return;
+    for (int index = 0; index < 8; index++)
+        if (state->requests[index].texture > 0)
+            window_gl_destroy_texture(window, state->requests[index].texture);
+    image_scheduler_destroy(state->scheduler, window);
+    free(state);
+}
+
+static wasm_trap_t *host_gl_image_load(void *env, wasmtime_caller_t *caller,
+                                       const wasmtime_val_t *args, size_t nargs,
+                                       wasmtime_val_t *results, size_t nresults)
+{
+    (void)caller;
+    (void)nargs;
+    (void)nresults;
+    WasmCanvasContext *ctx = wasm_canvas_graphics(env);
+    results[0].kind = WASMTIME_I32;
+    results[0].of.i32 = 0;
+    int mode = args[2].of.i32;
+    int width = args[3].of.i32;
+    int height = args[4].of.i32;
+    int max_bytes = args[5].of.i32;
+    int max_pixels = args[6].of.i32;
+    if (!ctx || mode < 0 || mode > 2 || width < 0 || height < 0 || max_bytes < 0 || max_pixels < 0)
+    {
+        wasm_canvas_set_error(ctx, "Invalid image source or options");
+        return NULL;
+    }
+    ImageAsyncOptions options = {width, height, (size_t)max_bytes, (size_t)max_pixels};
+    if (mode == 2)
+    {
+        const uint8_t *bytes = wasm_canvas_read_bytes(ctx, args[0].of.i32, args[1].of.i32);
+        if (bytes)
+            results[0].of.i32 = (int32_t)wasm_canvas_image_load(ctx, NULL, bytes, (size_t)args[1].of.i32, &options);
+    }
+    else
+    {
+        char path[FILE_MAX_PATH];
+        char mounted[FILE_MAX_PATH];
+        if (!wasm_canvas_read_string(ctx, args[0].of.i32, args[1].of.i32, path, sizeof(path)) ||
+            strlen(path) != (size_t)args[1].of.i32 || !file_path_is_valid(path, false) ||
+            snprintf(mounted, sizeof(mounted), "%s/%s", mode ? "files" : "assets", path) >= (int)sizeof(mounted))
+        {
+            wasm_canvas_set_error(ctx, "Invalid image path");
+            return NULL;
+        }
+        results[0].of.i32 = (int32_t)wasm_canvas_image_load(ctx, mounted, NULL, 0, &options);
+    }
+    return NULL;
+}
+
+static wasm_trap_t *host_gl_image_status(void *env, wasmtime_caller_t *caller,
+                                         const wasmtime_val_t *args, size_t nargs,
+                                         wasmtime_val_t *results, size_t nresults)
+{
+    (void)caller;
+    (void)nargs;
+    (void)nresults;
+    WasmCanvasContext *ctx = env;
+    uint8_t *output = wasm_canvas_guest_bytes(ctx, args[1].of.i32, 312);
+    results[0].kind = WASMTIME_I32;
+    results[0].of.i32 = output ? wasm_canvas_image_status(ctx, (uint32_t)args[0].of.i32, output) : -1;
+    return NULL;
+}
+
+static wasm_trap_t *host_gl_image_take(void *env, wasmtime_caller_t *caller,
+                                       const wasmtime_val_t *args, size_t nargs,
+                                       wasmtime_val_t *results, size_t nresults)
+{
+    (void)caller;
+    (void)nargs;
+    (void)nresults;
+    results[0].kind = WASMTIME_I32;
+    results[0].of.i32 = wasm_canvas_image_take(env, (uint32_t)args[0].of.i32);
+    return NULL;
+}
+
+static wasm_trap_t *host_gl_image_release(void *env, wasmtime_caller_t *caller,
+                                          const wasmtime_val_t *args, size_t nargs,
+                                          wasmtime_val_t *results, size_t nresults)
+{
+    (void)caller;
+    (void)nargs;
+    (void)nresults;
+    results[0].kind = WASMTIME_I32;
+    results[0].of.i32 = wasm_canvas_image_release(env, (uint32_t)args[0].of.i32) ? 1 : 0;
+    return NULL;
+}
 
 static wasm_trap_t *host_gl_create_program(
     void *env, wasmtime_caller_t *caller,
@@ -986,6 +1261,30 @@ wasmtime_error_t *wasm_gl_register(wasmtime_linker_t *linker,
             return error;
     }
 
+    {
+        wasm_valkind_t params[] = {WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32};
+        wasm_valkind_t results[] = {WASM_I32};
+        error = define_host_function(linker, "env", "gl_image_load_async", host_gl_image_load, params, 7, results, 1);
+        if (error)
+            return error;
+    }
+    {
+        wasm_valkind_t params[] = {WASM_I32, WASM_I32};
+        wasm_valkind_t results[] = {WASM_I32};
+        error = define_host_function(linker, "env", "gl_image_status", host_gl_image_status, params, 2, results, 1);
+        if (error)
+            return error;
+    }
+    {
+        wasm_valkind_t params[] = {WASM_I32};
+        wasm_valkind_t results[] = {WASM_I32};
+        error = define_host_function(linker, "env", "gl_image_take_texture", host_gl_image_take, params, 1, results, 1);
+        if (error)
+            return error;
+        error = define_host_function(linker, "env", "gl_image_release", host_gl_image_release, params, 1, results, 1);
+        if (error)
+            return error;
+    }
     {
         wasm_valkind_t params[] = {WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32};
         wasm_valkind_t results_v[] = {WASM_I32};

@@ -100,6 +100,11 @@ void audio_stop(AudioContext *ctx)
         ctx->playing = false;
 }
 
+void audio_pause(AudioContext *ctx)
+{
+    audio_stop(ctx);
+}
+
 bool audio_is_playing(AudioContext *ctx)
 {
     return ctx && ctx->playing;

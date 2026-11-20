@@ -5,8 +5,12 @@ bundle carries the corresponding license texts under `share/budo/licenses/`.
 
 - **Skia** — BSD 3-Clause license. Copyright Google Inc.
 - **SDL2** — zlib license. Copyright Sam Lantinga and contributors.
+- **zlib** — zlib license. Copyright Jean-loup Gailly and Mark Adler.
 - **Expat** — MIT license. Copyright the Expat maintainers.
 - **stb_image** — MIT license or public-domain dedication. Copyright Sean Barrett.
+- **Ogg**, **Opus**, and **opusfile** — BSD-style licenses. These bundled
+  libraries provide OPUS audio decoding; their immutable source revisions are
+  recorded in `cmake/BudoDependencyLock.cmake`.
 - **llama.cpp** — MIT license. Optional local GGUF inference; the immutable
   source revision is recorded in `cmake/BudoDependencyLock.cmake`.
 

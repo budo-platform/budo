@@ -1,0 +1,131 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Async Image Regression</title>
+<style>
+    canvas {
+        width: 64px;
+        height: 64px;
+    }
+</style>
+<canvas id="canvas" width="64" height="64"></canvas>
+<script>
+    const parameters = new URLSearchParams(location.search);
+    globalThis.imageTestUploads = [];
+    const upload = WebGL2RenderingContext.prototype.texSubImage2D;
+    WebGL2RenderingContext.prototype.texSubImage2D = function (...args) {
+        upload.apply(this, args);
+        const previous = this.getParameter(this.READ_FRAMEBUFFER_BINDING);
+        const texture = this.getParameter(this.TEXTURE_BINDING_2D);
+        const target = this.createFramebuffer();
+        this.bindFramebuffer(this.READ_FRAMEBUFFER, target);
+        this.framebufferTexture2D(this.READ_FRAMEBUFFER, this.COLOR_ATTACHMENT0, this.TEXTURE_2D, texture, 0);
+        const pixel = new Uint8Array(4);
+        this.readPixels(0, 0, 1, 1, this.RGBA, this.UNSIGNED_BYTE, pixel);
+        imageTestUploads.push({ width: args[4], height: args[5], pixel: [...pixel] });
+        this.bindFramebuffer(this.READ_FRAMEBUFFER, previous);
+        this.deleteFramebuffer(target);
+    };
+    const image = new Uint8Array([0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 32, 40,
+        0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255]);
+    const javascript = `
+function check(value) { if (!value) throw new Error('WEB_IMAGE_ASSERTION_FAILED'); }
+check(sys.gl.isAsyncTextureLoadingAvailable());
+const original = new Uint8Array([${[...image]}]);
+const padded = new Uint8Array(original.length + 8); padded.set(original, 4);
+let terminals = 0, metadata = 0, cancelled = 0;
+function done() { if (++terminals === 7) { check(metadata === 1 && cancelled === 1); console.log('WEB_IMAGE_COMPLETE'); sys.exit(0); } }
+function unexpected(error) { console.log('WEB_IMAGE_FAILED', error.code); sys.exit(9); }
+const queued = [];
+for (let index = 0; index < 8; index++) queued.push(sys.gl.loadTexture2DFromBufferAsync(original, {}, {onComplete:unexpected,onError:unexpected}));
+let saturated = false;
+try { sys.gl.loadTexture2DFromBufferAsync(original, {}, {onComplete:unexpected,onError:unexpected}); } catch (_) { saturated = true; }
+check(saturated);
+for (const request of queued) { check(sys.gl.cancelTextureLoad(request)); check(!sys.gl.cancelTextureLoad(request)); }
+sys.gl.loadTexture2DFromBufferAsync(padded.subarray(4, 4 + original.length), {maxWidth:1}, {
+    onMetadata(info) { check(info.width === 1 && info.sourceWidth === 2); metadata++; },
+    onComplete(texture, info) { check(metadata === 1 && texture > 0 && info.height === 1); sys.gl.destroyTexture(texture); done(); },
+    onError:unexpected
+});
+padded.fill(0);
+sys.gl.loadTexture2DAsync('photo.tga', {}, {
+    onComplete(texture, info) { check(texture > 0 && info.width === 2); sys.gl.destroyTexture(texture); done(); }, onError:unexpected
+});
+sys.gl.loadTexture2DAsync('photo.tga', {mount:'files',maxHeight:1}, {
+    onComplete(texture, info) { check(texture > 0 && info.height === 1); sys.gl.destroyTexture(texture); done(); }, onError:unexpected
+});
+sys.gl.loadTexture2DAsync('missing.tga', {}, {
+    onComplete:unexpected, onError(error) { check(error.code === 'image.read_failed'); done(); }
+});
+const request = sys.gl.loadTexture2DFromBufferAsync(original, {}, {
+    onMetadata() { check(sys.gl.cancelTextureLoad(request)); cancelled++; }, onComplete:unexpected, onError:unexpected
+});
+sys.gl.loadTexture2DFromBufferAsync(new Uint8Array([1,2,3]), {}, {
+    onComplete:unexpected, onError(error) { check(error.code === 'image.invalid_data'); done(); }
+});
+const large = new Uint8Array(18 + 1025 * 1025 * 4); large.fill(255, 18);
+large.set([0,0,2,0,0,0,0,0,0,0,0,0,1,4,1,4,32,40]);
+sys.gl.loadTexture2DFromBufferAsync(large, {}, {
+    onComplete(texture, info) { check(texture > 0 && info.width === 1025); sys.gl.destroyTexture(texture); done(); }, onError:unexpected
+});
+sys.gl.loadTexture2DFromBufferAsync(original, {maxPixels:3}, {
+    onComplete:unexpected, onError(error) { check(error.code === 'image.pixel_limit'); done(); }
+});
+function idle() { sys.animation.waitForInput(idle, 10000); } idle();
+`;
+    const lua = `
+local function check(value) if not value then error('WEB_IMAGE_ASSERTION_FAILED') end end
+check(sys.gl.isAsyncTextureLoadingAvailable())
+local bytes = string.char(${[...image]})
+local completed = 0
+local function callbacks()
+    local metadata = false
+    return {onMetadata=function(info) check(not metadata and info.width == 1 and info.sourceWidth == 2); metadata = true end,
+        onComplete=function(texture, info)
+            check(metadata and texture > 0 and info.height == 1)
+            sys.gl.destroyTexture(texture)
+            completed = completed + 1
+            if completed == 2 then print('WEB_IMAGE_COMPLETE'); sys.exit(0) end
+        end,
+        onError=function(err) print('WEB_IMAGE_FAILED', err.code); sys.exit(9) end}
+end
+sys.gl.loadTexture2DFromBufferAsync(bytes, {maxWidth=1}, callbacks())
+sys.gl.loadTexture2DAsync('photo.tga', {mount='files',maxHeight=1}, callbacks())
+local function idle() sys.animation.waitForInput(idle, 10000) end
+idle()
+`;
+    const unavailable = `
+if (sys.gl.isAsyncTextureLoadingAvailable()) throw new Error('availability');
+let failed = false;
+try { sys.gl.loadTexture2DAsync('photo.tga', {}, {onComplete(){},onError(){}}); } catch (_) { failed = true; }
+if (!failed || sys.gl.cancelTextureLoad(1)) throw new Error('unavailable');
+console.log('WEB_IMAGE_UNAVAILABLE'); sys.exit(0);
+`;
+    if (parameters.has('unavailable')) globalThis.Worker = undefined;
+    const pending = `
+const bytes = new Uint8Array([${[...image]}]);
+sys.gl.loadTexture2DFromBufferAsync(bytes, {}, {onMetadata(){ console.log('WEB_IMAGE_PENDING'); },
+    onComplete(texture){sys.gl.destroyTexture(texture);console.log('WEB_IMAGE_STALE');},onError(){console.log('WEB_IMAGE_STALE');}});
+function idle() { sys.animation.waitForInput(idle, 10000); } idle();
+`;
+    var Module = {
+        canvas: document.getElementById('canvas'),
+        locateFile: path => '../build-web/' + path,
+        print: message => {
+            console.log(message);
+            if (message.includes('IDBFS synced')) FS.writeFile('/files/photo.tga', image);
+            if (message === 'WEB_IMAGE_PENDING' && parameters.has('contextloss'))
+                queueMicrotask(() => Module.canvas.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext());
+            if (message === 'WEB_IMAGE_PENDING' && parameters.has('pagehide'))
+                queueMicrotask(() => dispatchEvent(new PageTransitionEvent('pagehide')));
+        },
+        printErr: message => { console.warn(message); },
+        preRun: [() => {
+            FS.writeFile('/photo.tga', image);
+            const language = parameters.get('runtime') === 'lua' ? 'lua' : 'js';
+            FS.writeFile('/main.' + language, parameters.has('unavailable') ? unavailable :
+                parameters.has('pending') ? pending : language === 'lua' ? lua : javascript);
+        }]
+    };
+    addEventListener('budoexit', event => { globalThis.imageTestExit = event.detail.code; });
+</script>
+<script src="../build-web/budo.js"></script>

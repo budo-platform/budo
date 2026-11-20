@@ -1,7 +1,7 @@
 name: Release
 
-# Builds standalone `budo` binaries for Linux and macOS, and a Windows zip
-# (budo.exe with its DLLs), and publishes them on a GitHub release. Push a tag (git tag v0.4.3 && git push origin v0.4.3) or run
+# Builds standalone `budo` binaries for Linux, macOS, and Windows.
+# Push a tag (git tag v0.4.3 && git push origin v0.4.3) or run
 # the workflow by hand with an existing or new tag name.
 
 on:
@@ -74,11 +74,29 @@ jobs:
       - name: Build static SDL2
         run: ./scripts/setup-sdl2-static.sh
 
+      - name: Build static zlib (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          source scripts/_common.sh
+          version="$(budo_dependency_lock_value BUDO_ZLIB_SOURCE_VERSION)"
+          url="$(budo_dependency_lock_value BUDO_ZLIB_SOURCE_URL)"
+          expected="$(budo_dependency_lock_value BUDO_ZLIB_SOURCE_SHA256)"
+          cd "$RUNNER_TEMP"
+          curl -qfsSL --proto '=https' --proto-redir '=https' -o zlib.tar.gz "$url"
+          echo "$expected  zlib.tar.gz" | shasum -a 256 -c
+          tar -xzf zlib.tar.gz
+          cmake -S "zlib-$version" -B zlib-build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DZLIB_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/zlib"
+          cmake --build zlib-build --target install --parallel
+          echo "ZLIB_ROOT=$RUNNER_TEMP/zlib" >> "$GITHUB_ENV"
+
       - name: Build
         run: |
           prefix="$PWD/third_party/sdl2-static"
           # The repository hosts the Android support bundle release.
-          make build CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2 -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
+          make build CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2 -DZLIB_ROOT=${ZLIB_ROOT:-} -DZLIB_USE_STATIC_LIBS=ON -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
       - name: Check the binary is standalone
         run: |
@@ -90,13 +108,18 @@ jobs:
               echo "::error::build/budo links non-system libraries"
               exit 1
             fi
+            if otool -L build/budo | grep -q '/libz\.'; then
+              echo "::error::build/budo links zlib dynamically"
+              exit 1
+            fi
           else
             ldd build/budo
-            if ldd build/budo | grep -i 'sdl2'; then
-              echo "::error::build/budo links SDL2 dynamically"
+            if readelf -d build/budo | grep -Ei 'NEEDED.*(sdl2|libz\.so)'; then
+              echo "::error::build/budo links SDL2 or zlib dynamically"
               exit 1
             fi
           fi
+          python3 tests/desktop_package_test.py build/budo
 
       - name: Stage release asset
         run: |
@@ -120,6 +143,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@main
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -130,6 +154,7 @@ jobs:
         run: |
           chmod 0755 budo-linux-* budo-macos-*
           sha256sum budo-* > SHA256SUMS.txt
+          cp ../LICENSE ../THIRD_PARTY_NOTICES.md .
           cat SHA256SUMS.txt
 
       # Mention Android packaging when the build included it (`budo version`).
@@ -182,10 +207,10 @@ jobs:
             echo "|---|---|"
             echo "| Linux x86_64 | $base/budo-linux-x86_64 |"
             echo "| macOS Apple Silicon | $base/budo-macos-aarch64 |"
-            echo "| Windows x64 (zip: budo.exe + DLLs) | $base/budo-windows-x86_64.zip |"
+            echo "| Windows x64 | $base/budo-windows-x86_64.exe |"
             echo "| Checksums | $base/SHA256SUMS.txt |"
             echo ""
-            echo "Always-latest links: \`$latest/budo-linux-x86_64\`, \`$latest/budo-macos-aarch64\`, \`$latest/budo-windows-x86_64.zip\`"
+            echo "Always-latest links: \`$latest/budo-linux-x86_64\`, \`$latest/budo-macos-aarch64\`, \`$latest/budo-windows-x86_64.exe\`"
             echo ""
             echo "Install:"
             echo ""
@@ -194,12 +219,12 @@ jobs:
             echo "chmod +x budo && ./budo help"
             echo '```'
             echo ""
-            echo "On Windows, unzip budo-windows-x86_64.zip and keep the DLLs next to budo.exe."
+            echo "On Windows, run budo-windows-x86_64.exe directly."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice title=Budo $RELEASE_TAG for Linux x86_64::$base/budo-linux-x86_64"
           echo "::notice title=Budo $RELEASE_TAG for macOS Apple Silicon::$base/budo-macos-aarch64"
-          echo "::notice title=Budo $RELEASE_TAG for Windows x64::$base/budo-windows-x86_64.zip"
+          echo "::notice title=Budo $RELEASE_TAG for Windows x64::$base/budo-windows-x86_64.exe"
           echo "Linux x86_64:        $base/budo-linux-x86_64"
           echo "macOS Apple Silicon: $base/budo-macos-aarch64"
-          echo "Windows x64:         $base/budo-windows-x86_64.zip"
+          echo "Windows x64:         $base/budo-windows-x86_64.exe"
           echo "Checksums:           $base/SHA256SUMS.txt"
