@@ -32,6 +32,7 @@ jobs:
             echo "Preparing tag: $tag"
             echo "Publish url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag"
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Android support bundle::Publishing $tag"
 
       # The bundle scripts live in the private pack.
       - name: Android pack
