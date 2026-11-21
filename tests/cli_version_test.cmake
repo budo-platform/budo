@@ -46,3 +46,17 @@ foreach(feature IN ITEMS NEURAL LLAMACPP)
         message(FATAL_ERROR "Incorrect ENABLE_${feature} setting:\n${report}")
     endif()
 endforeach()
+
+if(BUDO_ANDROID)
+    foreach(entry IN ITEMS
+            "Android support bundle: ${BUDO_ANDROID_TAG}"
+            "Android support bundle default SHA-256: ${BUDO_ANDROID_SHA}"
+            "Android support bundle default URL: ${BUDO_ANDROID_BASE_URL}/budo-android-support-${BUDO_ANDROID_SHA}.tar.gz")
+        string(FIND "${report}" "\n  ${entry}\n" position)
+        if(position EQUAL -1)
+            message(FATAL_ERROR "Missing Android support bundle detail '${entry}':\n${report}")
+        endif()
+    endforeach()
+elseif(report MATCHES "\n  Android support bundle")
+    message(FATAL_ERROR "Android support bundle reported when packaging is disabled:\n${report}")
+endif()

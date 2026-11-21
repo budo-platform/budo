@@ -125,6 +125,10 @@ for the runtime engines and other dependencies. These are build-time details,
 not a probe of the installed graphics driver or optional runtimes. The first
 line remains `budo <version>`.
 
+When Android packaging is included, the report also shows its pinned support
+bundle SHA-256 and default download URL. Environment overrides can change the
+URL or, with explicit unsafe opt-in, the digest used during provisioning.
+
 ### Run a demo application
 
 ```bash

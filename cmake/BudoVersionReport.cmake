@@ -170,7 +170,10 @@ function(budo_add_version_report target)
         endforeach()
     endif()
     if(BUDO_ENABLE_ANDROID_PACKAGING)
-        string(APPEND report "  Android support bundle: ${BUDO_ANDROID_SUPPORT_BUNDLE_TAG}\n")
+        string(APPEND report
+            "  Android support bundle: ${BUDO_ANDROID_SUPPORT_BUNDLE_TAG}\n"
+            "  Android support bundle default SHA-256: ${BUDO_ANDROID_SUPPORT_BUNDLE_SHA256}\n"
+            "  Android support bundle default URL: ${BUDO_ANDROID_SUPPORT_BASE_URL}/budo-android-support-${BUDO_ANDROID_SUPPORT_BUNDLE_SHA256}.tar.gz\n")
     endif()
 
     set(configs ${CMAKE_CONFIGURATION_TYPES} ${CMAKE_BUILD_TYPE})
