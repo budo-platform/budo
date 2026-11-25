@@ -96,7 +96,7 @@ jobs:
         run: |
           prefix="$PWD/third_party/sdl2-static"
           # The repository hosts the Android support bundle release.
-          make build CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2 -DZLIB_ROOT=${ZLIB_ROOT:-} -DZLIB_USE_STATIC_LIBS=ON -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
+          make build CMAKE_FLAGS="-DENABLE_VIDEO=OFF -DCMAKE_PREFIX_PATH=$prefix -DSDL2_DIR=$prefix/lib/cmake/SDL2 -DZLIB_ROOT=${ZLIB_ROOT:-} -DZLIB_USE_STATIC_LIBS=ON -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
       - name: Check the binary is standalone
         run: |

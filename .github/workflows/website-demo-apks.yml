@@ -62,6 +62,7 @@ jobs:
           ./budo android-apk examples/network --output-file dist/network.apk --release
           ./budo android-apk examples/persistence --output-file dist/persistence.apk --release
           ./budo android-apk examples/sound-instrument --output-file dist/sound-instrument.apk --release
+          ./budo android-apk examples/text-editor --output-file dist/text-editor.apk --release
 
       - name: Publish
         env:

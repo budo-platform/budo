@@ -4,6 +4,14 @@
 #include "core/managed_subsystem_adapters.h"
 #include "core/subsystem_composition.h"
 #include "file/file_wrapper.h"
+#ifdef BUDO_VIDEO
+#include "graphics/js_video_bindings.h"
+
+static void managed_js_video_context_lost(void *opaque)
+{
+    js_video_context_lost((JSGraphicContext *)opaque);
+}
+#endif
 
 #ifndef BUDO_WEB
 #define BUDO_MANAGED_UDP 1
@@ -155,6 +163,9 @@ static void *init_js_file(void *opaque)
     c->js_file_ctx = js_file_init(c->js_ctx->context, host->config->project_dir);
     host_publish_file(host, js_file_context(c->js_file_ctx));
     c->js_graphic_ctx->image_files = &c->file_ctx;
+#ifdef BUDO_VIDEO
+    c->js_graphic_ctx->video_files = &c->file_ctx;
+#endif
     return c->js_file_ctx;
 }
 
@@ -414,7 +425,14 @@ bool managed_subsystems_compose(ManagedRuntimeKind kind,
                 *failed_subsystem = entries[i].descriptor.name;
             return false;
         }
-        descriptors[descriptor_count++] = entries[i].descriptor;
+        descriptors[descriptor_count] = entries[i].descriptor;
+#ifdef BUDO_VIDEO
+        if (kind == MANAGED_RUNTIME_JAVASCRIPT &&
+            entries[i].descriptor.initialize == init_js_canvas)
+            descriptors[descriptor_count].ops.context_lost =
+                managed_js_video_context_lost;
+#endif
+        descriptor_count++;
     }
 
     host.contexts = contexts;

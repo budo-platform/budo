@@ -50,7 +50,7 @@ extern "C"
 
 #ifdef BUDO_NEURAL
 
-    bool wasm_canvas_enable_neural(WasmCanvasContext *ctx);
+    bool wasm_canvas_enable_onnx(WasmCanvasContext *ctx);
 #endif
 
     void wasm_canvas_destroy(WasmCanvasContext *ctx);

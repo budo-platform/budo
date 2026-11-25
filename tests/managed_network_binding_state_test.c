@@ -156,6 +156,55 @@ static void test_javascript(void)
     assert(network_mock_destroy_count() == 2);
 }
 
+static void test_javascript_response_bodies(void)
+{
+    static const struct
+    {
+        const char *body;
+        const char *check;
+    } cases[] = {
+        {"{\"token\":\"caf\xc3\xa9\"}",
+         "var value = response.json();"
+         "if (value.token !== 'caf\\u00e9') throw Error('wrong token');"
+         "try { response.text(); throw Error('body was not consumed'); }"
+         "catch (e) { if (!(e instanceof TypeError)) throw e; }"},
+        {"123", "if (response.json() !== 123) throw Error('wrong number');"},
+        {"true", "if (response.json() !== true) throw Error('wrong boolean');"},
+        {"{\"x\":1} \n", "if (response.json().x !== 1) throw Error('wrong object');"},
+        {"{\"x\":", "try { response.json(); throw Error('accepted invalid JSON'); }"
+                    "catch (e) { if (!(e instanceof SyntaxError)) throw e; }"},
+        {"", "try { response.json(); throw Error('accepted empty JSON'); }"
+             "catch (e) { if (!(e instanceof SyntaxError)) throw e; }"},
+        {"hello", "if (response.text() !== 'hello') throw Error('wrong text');"},
+        {"hello", "var bytes = new Uint8Array(response.arrayBuffer());"
+                  "if (bytes.length !== 5 || bytes[4] !== 111) throw Error('wrong bytes');"},
+    };
+    JsNetworkRuntime runtime;
+    char script[2048];
+
+    network_mock_reset();
+    js_runtime_create(&runtime);
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+    {
+        snprintf(script, sizeof(script),
+                 "var bodyDone = false, bodyError = '';"
+                 "sys.net.fetch('https://body.test').then(function (response) {"
+                 "  try { %s } catch (e) { bodyError = String(e); }"
+                 "  bodyDone = true;"
+                 "}, function (e) { bodyError = String(e); bodyDone = true; });",
+                 cases[i].check);
+        js_eval_or_fail(&runtime, script);
+        int request = network_mock_find_request(runtime.network, "https://body.test");
+        assert(request > 0);
+        assert(network_mock_complete(request, 200, cases[i].body));
+        js_network_poll(runtime.network_state);
+        js_drain_jobs(&runtime);
+        js_eval_or_fail(&runtime,
+                        "if (!bodyDone || bodyError) throw Error('body check failed: ' + bodyError);");
+    }
+    js_runtime_destroy(&runtime);
+}
+
 static void lua_eval_or_fail(LuaNetworkRuntime *runtime, const char *script)
 {
     if (luaL_dostring(runtime->state, script) != LUA_OK)
@@ -253,6 +302,7 @@ static void test_lua(void)
 int main(void)
 {
     test_javascript();
+    test_javascript_response_bodies();
     test_lua();
     puts("{\"runtime\":\"javascript\",\"operation\":\"network.complete\",\"result\":true,\"errorKind\":\"none\",\"errorCode\":\"\"}");
     puts("{\"runtime\":\"javascript\",\"operation\":\"network.staleCompletionDiscarded\",\"result\":true,\"errorKind\":\"none\",\"errorCode\":\"\"}");

@@ -15,7 +15,7 @@ to try the Lua version.
 
 ## Prerequisites
 
-- Budo must be built with `ENABLE_NEURAL=ON` (the default).
+- Budo must be built with `ENABLE_ONNX=ON` (the default).
   Run `./scripts/setup-onnx.sh` first if `third_party/onnxruntime/` is absent.
 - `"neural": true` is already set in `app.json`; no additional configuration
   is needed.

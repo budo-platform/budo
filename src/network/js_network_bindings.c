@@ -336,13 +336,7 @@ static JSValue js_response_json(JSContext *ctx, JSValueConst this_val, int argc,
     if (!data->body || data->body_len == 0)
         return JS_ThrowSyntaxError(ctx, "Unexpected end of JSON input");
 
-    JSValue str = JS_NewStringLen(ctx, (const char *)data->body, data->body_len);
-    if (JS_IsException(str))
-        return str;
-
-    JSValue result = JS_ParseJSON(ctx, (const char *)data->body, data->body_len, "<response>");
-    JS_FreeValue(ctx, str);
-    return result;
+    return JS_ParseJSON(ctx, (const char *)data->body, data->body_len, "<response>");
 }
 
 static JSValue js_response_arrayBuffer(JSContext *ctx, JSValueConst this_val,
@@ -369,6 +363,9 @@ static JSValue create_response_object(JsNetworkContext *state,
                                       NetworkResponse *resp)
 {
     JSContext *ctx = state->js_ctx;
+    if (resp->body_len == SIZE_MAX)
+        return JS_ThrowInternalError(ctx, "Response body is too large");
+
     JSValue obj = JS_NewObjectClass(ctx, state->response_class_id);
     if (JS_IsException(obj))
         return obj;
@@ -388,10 +385,12 @@ static JSValue create_response_object(JsNetworkContext *state,
     data->ok = (resp->status >= 200 && resp->status < 300);
     data->body_used = false;
 
-    data->body = js_malloc(ctx, resp->body_len > 0 ? resp->body_len : 1);
+    data->body = js_malloc(ctx, resp->body_len + 1);
     if (data->body && resp->body)
         memcpy(data->body, resp->body, resp->body_len);
     data->body_len = resp->body_len;
+    if (data->body)
+        data->body[data->body_len] = '\0';
 
     data->header_count = resp->header_count;
     data->headers = js_malloc(ctx, sizeof(NetworkHeader) * (resp->header_count > 0 ? resp->header_count : 1));

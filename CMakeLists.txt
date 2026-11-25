@@ -47,6 +47,12 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
 option(BUDO_WINDOWS_STANDALONE "Link Windows Budo and its dependencies statically" OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(BUDO_ENABLE_VIDEO_DEFAULT ON)
+else()
+    set(BUDO_ENABLE_VIDEO_DEFAULT OFF)
+endif()
+option(ENABLE_VIDEO "Build the experimental desktop video foundation" ${BUDO_ENABLE_VIDEO_DEFAULT})
 if(BUDO_WINDOWS_STANDALONE)
     if(NOT MSVC)
         message(FATAL_ERROR "BUDO_WINDOWS_STANDALONE requires MSVC")
@@ -66,6 +72,36 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
+
+if(ENABLE_VIDEO)
+    if(WIN32 OR ANDROID OR EMSCRIPTEN)
+        message(FATAL_ERROR
+            "ENABLE_VIDEO is currently supported only by macOS and Linux desktop builds")
+    endif()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(BUDO_VIDEO_FFMPEG REQUIRED IMPORTED_TARGET
+        libavformat>=59 libavcodec>=59 libavutil>=57 libswscale>=6
+        libswresample>=4)
+    add_library(budo_video STATIC
+        src/video/video_demux.c
+        src/video/video_frame.c
+        src/video/video_frame_writer.c
+        src/video/video_compositor.c
+        src/video/video_composition.c
+        src/video/video_export.c
+        src/video/video_preview.c
+        src/video/video_playback_clock.c
+        src/video/video_player.c
+        src/video/video_reader.c
+        src/video/video_texture.c
+        src/video/video_writer.c)
+    target_compile_features(budo_video PUBLIC c_std_11)
+    target_include_directories(budo_video PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(budo_video PRIVATE PkgConfig::BUDO_VIDEO_FFMPEG Threads::Threads)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_libraries(budo_video PRIVATE m)
+    endif()
+endif()
 
 # Platform detection
 if(WIN32)
@@ -689,6 +725,9 @@ add_library(skia STATIC IMPORTED)
 set_target_properties(skia PROPERTIES
     IMPORTED_LOCATION "${SKIA_LIBRARY}"
 )
+# Match the release-built Skia archive even when Budo itself is a Debug build.
+# Mixing SK_DEBUG inline ref-counting with release Skia breaks SVG destruction.
+target_compile_definitions(skia INTERFACE SK_RELEASE)
 get_filename_component(BUDO_SDK_SKIA_NAME "${SKIA_LIBRARY}" NAME)
 
 # Find Skia include directory
@@ -860,11 +899,11 @@ else()
 endif()
 
 # ==================================================
-# ONNX Runtime (optional — controlled by ENABLE_NEURAL)
+# ONNX Runtime (optional — controlled by ENABLE_ONNX)
 # ==================================================
-option(ENABLE_NEURAL "Enable ONNX Runtime neural inference API" OFF)
+option(ENABLE_ONNX "Enable ONNX Runtime neural inference API" OFF)
 
-if(ENABLE_NEURAL)
+if(ENABLE_ONNX)
     set(ORT_VERSION "1.21.0")
     set(ORT_DIR "${CMAKE_SOURCE_DIR}/third_party/onnxruntime")
 
@@ -872,10 +911,10 @@ if(ENABLE_NEURAL)
         message(STATUS "")
         message(STATUS "=== ONNX Runtime NOT FOUND ===")
         message(STATUS "Run:  ./scripts/setup-onnx.sh")
-        message(STATUS "Or:   cmake -DENABLE_NEURAL=OFF ..")
+        message(STATUS "Or:   cmake -DENABLE_ONNX=OFF ..")
         message(STATUS "")
-        message(WARNING "ONNX Runtime not found; disabling neural API (ENABLE_NEURAL=OFF)")
-        set(ENABLE_NEURAL OFF)
+        message(WARNING "ONNX Runtime not found; disabling neural API (ENABLE_ONNX=OFF)")
+        set(ENABLE_ONNX OFF)
     endif()
 endif()
 
@@ -888,7 +927,7 @@ if(ENABLE_LLAMACPP)
     )
 endif()
 
-if(ENABLE_NEURAL)
+if(ENABLE_ONNX)
     find_library(ORT_LIBRARY
         NAMES onnxruntime libonnxruntime.so libonnxruntime.dylib
         PATHS "${ORT_DIR}/lib"
@@ -1364,6 +1403,11 @@ add_library(budo_managed_drivers STATIC ${SOURCES})
 add_library(budo::managed_drivers ALIAS budo_managed_drivers)
 target_link_libraries(budo_managed_drivers PRIVATE quickjs lua sqlite3 ZLIB::ZLIB)
 target_link_libraries(budo_managed_drivers PRIVATE budo_opusfile)
+if(ENABLE_VIDEO)
+    target_sources(budo_managed_drivers PRIVATE src/graphics/js_video_bindings.c)
+    target_compile_definitions(budo_managed_drivers PRIVATE BUDO_VIDEO)
+    target_link_libraries(budo_managed_drivers PRIVATE budo_video)
+endif()
 if(ENABLE_LLAMACPP)
     target_compile_definitions(budo_managed_drivers PRIVATE
         BUDO_LLAMACPP
@@ -1423,6 +1467,11 @@ add_executable(${PROJECT_NAME}
     src/core/cli.c
     src/core/desktop_package.c
     src/desktop/managed_desktop.c)
+if(ENABLE_VIDEO)
+    target_sources(${PROJECT_NAME} PRIVATE src/desktop/desktop_recording.c)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE BUDO_VIDEO)
+    target_link_libraries(${PROJECT_NAME} PRIVATE budo_video PkgConfig::BUDO_VIDEO_FFMPEG)
+endif()
 # Strip the distribution runtime before it can have an app payload appended.
 if(APPLE)
     target_link_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:Release>:LINKER:-S,-x>")
@@ -1592,7 +1641,7 @@ if(BUILD_TESTING)
         "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
         "-DBUDO_VERSION=${BUDO_VERSION_STRING}"
         "-DBUDO_CONFIG=$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unspecified>"
-        "-DBUDO_NEURAL=$<BOOL:${ENABLE_NEURAL}>"
+        "-DBUDO_NEURAL=$<BOOL:${ENABLE_ONNX}>"
         "-DBUDO_LLAMACPP=$<BOOL:${ENABLE_LLAMACPP}>"
         "-DBUDO_ANDROID=$<BOOL:${BUDO_ENABLE_ANDROID_PACKAGING}>"
         "-DBUDO_ANDROID_SHA=${BUDO_ANDROID_SUPPORT_BUNDLE_SHA256}"
@@ -1614,6 +1663,18 @@ if(BUILD_TESTING)
             ${CMAKE_BINARY_DIR}/test-data/gl-canvas-interleave
             ${CMAKE_SOURCE_DIR}/examples/07_file_explorer)
     set_tests_properties(gl_canvas_interleave PROPERTIES SKIP_RETURN_CODE 77)
+
+    add_test(NAME desktop_window_icon
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/desktop_window_icon_test.py
+            $<TARGET_FILE:${PROJECT_NAME}>)
+    set_tests_properties(desktop_window_icon PROPERTIES SKIP_RETURN_CODE 77)
+
+    add_executable(gl_region_draw_test tests/gl_region_draw_test.c)
+    target_include_directories(gl_region_draw_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(gl_region_draw_test PRIVATE budo_desktop_host)
+    add_test(NAME gl_region_draw COMMAND gl_region_draw_test)
+    set_tests_properties(gl_region_draw PROPERTIES SKIP_RETURN_CODE 77)
 
     add_test(NAME binding_ownership
         COMMAND ${Python3_EXECUTABLE}
@@ -2182,6 +2243,10 @@ if(BUILD_TESTING)
             COMMAND "${BUDO_NODE_EXECUTABLE}" --test
                 "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.test.mjs"
                 "${CMAKE_SOURCE_DIR}/examples/budo-ui/budo-ui.snapshots.test.mjs")
+        add_test(NAME video_example_ui
+            COMMAND "${BUDO_NODE_EXECUTABLE}" --test
+                "${CMAKE_SOURCE_DIR}/examples/video_pip/player.test.mjs"
+                "${CMAKE_SOURCE_DIR}/examples/video_pip/ui.test.mjs")
         # The MIDI Preset Saver's capture, recording, playback, and recall,
         # running main.ts through Budo's own TypeScript stripper.
         add_executable(ts_strip_tool tests/ts_strip_tool.c src/core/ts_strip.c)
@@ -2206,6 +2271,9 @@ if(BUILD_TESTING)
     file(MAKE_DIRECTORY "${CANVAS_FEATURES_TEST_ROOT}")
     add_test(NAME canvas_features
         COMMAND canvas_features_test "${CANVAS_FEATURES_TEST_ROOT}")
+    add_test(NAME canvas_texture_transforms
+        COMMAND canvas_features_test "${CANVAS_FEATURES_TEST_ROOT}" --texture)
+    set_tests_properties(canvas_texture_transforms PROPERTIES SKIP_RETURN_CODE 77)
 
     add_executable(managed_magneto_binding_state_test
         tests/managed_magneto_binding_state_test.c
@@ -2408,6 +2476,9 @@ if(BUILD_TESTING)
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tests/window_graphics_consolidation_test.py
             ${CMAKE_SOURCE_DIR})
+    add_test(NAME managed_runtime_idle_video
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/managed_runtime_idle_video_test.py)
 
     add_executable(subsystem_queue_test
         tests/subsystem_queue_test.c
@@ -2416,6 +2487,84 @@ if(BUILD_TESTING)
     target_compile_features(subsystem_queue_test PRIVATE c_std_11)
     target_link_libraries(subsystem_queue_test PRIVATE budo_host_core Threads::Threads)
     add_test(NAME subsystem_queue COMMAND subsystem_queue_test)
+
+    if(ENABLE_VIDEO)
+        find_program(BUDO_VIDEO_TEST_FFMPEG ffmpeg)
+        add_executable(desktop_recording_test tests/desktop_recording_test.c
+            src/desktop/desktop_recording.c src/file/file_wrapper.c src/core/file_watcher.c)
+        target_include_directories(desktop_recording_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(desktop_recording_test PRIVATE
+            budo_desktop_host budo_managed_drivers budo_video quickjs PkgConfig::BUDO_VIDEO_FFMPEG)
+        add_test(NAME desktop_recording COMMAND desktop_recording_test)
+        set_tests_properties(desktop_recording PROPERTIES SKIP_RETURN_CODE 77)
+        add_test(NAME desktop_recording_cli COMMAND ${CMAKE_COMMAND}
+            "-DBUDO=$<TARGET_FILE:${PROJECT_NAME}>"
+            "-DWORK=${CMAKE_BINARY_DIR}/desktop-recording-cli"
+            -P "${CMAKE_SOURCE_DIR}/tests/desktop_recording_cli_test.cmake")
+        set_tests_properties(desktop_recording_cli PROPERTIES
+            SKIP_REGULAR_EXPRESSION "SKIP: No graphics window available")
+        add_test(NAME video_example_fixtures
+            COMMAND "${CMAKE_SOURCE_DIR}/examples/video_pip/fixture-script-test.sh")
+        set_tests_properties(video_example_fixtures PROPERTIES SKIP_RETURN_CODE 77)
+        add_executable(video_demux_test tests/video_demux_test.c src/file/file_wrapper.c)
+        target_include_directories(video_demux_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_demux_test PRIVATE budo_video)
+        add_executable(video_texture_test tests/video_texture_test.c)
+        target_include_directories(video_texture_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_texture_test PRIVATE budo_video)
+        add_executable(video_compositor_test tests/video_compositor_test.c)
+        target_include_directories(video_compositor_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_compositor_test PRIVATE budo_video)
+        add_executable(video_composition_test tests/video_composition_test.c src/file/file_wrapper.c)
+        target_include_directories(video_composition_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_composition_test PRIVATE budo_video)
+        add_executable(video_preview_test tests/video_preview_test.c src/file/file_wrapper.c)
+        target_include_directories(video_preview_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_preview_test PRIVATE budo_video)
+        add_executable(video_player_test tests/video_player_test.c src/file/file_wrapper.c)
+        target_include_directories(video_player_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_player_test PRIVATE budo_video)
+        add_executable(js_video_binding_test tests/js_video_binding_test.c
+            src/graphics/js_video_bindings.c src/file/file_wrapper.c)
+        target_include_directories(js_video_binding_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_compile_definitions(js_video_binding_test PRIVATE BUDO_VIDEO)
+        target_link_libraries(js_video_binding_test PRIVATE quickjs budo_video)
+        add_executable(video_frame_test tests/video_frame_test.c)
+        target_include_directories(video_frame_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_frame_test PRIVATE budo_video)
+        add_executable(video_playback_clock_test tests/video_playback_clock_test.c)
+        target_include_directories(video_playback_clock_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_playback_clock_test PRIVATE budo_video)
+        add_executable(video_reader_test tests/video_reader_test.c src/file/file_wrapper.c)
+        target_include_directories(video_reader_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(video_reader_test PRIVATE budo_video)
+        add_test(NAME video_reader COMMAND video_reader_test)
+        add_test(NAME video_texture COMMAND video_texture_test)
+        add_test(NAME video_compositor COMMAND video_compositor_test)
+        if(BUDO_VIDEO_TEST_FFMPEG)
+            add_test(NAME video_composition
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/video_composition_test.py"
+                    "$<TARGET_FILE:video_composition_test>"
+                    "$<TARGET_FILE:video_preview_test>"
+                    "$<TARGET_FILE:video_player_test>"
+                    "$<TARGET_FILE:js_video_binding_test>" "${BUDO_VIDEO_TEST_FFMPEG}")
+            set_tests_properties(video_composition PROPERTIES SKIP_RETURN_CODE 77)
+            add_test(NAME video_runtime_no_animation
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/video_runtime_test.py"
+                    "$<TARGET_FILE:${PROJECT_NAME}>" "${BUDO_VIDEO_TEST_FFMPEG}")
+            set_tests_properties(video_runtime_no_animation PROPERTIES SKIP_RETURN_CODE 77)
+        endif()
+        add_test(NAME video_frame COMMAND video_frame_test)
+        add_test(NAME video_playback_clock COMMAND video_playback_clock_test)
+        if(BUDO_VIDEO_TEST_FFMPEG)
+            add_test(NAME video_demux
+                COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/video_demux_test.py"
+                    "$<TARGET_FILE:video_demux_test>" "${BUDO_VIDEO_TEST_FFMPEG}")
+            set_tests_properties(video_demux PROPERTIES SKIP_RETURN_CODE 77)
+        else()
+            message(WARNING "Video demux tests require the ffmpeg executable")
+        endif()
+    endif()
 
     add_executable(image_async_test
         tests/image_async_test.c
@@ -2953,7 +3102,7 @@ target_compile_definitions(budo_managed_drivers PRIVATE)
 target_compile_definitions(${PROJECT_NAME} PRIVATE SK_GL SK_GANESH)
 target_compile_definitions(budo_managed_drivers PRIVATE SK_GL SK_GANESH)
 
-if(ENABLE_NEURAL)
+if(ENABLE_ONNX)
     target_compile_definitions(${PROJECT_NAME} PRIVATE BUDO_NEURAL)
     target_compile_definitions(budo_managed_drivers PRIVATE BUDO_NEURAL)
     target_include_directories(${PROJECT_NAME} PRIVATE "${ORT_DIR}/include")
@@ -3200,7 +3349,7 @@ export(EXPORT BudoNativeTargets
     NAMESPACE budo::
 )
 
-if(ENABLE_NEURAL)
+if(ENABLE_ONNX)
     # Resolve symlink so both the versioned dylib and the unversioned symlink are installed.
     # The binary links against the versioned name (e.g. libonnxruntime.1.21.0.dylib) via @rpath,
     # so we must install that real file in addition to the convenience symlink.

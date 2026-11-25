@@ -1992,7 +1992,7 @@ error_cleanup:
 }
 
 #ifdef BUDO_NEURAL
-bool wasm_canvas_enable_neural(WasmCanvasContext *ctx)
+bool wasm_canvas_enable_onnx(WasmCanvasContext *ctx)
 {
     return ctx && wasm_neural_binding_state_enable(ctx->neural_binding_state,
                                                    ctx->project_dir);

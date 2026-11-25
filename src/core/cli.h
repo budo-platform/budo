@@ -45,6 +45,7 @@ extern "C"
         bool fullscreen;
         bool vsync;
         bool watch;
+        const char *record_path; 
         const char *file_root; 
         const char *sqlite_root; 
     } BudoRunOptions;

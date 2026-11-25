@@ -9,6 +9,8 @@
 // =====================================================================
 // Color palette
 // =====================================================================
+import { createMetalRenderer } from './metal-renderer.js';
+
 const COLORS = {
     bg: '#1E1E2E',
     bgGradient: '#181825',
@@ -23,6 +25,10 @@ const COLORS = {
     textMuted: '#6C7086',
     border: '#45475A',
 };
+let metalTheme = false;
+let themeMix = 0; // 0 = classic, 1 = hologram; animated by the circular theme wipe
+let dashboardRenderer = null;
+const THEME_SWITCH_SECONDS = 0.2;
 
 // =====================================================================
 // `ui` — reusable animation / UI helpers (candidate for extraction)
@@ -65,7 +71,7 @@ const ui = (() => {
     // ---- Ripple manager (click feedback) ----
     class RippleSet {
         constructor() { this.list = []; }
-        spawn(x, y, color, radius = 60, life = 0.6) {
+        spawn(x, y, color, radius = 60, life = 0.2) {
             this.list.push({ x, y, color, radius, life, age: 0 });
         }
         update(dt) {
@@ -108,30 +114,40 @@ let lastTimestamp = 0;
 let appAge = 0;          // seconds since startup, for entry animations
 let hoveredPanel = -1;
 let selectedTab = 0;
-let prevSelectedTab = 0;
 
 const ripples = new ui.RippleSet();
 
 // Smoothed UI values
-const tabIndicatorX = new ui.Smoothed(0, 0.08);
-const tabIndicatorW = new ui.Smoothed(80, 0.08);
+const tabIndicatorX = new ui.Smoothed(0, 0.04);
+const tabIndicatorW = new ui.Smoothed(80, 0.04);
 const panelHoverLift = new Map(); // index -> Smoothed
 
 // Per-card animated values
 const cardValues = [
-    { current: new ui.Smoothed(0, 0.6), target: 12456, format: v => '$' + Math.round(v).toLocaleString(), color: COLORS.accent, delta: '+12%', deltaColor: COLORS.accent2 },
-    { current: new ui.Smoothed(0, 0.6), target: 1234, format: v => Math.round(v).toLocaleString(), color: COLORS.accent2, delta: '+8%', deltaColor: COLORS.accent2 },
-    { current: new ui.Smoothed(0, 0.6), target: 567, format: v => Math.round(v).toLocaleString(), color: COLORS.accent3, delta: '-3%', deltaColor: COLORS.accent4 },
-    { current: new ui.Smoothed(0, 0.6), target: 15, format: v => '+' + Math.round(v) + '%', color: COLORS.accent4, delta: '+5%', deltaColor: COLORS.accent2 },
+    { current: new ui.Smoothed(0, 0.04), target: 12456, format: v => '$' + Math.round(v).toLocaleString(), color: COLORS.accent, delta: '+12%', deltaColor: COLORS.accent2 },
+    { current: new ui.Smoothed(0, 0.04), target: 1234, format: v => Math.round(v).toLocaleString(), color: COLORS.accent2, delta: '+8%', deltaColor: COLORS.accent2 },
+    { current: new ui.Smoothed(0, 0.04), target: 567, format: v => Math.round(v).toLocaleString(), color: COLORS.accent3, delta: '-3%', deltaColor: COLORS.accent4 },
+    { current: new ui.Smoothed(0, 0.04), target: 15, format: v => '+' + Math.round(v) + '%', color: COLORS.accent4, delta: '+5%', deltaColor: COLORS.accent2 },
 ];
-for (const c of cardValues) c.current.set(c.target);
+const CARD_TITLES = ['Revenue', 'Users', 'Orders', 'Growth'];
+for (const [i, c] of cardValues.entries()) {
+    c.current.set(c.target);
+    c.title = CARD_TITLES[i];
+    c.samples = new Float32Array(16);
+}
 
 // Performance bar smoothed values
 const perfMetrics = [
-    { label: 'CPU', base: 0.65, color: COLORS.accent, value: new ui.Smoothed(0, 0.4) },
-    { label: 'Memory', base: 0.45, color: COLORS.accent2, value: new ui.Smoothed(0, 0.4) },
-    { label: 'Disk', base: 0.30, color: COLORS.accent3, value: new ui.Smoothed(0, 0.4) },
-    { label: 'Network', base: 0.80, color: COLORS.accent4, value: new ui.Smoothed(0, 0.4) },
+    { label: 'CPU', base: 0.65, color: COLORS.accent, value: new ui.Smoothed(0, 0.04) },
+    { label: 'Memory', base: 0.45, color: COLORS.accent2, value: new ui.Smoothed(0, 0.04) },
+    { label: 'Disk', base: 0.30, color: COLORS.accent3, value: new ui.Smoothed(0, 0.04) },
+    { label: 'Network', base: 0.80, color: COLORS.accent4, value: new ui.Smoothed(0, 0.04) },
+];
+
+const REGIONS = [
+    { name: 'North America', share: 0.42, color: COLORS.accent },
+    { name: 'Europe', share: 0.35, color: COLORS.accent2 },
+    { name: 'Asia', share: 0.23, color: COLORS.accent5 },
 ];
 
 // =====================================================================
@@ -154,7 +170,7 @@ class Panel {
 
         // Smoothed hover lift
         let lift = panelHoverLift.get(index);
-        if (!lift) { lift = new ui.Smoothed(0, 0.08); panelHoverLift.set(index, lift); }
+        if (!lift) { lift = new ui.Smoothed(0, 0.04); panelHoverLift.set(index, lift); }
         lift.set(isHovered ? 1 : 0);
         const liftAmount = lift.value * 4;
 
@@ -230,7 +246,7 @@ function createDashboardLayout(width, height) {
             contentY,
             cardWidth,
             cardHeight,
-            ['Revenue', 'Users', 'Orders', 'Growth'][i]
+            cardValues[i].title
         ));
     }
 
@@ -287,6 +303,22 @@ function navTabRect(margin, i) {
     };
 }
 
+function themeButtonRect(width, margin) {
+    return { x: width - margin - 148, y: margin + 8, w: 138, h: 34 };
+}
+
+function drawThemeButton(button) {
+    const accent = metalTheme ? '#70DEFF' : COLORS.accent;
+    sys.canvas.setFillColor(metalTheme ? '#09182BE8' : ui.withAlpha(accent, 0.15));
+    sys.canvas.drawRoundRect(button.x, button.y, button.w, button.h, 5, 5);
+    sys.canvas.setStrokeColor(accent);
+    sys.canvas.setStrokeWidth(1);
+    sys.canvas.drawRoundRect(button.x, button.y, button.w, button.h, 5, 5);
+    sys.canvas.setFillColor(accent);
+    sys.canvas.drawText(metalTheme ? 'Classic theme' : 'Hologram theme',
+        button.x + 10, button.y + 23, 15);
+}
+
 function drawNavBar(width, navHeight, margin) {
     sys.canvas.setFillColor(COLORS.panel);
     sys.canvas.drawRoundRect(margin, margin, width - margin * 2, navHeight, 8, 8);
@@ -313,11 +345,14 @@ function drawNavBar(width, navHeight, margin) {
         sys.canvas.drawText(TABS[i], r.x + 10, r.y + 23, 17);
     }
 
-    // Time display
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    sys.canvas.setFillColor(COLORS.textMuted);
-    sys.canvas.drawText(timeStr, width - margin - 100, margin + 33, 17);
+    if (width >= 940) {
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        sys.canvas.setFillColor(COLORS.textMuted);
+        sys.canvas.drawText(timeStr, width - margin - 245, margin + 33, 17);
+    }
+
+    drawThemeButton(themeButtonRect(width, margin));
 }
 
 // =====================================================================
@@ -332,7 +367,7 @@ const SIDEBAR_ITEMS = [
     { icon: '◇', label: 'Reports' },
 ];
 
-function drawSidebar(sidebarWidth, navHeight, height, margin, gap, mouseX, mouseY) {
+function drawSidebar(sidebarWidth, navHeight, height, margin, gap, mouseX, mouseY, regions) {
     const sidebarY = margin + navHeight + gap;
     const sidebarHeight = height - sidebarY - margin;
 
@@ -340,10 +375,11 @@ function drawSidebar(sidebarWidth, navHeight, height, margin, gap, mouseX, mouse
     sys.canvas.drawRoundRect(margin, sidebarY, sidebarWidth, sidebarHeight, 8, 8);
 
     let itemY = sidebarY + 20;
+    const itemStep = Math.min(50, Math.max(28, (sidebarHeight - 278) / SIDEBAR_ITEMS.length));
     for (const item of SIDEBAR_ITEMS) {
         const itemX = margin + 10;
         const itemW = sidebarWidth - 20;
-        const itemH = 35;
+        const itemH = Math.min(35, itemStep - 1);
         const isHovered = ui.pointInRect(mouseX, mouseY, itemX, itemY - 5, itemW, itemH);
 
         if (item.active) {
@@ -361,7 +397,34 @@ function drawSidebar(sidebarWidth, navHeight, height, margin, gap, mouseX, mouse
         sys.canvas.drawText(item.icon, margin + 20, itemY + 20, 19);
         sys.canvas.drawText(item.label, margin + 50, itemY + 20, 17);
 
-        itemY += 50;
+        itemY += itemStep;
+    }
+
+    const regionBottom = sidebarY + sidebarHeight - 80;
+    const globeSize = Math.min(sidebarWidth - 40, regionBottom - itemY - 87, 136);
+    const globe = globeSize > 24 ? { x: margin + sidebarWidth * 0.5,
+        y: itemY + 27 + globeSize * 0.5, size: globeSize } : null;
+    if (regionBottom - itemY > 66) {
+        sys.canvas.setFillColor(COLORS.text);
+        sys.canvas.drawText('Regional breakdown', margin + 15, itemY + 17, 16);
+        for (const [i, region] of regions.entries()) {
+            const y = regionBottom - (regions.length - 1 - i) * 17;
+            sys.canvas.setFillColor(region.color);
+            sys.canvas.drawCircle(margin + 19, y - 4, 3.5);
+            sys.canvas.drawText(`${region.name}  ${region.display}`, margin + 29, y, 13);
+        }
+        if (globe) {
+            const diameter = globe.size + 10;
+            let start = -90;
+            for (const region of regions) {
+                const sweep = region.share * 360;
+                sys.canvas.setStrokeColor(region.color);
+                sys.canvas.setStrokeWidth(3);
+                sys.canvas.drawArc(globe.x - diameter / 2, globe.y - diameter / 2,
+                    diameter, diameter, start + 2, sweep - 4);
+                start += sweep;
+            }
+        }
     }
 
     // Divider
@@ -383,41 +446,38 @@ function drawSidebar(sidebarWidth, navHeight, height, margin, gap, mouseX, mouse
     sys.canvas.drawText('John Doe', margin + 55, sidebarY + sidebarHeight - 40, 17);
     sys.canvas.setFillColor(COLORS.textMuted);
     sys.canvas.drawText('Admin', margin + 55, sidebarY + sidebarHeight - 20, 14);
+    return globe;
 }
 
 // =====================================================================
 // Stat card content (with mini sparkline + animated count-up)
 // =====================================================================
-function drawStatCard(panel, index, content) {
-    const card = cardValues[index];
-    card.current.set(card.target);
-
-    // Animated value
+function drawStatCard(card, content) {
+    const valueFont = Math.min(32, Math.max(16,
+        32 * (content.contentWidth - 37) / Math.max(1, sys.canvas.measureText(card.display, 32))));
     sys.canvas.setFillColor(card.color);
-    sys.canvas.drawText(card.format(card.current.value),
-        content.contentX, content.contentY + 30, 32);
+    sys.canvas.drawText(card.display, content.contentX, content.contentY + 30, valueFont);
 
     // Change indicator
     sys.canvas.setFillColor(card.deltaColor);
     sys.canvas.drawText(card.delta, content.contentX, content.contentY + 58, 16);
 
     // Mini sparkline on the right side of the card
-    const sparkW = Math.min(80, content.contentWidth * 0.45);
-    const sparkH = content.contentHeight - 10;
-    const sparkX = content.contentX + content.contentWidth - sparkW;
-    const sparkY = content.contentY;
-    drawSparkline(sparkX, sparkY, sparkW, sparkH, index, card.color);
+    const valueWidth = sys.canvas.measureText(card.display, valueFont);
+    const sparkW = Math.min(80, content.contentWidth * 0.45, content.contentWidth - valueWidth - 8);
+    if (sparkW >= 22) {
+        const sparkH = content.contentHeight - 10;
+        const sparkX = content.contentX + content.contentWidth - sparkW;
+        drawSparkline(sparkX, content.contentY, sparkW, sparkH, card.samples, card.color);
+    }
 }
 
-function drawSparkline(x, y, w, h, seed, color) {
-    const points = 16;
+function drawSparkline(x, y, w, h, samples, color) {
     const path = sys.path.create();
-    for (let i = 0; i < points; i++) {
-        const u = i / (points - 1);
-        // Slowly drifting smooth noise; no flicker.
-        const v = ui.noise1D(u * 3 + time * 0.4, seed + 1);
+    for (let i = 0; i < samples.length; i++) {
+        const u = i / (samples.length - 1);
         const px = x + u * w;
-        const py = y + h - v * h;
+        const py = y + h - samples[i] * h;
         if (i === 0) sys.path.moveTo(path, px, py);
         else sys.path.lineTo(path, px, py);
     }
@@ -441,16 +501,12 @@ function chartValueAt(i, t) {
         + 0.07 * Math.sin(i * 0.95 + phase * 1.3);
 }
 
-function drawChartContent(content) {
+function drawChartContent(content, data) {
     const chartPadding = 10;
     const chartWidth = content.contentWidth - chartPadding * 2;
     const chartHeight = content.contentHeight - 30;
     const baseX = content.contentX + chartPadding;
     const baseY = content.contentY;
-
-    // Build data
-    const data = new Array(CHART_POINTS);
-    for (let i = 0; i < CHART_POINTS; i++) data[i] = chartValueAt(i, time);
 
     // Grid
     sys.canvas.setStrokeColor(ui.withAlpha(COLORS.border, 0.6));
@@ -510,14 +566,14 @@ const ACTIVITIES = [
     { text: 'System update', time: '2h ago', color: COLORS.accent5 },
 ];
 
-function drawActivityContent(content) {
+function drawActivityContent(content, activities) {
     let y = content.contentY + 10;
 
-    for (let i = 0; i < ACTIVITIES.length; i++) {
-        const a = ACTIVITIES[i];
+    for (let i = 0; i < activities.length; i++) {
+        const a = activities[i];
 
         // Staggered entry animation
-        const entryT = ui.clamp((appAge - i * 0.08) / 0.4, 0, 1);
+        const entryT = ui.clamp((appAge - i * 0.02) / 0.12, 0, 1);
         const eased = ui.easeOutCubic(entryT);
         const offsetX = (1 - eased) * 16;
         const alpha = eased;
@@ -530,12 +586,17 @@ function drawActivityContent(content) {
         sys.canvas.setFillColor(ui.withAlpha(a.color, alpha));
         sys.canvas.drawCircle(content.contentX + 5 + offsetX, y + 5, dotPulse);
 
+        const labelX = content.contentX + 24 + offsetX;
+        const timeWidth = sys.canvas.measureText(a.time, 13);
+        const timeX = content.contentX + content.contentWidth - timeWidth;
+        const available = timeX - labelX - 8;
+        const textSize = Math.min(16, 16 * available / Math.max(1, sys.canvas.measureText(a.text, 16)));
         sys.canvas.setFillColor(ui.withAlpha(COLORS.text, alpha));
-        sys.canvas.drawText(a.text, content.contentX + 24 + offsetX, y + 12, 16);
-
-        sys.canvas.setFillColor(ui.withAlpha(COLORS.textMuted, alpha));
-        sys.canvas.drawText(a.time,
-            content.contentX + content.contentWidth - 65, y + 12, 13);
+        sys.canvas.drawText(a.text, labelX, y + 12, textSize >= 11 ? textSize : 16);
+        if (textSize >= 11) {
+            sys.canvas.setFillColor(ui.withAlpha(COLORS.textMuted, alpha));
+            sys.canvas.drawText(a.time, timeX, y + 12, 13);
+        }
 
         y += 40;
     }
@@ -551,10 +612,13 @@ const TASKS = [
     { text: 'Deploy to production', done: false },
 ];
 
-function drawTasksContent(content) {
-    let y = content.contentY + 10;
-    for (let i = 0; i < TASKS.length; i++) {
-        const task = TASKS[i];
+function drawTasksContent(content, tasks) {
+    const topInset = Math.min(10, Math.max(0, content.contentHeight - 99));
+    let y = content.contentY + topInset;
+    const rowHeight = Math.min(40, Math.max(25, (content.contentHeight - topInset - 24) / 3));
+    for (let i = 0; i < tasks.length; i++) {
+        if (y + 19 > content.contentY + content.contentHeight) break;
+        const task = tasks[i];
 
         // Checkbox
         sys.canvas.setStrokeColor(task.done ? COLORS.accent2 : COLORS.border);
@@ -577,47 +641,71 @@ function drawTasksContent(content) {
                 content.contentWidth - 34, 24, 4, 4);
         }
 
-        y += 40;
+        y += rowHeight;
     }
 }
 
 // =====================================================================
 // Performance bars — smoothed values, soft glow
 // =====================================================================
-function drawPerformanceContent(content) {
-    let y = content.contentY + 10;
-    const barWidth = content.contentWidth - 60;
+function drawPerformanceContent(content, metrics) {
+    const topInset = Math.min(10, Math.max(0, content.contentHeight - 113));
+    let y = content.contentY + topInset;
+    const barWidth = Math.max(0, content.contentWidth - 60);
+    const rowHeight = Math.min(46, Math.max(27, (content.contentHeight - topInset - 32) / 3));
+    const compact = rowHeight < 40;
+    const barY = compact ? 19 : 22;
+    const barHeight = compact ? 7 : 10;
 
-    for (let i = 0; i < perfMetrics.length; i++) {
-        const m = perfMetrics[i];
-        // Slow drifting target around the base value.
-        const target = ui.clamp(m.base + Math.sin(time * 0.7 + i * 1.7) * 0.08, 0, 1);
-        m.value.set(target);
+    for (let i = 0; i < metrics.length; i++) {
+        if (y + 32 > content.contentY + content.contentHeight) break;
+        const m = metrics[i];
         const v = m.value.value;
 
         sys.canvas.setFillColor(COLORS.text);
-        sys.canvas.drawText(m.label, content.contentX, y + 12, 16);
+        sys.canvas.drawText(m.label, content.contentX, y + 12, compact ? 14 : 16);
 
         // Background track
         sys.canvas.setFillColor(COLORS.border);
-        sys.canvas.drawRoundRect(content.contentX, y + 22, barWidth, 10, 5, 5);
+        sys.canvas.drawRoundRect(content.contentX, y + barY, barWidth, barHeight, 5, 5);
 
         // Glow
         sys.canvas.setFillColor(ui.withAlpha(m.color, 0.25));
-        sys.canvas.drawRoundRect(content.contentX - 2, y + 20,
-            barWidth * v + 4, 14, 7, 7);
+        sys.canvas.drawRoundRect(content.contentX - 2, y + barY - 2,
+            barWidth * v + 4, barHeight + 4, 7, 7);
 
         // Foreground bar
         sys.canvas.setFillColor(m.color);
-        sys.canvas.drawRoundRect(content.contentX, y + 22, barWidth * v, 10, 5, 5);
+        sys.canvas.drawRoundRect(content.contentX, y + barY, barWidth * v, barHeight, 5, 5);
 
         // Percentage
         sys.canvas.setFillColor(COLORS.textMuted);
-        sys.canvas.drawText(`${Math.round(v * 100)}%`,
-            content.contentX + barWidth + 12, y + 30, 14);
+        sys.canvas.drawText(m.display,
+            content.contentX + barWidth + 12, y + barY + barHeight, 14);
 
-        y += 46;
+        y += rowHeight;
     }
+}
+
+const formatPercent = value => `${Math.round(value * 100)}%`;
+for (const region of REGIONS) region.display = formatPercent(region.share);
+const dashboard = {
+    cards: cardValues, metrics: perfMetrics, activities: ACTIVITIES,
+    tasks: TASKS, regions: REGIONS, analytics: new Float32Array(CHART_POINTS),
+};
+
+function updateDashboard(dt) {
+    for (const [i, card] of dashboard.cards.entries()) {
+        card.display = card.format(card.current.update(dt));
+        for (let j = 0; j < card.samples.length; j++) {
+            card.samples[j] = ui.noise1D(j / (card.samples.length - 1) * 3 + time * 0.4, i + 1);
+        }
+    }
+    for (const [i, metric] of dashboard.metrics.entries()) {
+        metric.value.set(ui.clamp(metric.base + Math.sin(time * 0.7 + i * 1.7) * 0.08, 0, 1));
+        metric.display = formatPercent(metric.value.update(dt));
+    }
+    for (let i = 0; i < dashboard.analytics.length; i++) dashboard.analytics[i] = chartValueAt(i, time);
 }
 
 // =====================================================================
@@ -626,7 +714,7 @@ function drawPerformanceContent(content) {
 function animate(timestamp) {
     // Δt in seconds, clamped to avoid jumps after long pauses.
     const dt = lastTimestamp === 0 ? 1 / 60
-        : ui.clamp((timestamp - lastTimestamp) / 1000, 0, 1 / 15);
+        : ui.clamp((timestamp - lastTimestamp) / 1000, 0, 0.1);
     lastTimestamp = timestamp;
     time = timestamp / 1000;
     appAge += dt;
@@ -635,68 +723,98 @@ function animate(timestamp) {
     const height = sys.window.getHeight();
     const input = sys.input.get();
 
-    // Background
-    drawBackground(width, height);
+    const pointer = input.pointer;
+    const mouseX = pointer.x;
+    const mouseY = pointer.y;
+    const button = themeButtonRect(width, 20);
+    const buttonPressed = pointer.pressed && ui.pointInRect(mouseX, mouseY, button.x, button.y, button.w, button.h);
+    if (!dashboardRenderer) dashboardRenderer = createMetalRenderer();
+    if (sys.input.isKeyPressed(23) || buttonPressed) { // T
+        metalTheme = !metalTheme;
+        if (metalTheme) dashboardRenderer.enterTheme(time);
+        else dashboardRenderer.leaveTheme(time);
+    }
+    themeMix = ui.clamp(themeMix + (metalTheme ? dt : -dt) / THEME_SWITCH_SECONDS, 0, 1);
+    if (themeMix === 0 && !metalTheme) dashboardRenderer.reset();
 
-    // Layout
+    updateDashboard(dt);
+    ripples.update(dt);
+
+    if (themeMix === 1) {
+        if (width > 0 && height > 0) {
+            dashboardRenderer.draw(width, height, time, dashboard, button, drawThemeButton, {
+                x: mouseX, y: mouseY, pressed: pointer.pressed && !buttonPressed,
+                back: sys.input.isKeyPressed(42), space: sys.input.isKeyPressed(44),
+                right: sys.input.isKeyPressed(79), left: sys.input.isKeyPressed(80),
+            });
+        }
+        sys.animation.requestFrame(animate);
+        return;
+    }
+
     const layout = createDashboardLayout(width, height);
+    if (pointer.pressed && !buttonPressed && themeMix === 0) {
+        for (let i = 0; i < TABS.length; i++) {
+            const r = navTabRect(layout.margin, i);
+            if (ui.pointInRect(mouseX, mouseY, r.x, r.y, r.w, r.h)) {
+                selectedTab = i;
+                break;
+            }
+        }
+        ripples.spawn(mouseX, mouseY, COLORS.accent, 80, 0.2);
+    }
+
+    drawBackground(width, height);
 
     // Hover state
     hoveredPanel = -1;
     for (let i = 0; i < layout.panels.length; i++) {
-        if (layout.panels[i].contains(input.mouse.x, input.mouse.y)) {
+        if (layout.panels[i].contains(mouseX, mouseY)) {
             hoveredPanel = i;
             break;
         }
-    }
-
-    // Tab clicks (use the single source of truth: navTabRect)
-    if (input.mouse.leftPressed) {
-        for (let i = 0; i < TABS.length; i++) {
-            const r = navTabRect(layout.margin, i);
-            if (ui.pointInRect(input.mouse.x, input.mouse.y, r.x, r.y, r.w, r.h)) {
-                if (selectedTab !== i) {
-                    prevSelectedTab = selectedTab;
-                    selectedTab = i;
-                }
-                break;
-            }
-        }
-        // Click ripple anywhere
-        ripples.spawn(input.mouse.x, input.mouse.y, COLORS.accent, 80, 0.7);
     }
 
     // Update animated values
     tabIndicatorX.update(dt);
     tabIndicatorW.update(dt);
     for (const lift of panelHoverLift.values()) lift.update(dt);
-    for (const c of cardValues) c.current.update(dt);
-    for (const m of perfMetrics) m.value.update(dt);
-    ripples.update(dt);
 
     // Draw chrome
     drawNavBar(width, layout.navHeight, layout.margin);
-    drawSidebar(layout.sidebarWidth, layout.navHeight, height,
-        layout.margin, layout.gap, input.mouse.x, input.mouse.y);
+    const globe = drawSidebar(layout.sidebarWidth, layout.navHeight, height,
+        layout.margin, layout.gap, mouseX, mouseY, dashboard.regions);
 
     // Draw panels with content
     for (let i = 0; i < layout.panels.length; i++) {
         const content = layout.panels[i].draw(i);
-        if (i < 4) drawStatCard(layout.panels[i], i, content);
-        else if (i === 4) drawChartContent(content);
-        else if (i === 5) drawActivityContent(content);
-        else if (i === 6) drawTasksContent(content);
-        else if (i === 7) drawPerformanceContent(content);
+        if (i < 4) drawStatCard(dashboard.cards[i], content);
+        else if (i === 4) drawChartContent(content, dashboard.analytics);
+        else if (i === 5) drawActivityContent(content, dashboard.activities);
+        else if (i === 6) drawTasksContent(content, dashboard.tasks);
+        else if (i === 7) drawPerformanceContent(content, dashboard.metrics);
     }
 
     // Click ripples on top of everything
     ripples.draw();
 
-    // Footer
     sys.canvas.setFillColor(COLORS.textMuted);
-    sys.canvas.drawText('Press ESC to exit | Click to ripple, hover panels for lift',
+    sys.canvas.drawText('T: switch theme | Click to ripple, hover panels for lift',
         layout.margin, height - 12, 14);
 
+    // Mid-switch: punch a growing hole into the classic canvas and project the hologram through it.
+    let wipe = null;
+    if (themeMix > 0 && width > 0 && height > 0) {
+        const cx = button.x + button.w * 0.5, cy = button.y + button.h * 0.5;
+        const max = Math.hypot(Math.max(cx, width - cx), Math.max(cy, height - cy)) + 40;
+        const eased = themeMix * themeMix * (3 - 2 * themeMix);
+        wipe = { x: cx, y: cy, r: Math.max(1, eased * max), max };
+        sys.canvas.setBlendMode('clear');
+        sys.canvas.drawCircle(wipe.x, wipe.y, wipe.r);
+        sys.canvas.setBlendMode('src-over');
+        dashboardRenderer.draw(width, height, time, dashboard, button, drawThemeButton, null, wipe);
+    }
+    if (globe) dashboardRenderer.drawClassicGlobe(width, height, time, globe, wipe);
     sys.animation.requestFrame(animate);
 }
 

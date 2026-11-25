@@ -64,6 +64,8 @@ extract_cfunc_defs() {
             current_scope="font"
         elif [[ "$line" =~ js_sys_graphics_funcs ]]; then
             current_scope="graphics"
+        elif [[ "$line" =~ video_functions ]]; then
+            current_scope="video"
         elif [[ "$line" =~ js_sys_gl_funcs ]]; then
             current_scope="gl"
         elif [[ "$line" =~ js_sys_input_funcs ]]; then
@@ -124,6 +126,7 @@ trap 'rm -f "$ALL_FUNCS" "$ALL_CONSTS" "$GENERATED_OUT"' EXIT
 
 extract_cfunc_defs "$SRC_DIR/graphics/js_canvas_bindings.c"  >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/graphics/js_canvas_effects_bindings.c" >> "$ALL_FUNCS"
+extract_cfunc_defs "$SRC_DIR/graphics/js_video_bindings.c"   >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/graphics/js_gl_bindings.c"      >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/audio/js_audio_bindings.c"     >> "$ALL_FUNCS"
 extract_cfunc_defs "$SRC_DIR/midi/js_midi_bindings.c"       >> "$ALL_FUNCS"
@@ -455,6 +458,24 @@ interface TextureLoadCallbacks {
 interface CanvasTextureCanvas {
     /** Clear this offscreen canvas texture. */
     clear(color?: Color): void;
+    /** Read this canvas as RGBA8 pixels. Synchronous readback stalls the GPU. */
+    readPixels(): { width: number, height: number, pixels: ArrayBuffer };
+    /** Save the current transform and clip state onto a stack. */
+    save(): void;
+    /** Restore the most recently saved transform/clip state. */
+    restore(): void;
+    /** Translate the canvas origin. */
+    translate(dx: number, dy: number): void;
+    /** Rotate in degrees around the origin or the optional pivot. */
+    rotate(degrees: number, px?: number, py?: number): void;
+    /** Scale the canvas. */
+    scale(sx: number, sy: number): void;
+    /** Skew the canvas. */
+    skew(sx: number, sy: number): void;
+    /** Reset the transform to identity without resetting the clip. */
+    reset(): void;
+    /** Intersect the current clip with a rectangle. */
+    clipRect(x: number, y: number, width: number, height: number): void;
     /** Draw a filled/stroked rectangle into this offscreen canvas texture. */
     drawRect(x: number, y: number, width: number, height: number): void;
     /** Draw a filled/stroked circle into this offscreen canvas texture. */
@@ -584,6 +605,16 @@ emit_const() {
     while read -r scope name argc; do
         [[ "$scope" == "graphics" ]] || continue
         emit_func "  " "graphics.$name" "$name" "$argc"
+    done < "$ALL_FUNCS"
+    echo "}"
+    echo ""
+
+    # ── sys.video ──
+    cat "$FRAGMENTS_DIR/sysvideo.d.ts.frag"
+    echo "interface SysVideo {"
+    while read -r scope name argc; do
+        [[ "$scope" == "video" ]] || continue
+        emit_func "  " "video.$name" "$name" "$argc"
     done < "$ALL_FUNCS"
     echo "}"
     echo ""
@@ -826,6 +857,8 @@ NEURAL_TYPES
     echo "  readonly font: SysFont;"
     echo "  /** Texture-backed Skia surfaces. */"
     echo "  readonly graphics: SysGraphics;"
+    echo "  /** Experimental silent picture-in-picture video API; desktop video builds only. */"
+    echo "  readonly video?: SysVideo;"
     echo "  /** OpenGL shader pass API. */"
     echo "  readonly gl: SysGL;"
     echo "  /** In-place 3D math (vec3, quat, mat4) — gl-matrix style. */"

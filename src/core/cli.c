@@ -90,6 +90,7 @@ void budo_cli_print_usage(const char *program_name)
             "  --fullscreen     Start in fullscreen mode\n"
             "  --no-vsync       Disable vertical sync\n"
             "  --watch          Restart the app when files in the project change\n"
+            "  --record <file.mp4> Record the app and input events (requires ENABLE_VIDEO)\n"
             "  --from-input <k> Read stdin as a virtual app main file (js, ts, lua, wat, wasm)\n"
             "  --file-root <p>  Root directory for sys.files (default: project dir)\n"
             "\n"
@@ -209,6 +210,19 @@ static bool parse_run_options(int argc, char **argv, int start, BudoRunOptions *
         else if (strcmp(argv[i], "--watch") == 0)
         {
             run->watch = true;
+        }
+        else if (strcmp(argv[i], "--record") == 0)
+        {
+            if (!(value = take_option_value(argc, argv, &i)))
+                return false;
+            size_t length = strlen(value);
+            if (length <= 4 || strcmp(value + length - 4, ".mp4") != 0 ||
+                value[0] == '-')
+            {
+                fprintf(stderr, "Error: --record expects an output filename ending in .mp4\n");
+                return false;
+            }
+            run->record_path = value;
         }
         else if (strcmp(argv[i], "--from-input") == 0)
         {

@@ -279,6 +279,24 @@ interface TextureLoadCallbacks {
 interface CanvasTextureCanvas {
     /** Clear this offscreen canvas texture. */
     clear(color?: Color): void;
+    /** Read this canvas as RGBA8 pixels. Synchronous readback stalls the GPU. */
+    readPixels(): { width: number, height: number, pixels: ArrayBuffer };
+    /** Save the current transform and clip state onto a stack. */
+    save(): void;
+    /** Restore the most recently saved transform/clip state. */
+    restore(): void;
+    /** Translate the canvas origin. */
+    translate(dx: number, dy: number): void;
+    /** Rotate in degrees around the origin or the optional pivot. */
+    rotate(degrees: number, px?: number, py?: number): void;
+    /** Scale the canvas. */
+    scale(sx: number, sy: number): void;
+    /** Skew the canvas. */
+    skew(sx: number, sy: number): void;
+    /** Reset the transform to identity without resetting the clip. */
+    reset(): void;
+    /** Intersect the current clip with a rectangle. */
+    clipRect(x: number, y: number, width: number, height: number): void;
     /** Draw a filled/stroked rectangle into this offscreen canvas texture. */
     drawRect(x: number, y: number, width: number, height: number): void;
     /** Draw a filled/stroked circle into this offscreen canvas texture. */
@@ -368,6 +386,9 @@ interface SysGL {
 
   /** Resize an existing render target to new dimensions. */
   resizeRenderTarget(targetId: number, width: number, height: number): void;
+
+  /** Synchronously read stored RGBA8 bytes in top-to-bottom row order. The shader determines the alpha convention. Stalls the GPU; throws on invalid targets or readback failure. */
+  readRenderTargetPixels(targetId: number): { width: number; height: number; pixels: ArrayBuffer };
 
   /** Draw a rectangular region immediately using a shader program. If targetId is given, draws into that render target. */
   drawRegion(programId: number, x: number, y: number, w: number, h: number, targetId?: number): void;
@@ -854,6 +875,136 @@ interface SysCanvas {
 interface SysGraphics {
   /** Create an offscreen Skia canvas backed by a GL texture and framebuffer. */
   createCanvasTexture(width: number, height: number): CanvasTexture;
+
+}
+
+// -- sys.video object ---------------------------------------------------------
+
+interface DemoVideoError {
+  code: string;
+  message: string;
+}
+
+interface DemoVideoPreviewCallbacks {
+  /** Called once before the first frame with the shorter input's duration. */
+  onReady?(durationUs: number): void;
+  onFrame(texture: number, ptsUs: number): void;
+  onEnd(): void;
+  onError(error: DemoVideoError): void;
+}
+
+interface DemoVideoExportCallbacks {
+  onProgress?(completedFrames: number): void;
+  onComplete(path: string): void;
+  onError(error: DemoVideoError): void;
+}
+
+interface VideoReaderInfo {
+  width: number;
+  height: number;
+  frameRateNum: number;
+  frameRateDen: number;
+  sampleAspectRatioNum: 1;
+  sampleAspectRatioDen: 1;
+  rotationDegrees: 0;
+  timeBaseNum: number;
+  timeBaseDen: number;
+  durationUs: number;
+  seekable: true;
+  exactFrameOrdinals: true;
+  /** Frame PTS values are relative to the stream's first presentation time. */
+  timeOrigin: "stream-start";
+  codec: "h264";
+  colorPrimaries: "bt709";
+  colorTransfer: "bt709";
+  colorMatrix: "bt709";
+  colorRange: "full" | "limited";
+}
+
+interface VideoReaderCallbacks {
+  onReady(info: VideoReaderInfo): void;
+  onError(error: DemoVideoError): void;
+}
+
+interface VideoFrameCallbacks {
+  /** Texture contents are stable until releaseFrame(frameHandle). */
+  onFrame(frameHandle: number, texture: number, ptsUs: number, durationUs: number,
+          ordinal: number, width: number, height: number): void;
+  onEof(): void;
+  onError(error: DemoVideoError): void;
+}
+
+interface VideoFrameWriterOptions {
+  /** Positive even dimensions, at most 16 Mi pixels. */
+  width: number;
+  height: number;
+  /** 1..1,000,000 frames; finish rejects incomplete output. */
+  totalFrames: number;
+  /** Rational constant frame rate, 1..240 fps. Defaults to 30/1. Numerator <= 240000, denominator <= 10000. */
+  frameRateNum?: number;
+  frameRateDen?: number;
+  /** Positive bits/second, default 8000000. */
+  videoBitRate?: number;
+  /** Omit all audio fields for silent video. Otherwise use 44100 or 48000 Hz and 1 or 2 channels. */
+  audioSampleRate?: 44100 | 48000;
+  audioChannels?: 1 | 2;
+  /** Positive bits/second, default 128000 when audio is enabled. */
+  audioBitRate?: number;
+}
+
+interface VideoFrameWriterCallbacks {
+  /** Called after opening (0) and each encoded frame. Submit only after this acknowledgement. */
+  onReady(completedFrames: number): void;
+  /** Called after successful atomic publication with a virtual files/ path. The writer handle is now invalid. */
+  onComplete(path: string): void;
+  /** Terminal failure or video.cancelled; staging output is discarded and the handle is invalid. */
+  onError(error: DemoVideoError): void;
+}
+
+interface SysVideo {
+  preview(background: string, inset: string, callbacks: DemoVideoPreviewCallbacks): number;
+
+  closePreview(id: number): boolean;
+
+  pausePreview(id: number): boolean;
+
+  resumePreview(id: number): boolean;
+
+  /** Reopens and scans the inputs asynchronously; invalidates the current texture. */
+  seekPreview(id: number, ptsUs: number): boolean;
+
+  exportMp4(background: string, inset: string, output: string, callbacks: DemoVideoExportCallbacks): number;
+
+  cancelExport(id: number): boolean;
+
+  getError(): string;
+
+  /** Opens an independent sandboxed MP4/MOV reader asynchronously. Zero means an immediate resource failure; read getError() for details. */
+  openReader(path: string, callbacks: VideoReaderCallbacks): number;
+
+  /** Requests the exact zero-based presentation-order frame ordinal. Forward requests decode from the current position and validate skipped frames; repeated/backward requests or an invalid decoder position scan from the start. False indicates immediate backpressure or an inactive reader. */
+  requestFrame(reader: number, ordinal: number, callbacks: VideoFrameCallbacks): boolean;
+
+  /** Cancels the pending frame request without waiting; its onError receives video.cancelled. False means no request can be cancelled. */
+  cancelFrameRequest(reader: number): boolean;
+
+  /** Releases the owned GL texture for a retained frame. The texture is RGBA8 with the decoded top source row at texture v=0. False indicates an unknown handle or a texture cleanup failure. */
+  releaseFrame(frameHandle: number): boolean;
+
+  /** Requests non-blocking reader shutdown. Pending open or frame callbacks receive video.cancelled unless the runtime is torn down. Retained frames survive reader close. */
+  closeReader(reader: number): boolean;
+
+  /** Desktop ENABLE_VIDEO only. Encodes app-generated frames on a worker to staged fragmented MP4, H.264/YUV420P BT.709 with optional AAC. Only one export (including exportMp4) may be active. Invalid options throw; immediate resource failure returns zero and sets getError(). */
+  openFrameWriter(path: string, options: VideoFrameWriterOptions, callbacks: VideoFrameWriterCallbacks): number;
+
+  /** Copies one tightly packed top-down RGBA8 frame (alpha ignored). Ordinals start at 0 and increase by 1. With audio enabled, supply interleaved finite PCM in [-1,1], with (round((ordinal+1)*sampleRate*frameRateDen/frameRateNum)-round(ordinal*sampleRate*frameRateDen/frameRateNum))*channels values. At most one frame is outstanding. False sets getError() and leaves the writer usable; onError reports terminal encoding/sink failures. */
+  writeFrame(writer: number, ordinal: number, pixels: ArrayBuffer | Uint8Array | Uint8ClampedArray, audio?: Float32Array): boolean;
+
+  /** Asynchronously finalizes after all totalFrames acknowledgements. False sets getError(). No partial file is published on error. */
+  finishFrameWriter(writer: number): boolean;
+
+  /** Nonblocking abort, including opening/in-flight encoding. onError receives video.cancelled after staging cleanup. Returns false once finalization has begun or the handle is inactive. Runtime teardown suppresses callbacks and joins the worker. */
+  cancelFrameWriter(writer: number): boolean;
 
 }
 
@@ -1434,7 +1585,7 @@ interface ModelInfo {
 }
 
 interface SysNeural {
-  /** Returns true if ONNX Runtime was compiled in (ENABLE_NEURAL=ON). */
+  /** Returns true if ONNX Runtime was compiled in (ENABLE_ONNX=ON). */
   isAvailable(): boolean;
 
   /** Returns the last error message from the neural subsystem, or an empty string. */
@@ -1590,6 +1741,8 @@ interface Sys {
   readonly font: SysFont;
   /** Texture-backed Skia surfaces. */
   readonly graphics: SysGraphics;
+  /** Experimental silent picture-in-picture video API; desktop video builds only. */
+  readonly video?: SysVideo;
   /** OpenGL shader pass API. */
   readonly gl: SysGL;
   /** In-place 3D math (vec3, quat, mat4) — gl-matrix style. */

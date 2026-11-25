@@ -18,6 +18,69 @@
 sig = SysTransform
 doc = /** Canvas transform operations. */
 
+# ── sys.video ────────────────────────────────────────────────────────────────
+
+[video.preview]
+sig = (background: string, inset: string, callbacks: DemoVideoPreviewCallbacks): number
+
+[video.closePreview]
+sig = (id: number): boolean
+
+[video.pausePreview]
+sig = (id: number): boolean
+
+[video.resumePreview]
+sig = (id: number): boolean
+
+[video.seekPreview]
+sig = (id: number, ptsUs: number): boolean
+doc = /** Reopens and scans the inputs asynchronously; invalidates the current texture. */
+
+[video.exportMp4]
+sig = (background: string, inset: string, output: string, callbacks: DemoVideoExportCallbacks): number
+
+[video.cancelExport]
+sig = (id: number): boolean
+
+[video.openFrameWriter]
+sig = (path: string, options: VideoFrameWriterOptions, callbacks: VideoFrameWriterCallbacks): number
+doc = /** Desktop ENABLE_VIDEO only. Encodes app-generated frames on a worker to staged fragmented MP4, H.264/YUV420P BT.709 with optional AAC. Only one export (including exportMp4) may be active. Invalid options throw; immediate resource failure returns zero and sets getError(). */
+
+[video.writeFrame]
+sig = (writer: number, ordinal: number, pixels: ArrayBuffer | Uint8Array | Uint8ClampedArray, audio?: Float32Array): boolean
+doc = /** Copies one tightly packed top-down RGBA8 frame (alpha ignored). Ordinals start at 0 and increase by 1. With audio enabled, supply interleaved finite PCM in [-1,1], with (round((ordinal+1)*sampleRate*frameRateDen/frameRateNum)-round(ordinal*sampleRate*frameRateDen/frameRateNum))*channels values. At most one frame is outstanding. False sets getError() and leaves the writer usable; onError reports terminal encoding/sink failures. */
+
+[video.finishFrameWriter]
+sig = (writer: number): boolean
+doc = /** Asynchronously finalizes after all totalFrames acknowledgements. False sets getError(). No partial file is published on error. */
+
+[video.cancelFrameWriter]
+sig = (writer: number): boolean
+doc = /** Nonblocking abort, including opening/in-flight encoding. onError receives video.cancelled after staging cleanup. Returns false once finalization has begun or the handle is inactive. Runtime teardown suppresses callbacks and joins the worker. */
+
+[video.getError]
+sig = (): string
+
+[video.openReader]
+sig = (path: string, callbacks: VideoReaderCallbacks): number
+doc = /** Opens an independent sandboxed MP4/MOV reader asynchronously. Zero means an immediate resource failure; read getError() for details. */
+
+[video.requestFrame]
+sig = (reader: number, ordinal: number, callbacks: VideoFrameCallbacks): boolean
+doc = /** Requests the exact zero-based presentation-order frame ordinal. Forward requests decode from the current position and validate skipped frames; repeated/backward requests or an invalid decoder position scan from the start. False indicates immediate backpressure or an inactive reader. */
+
+[video.cancelFrameRequest]
+sig = (reader: number): boolean
+doc = /** Cancels the pending frame request without waiting; its onError receives video.cancelled. False means no request can be cancelled. */
+
+[video.releaseFrame]
+sig = (frameHandle: number): boolean
+doc = /** Releases the owned GL texture for a retained frame. The texture is RGBA8 with the decoded top source row at texture v=0. False indicates an unknown handle or a texture cleanup failure. */
+
+[video.closeReader]
+sig = (reader: number): boolean
+doc = /** Requests non-blocking reader shutdown. Pending open or frame callbacks receive video.cancelled unless the runtime is torn down. Retained frames survive reader close. */
+
 # ── sys.canvas — drawing primitives ─────────────────────────────────────────
 
 [canvas.clear]
@@ -347,6 +410,10 @@ doc = /** Destroy a previously created render target. */
 [gl.resizeRenderTarget]
 sig = (targetId: number, width: number, height: number): void
 doc = /** Resize an existing render target to new dimensions. */
+
+[gl.readRenderTargetPixels]
+sig = (targetId: number): { width: number; height: number; pixels: ArrayBuffer }
+doc = /** Synchronously read stored RGBA8 bytes in top-to-bottom row order. The shader determines the alpha convention. Stalls the GPU; throws on invalid targets or readback failure. */
 
 [gl.drawRegion]
 sig = (programId: number, x: number, y: number, w: number, h: number, targetId?: number): void
@@ -1005,7 +1072,7 @@ doc = /** Request that the device screen stays on (true) or release the request 
 
 [neural.isAvailable]
 sig = (): boolean
-doc = /** Returns true if ONNX Runtime was compiled in (ENABLE_NEURAL=ON). */
+doc = /** Returns true if ONNX Runtime was compiled in (ENABLE_ONNX=ON). */
 
 [neural.getError]
 sig = (): string

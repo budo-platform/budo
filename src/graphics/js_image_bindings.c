@@ -4,6 +4,9 @@
 #include "graphics/image_scheduler.h"
 #include "core/window.h"
 #include "file/file_wrapper.h"
+#ifdef BUDO_VIDEO
+#include "graphics/js_video_bindings.h"
+#endif
 
 #include <math.h>
 #include <stdio.h>
@@ -231,6 +234,9 @@ JSValue js_image_cancel(JSContext *ctx, JSGraphicContext *graphics, int argc, JS
 
 void js_image_poll(JSGraphicContext *graphics)
 {
+#ifdef BUDO_VIDEO
+    js_video_poll(graphics);
+#endif
     if (!graphics || !graphics->images)
         return;
     JsImageBindings *images = graphics->images;
@@ -261,6 +267,10 @@ void js_image_poll(JSGraphicContext *graphics)
 
 bool js_image_pending(JSGraphicContext *graphics)
 {
+#ifdef BUDO_VIDEO
+    if (js_video_pending(graphics))
+        return true;
+#endif
     return graphics && graphics->images && image_scheduler_pending(graphics->images->scheduler);
 }
 

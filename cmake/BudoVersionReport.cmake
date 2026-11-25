@@ -84,7 +84,7 @@ function(budo_add_version_report target)
             "^#define PACKAGE_VERSION[ \t]+\"([^\"]+)\"")
     endif()
     set(onnx "not built")
-    if(ENABLE_NEURAL)
+    if(ENABLE_ONNX)
         set(onnx "${ORT_VERSION}")
         budo_read_version(onnx "${ORT_DIR}/VERSION_NUMBER" "^([0-9][0-9A-Za-z.+-]+)")
         string(APPEND onnx " (runtime loaded on demand)")
@@ -159,7 +159,7 @@ function(budo_add_version_report target)
         "  C++ compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} (C++${CMAKE_CXX_STANDARD})\n"
         "  Python (build tool): ${Python3_VERSION}\n"
         "  Dependency lock: v${BUDO_DEPENDENCY_LOCK_VERSION}\n")
-    foreach(flag IN ITEMS ENABLE_NEURAL ENABLE_LLAMACPP ENABLE_LLAMACPP_CUDA
+    foreach(flag IN ITEMS ENABLE_ONNX ENABLE_LLAMACPP ENABLE_LLAMACPP_CUDA
             ENABLE_LLAMACPP_VULKAN BUDO_ENABLE_ANDROID_PACKAGING
             BUDO_EMBED_WEB_RUNTIME BUDO_WINDOWS_STANDALONE USE_SYSTEM_SKIA)
         string(APPEND report "  ${flag}: $<IF:$<BOOL:${${flag}}>,ON,OFF>\n")

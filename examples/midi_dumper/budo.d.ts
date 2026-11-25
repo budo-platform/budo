@@ -1376,7 +1376,7 @@ interface ModelInfo {
 }
 
 interface SysNeural {
-  /** Returns true if ONNX Runtime was compiled in (ENABLE_NEURAL=ON). */
+  /** Returns true if ONNX Runtime was compiled in (ENABLE_ONNX=ON). */
   isAvailable(): boolean;
 
   /** Returns the last error message from the neural subsystem, or an empty string. */

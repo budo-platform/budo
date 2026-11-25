@@ -11,6 +11,7 @@ typedef struct
     char date[64];
     char version[64];
     char orientation[64];
+    char icon[4096];
     bool neural_enabled;     
     bool filesystem_enabled; 
     bool valid;              

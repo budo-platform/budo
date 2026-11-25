@@ -143,15 +143,24 @@ double managed_runtime_idle_ms(ManagedRuntimeKind kind,
                                const ManagedRuntimeCommon *contexts,
                                double timestamp_ms)
 {
-    if (!contexts || !runtime_has_animation(kind, contexts))
+    if (!contexts)
         return -1.0;
-    double idle = budo_animation_wait_remaining(runtime_animation_wait(kind, contexts), timestamp_ms);
-    if (idle > 16.0 && ((kind == MANAGED_RUNTIME_JAVASCRIPT && js_image_pending(contexts->js_graphic_ctx)) ||
-                        (kind == MANAGED_RUNTIME_LUA && lua_image_pending(contexts->lua_ctx))
+    bool has_animation = runtime_has_animation(kind, contexts);
+    double idle = has_animation
+                      ? budo_animation_wait_remaining(
+                            runtime_animation_wait(kind, contexts), timestamp_ms)
+                      : -1.0;
+    bool graphics_pending =
+        (kind == MANAGED_RUNTIME_JAVASCRIPT &&
+         js_image_pending(contexts->js_graphic_ctx)) ||
+        (kind == MANAGED_RUNTIME_LUA && lua_image_pending(contexts->lua_ctx))
 #ifdef BUDO_MANAGED_WASMTIME
-                        || (kind == MANAGED_RUNTIME_WEBASSEMBLY && wasm_canvas_image_pending(contexts->wasm_ctx))
+        || (kind == MANAGED_RUNTIME_WEBASSEMBLY &&
+            wasm_canvas_image_pending(contexts->wasm_ctx))
 #endif
-                            ))
+        ;
+
+    if (graphics_pending && (!has_animation || idle > 16.0))
         idle = 16.0;
     
     if (idle >= 0.0 && kind == MANAGED_RUNTIME_JAVASCRIPT)

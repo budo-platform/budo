@@ -252,6 +252,14 @@
                 "sqlite.invalidQuery"
             ]
         },
+        "video": {
+            "mode": "backend_sequence",
+            "tests": [
+                "video_composition",
+                "video_runtime_no_animation"
+            ],
+            "reason": "The optional desktop QuickJS reader uses worker, callback, and graphics-thread sequences; the generated fixture tests cover ordering, resource ownership, cancellation, and simulated context loss."
+        },
         "udp": {
             "mode": "normalized_trace",
             "test": "udp_runtime_conformance",

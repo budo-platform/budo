@@ -2,6 +2,7 @@
 #include "graphics/lua_canvas_bindings.h"
 #include "graphics/skia_wrapper.h"
 #include "graphics/wasm_canvas_bindings.h"
+#include "core/window.h"
 #include "device/device_service.h"
 #include "device/js_device_bindings.h"
 #include "accessibility/accessibility_service.h"
@@ -276,6 +277,82 @@ static void test_javascript(const char *root)
     skia_surface_destroy(raster.surface);
 }
 
+static int test_texture_transforms(const char *root)
+{
+    WindowConfig config = {.title = "Canvas texture transforms test", .project_dir = root,
+                           .width = SIZE, .height = SIZE};
+    Window *window = window_create(&config);
+    if (!window)
+    {
+        fprintf(stderr, "canvas_texture_transforms: could not create a GL window\n");
+        return 77;
+    }
+
+    Raster raster;
+    raster_init(&raster);
+    JSRuntimeContext *runtime = js_runtime_create(root);
+    assert(runtime);
+    JSGraphicContext *graphic = js_graphic_init(runtime);
+    assert(graphic);
+    js_graphic_set_frame_context(graphic, raster.canvas, NULL, NULL, SIZE, SIZE, 1.0f);
+    js_eval(runtime,
+            "const a = sys.graphics.createCanvasTexture(64, 64);\n"
+            "const b = sys.graphics.createCanvasTexture(64, 64);\n"
+            "const c = a.canvas, d = b.canvas;\n"
+            "JSON.stringify(a);\n"
+            "function pixel(canvas, x, y, expected) {\n"
+            "  const shot = canvas.readPixels();\n"
+            "  const data = new Uint8Array(shot.pixels);\n"
+            "  const actual = Array.from(data.slice((y * shot.width + x) * 4, (y * shot.width + x) * 4 + 4)).join(',');\n"
+            "  if (actual !== expected) throw Error(`pixel ${x},${y}: ${actual} expected ${expected}`);\n"
+            "}\n"
+            "c.clear('#ffffff'); d.clear('#ffffff');\n"
+            "c.setFillColor('#ff0000'); c.save(); c.translate(8, 8); c.clipRect(0, 0, 16, 16);\n"
+            "c.drawRect(0, 0, 32, 32);\n"
+            "d.setFillColor('#000000'); d.drawRect(0, 0, 4, 4);\n"
+            "sys.canvas.setFillColor('#000000'); sys.canvas.drawRect(0, 0, 4, 4);\n"
+            "c.save(); c.translate(8, 0); c.clipRect(0, 0, 4, 4);\n"
+            "c.setFillColor('#00ff00'); c.drawRect(0, 0, 16, 16); c.restore();\n"
+            "c.setFillColor('#0000ff'); c.drawRect(0, 8, 4, 4); c.restore();\n"
+            "c.setFillColor('#000000'); c.drawRect(0, 0, 4, 4);\n"
+            "pixel(c, 1, 1, '0,0,0,255'); pixel(c, 10, 10, '255,0,0,255');\n"
+            "pixel(c, 17, 9, '0,255,0,255'); pixel(c, 9, 17, '0,0,255,255');\n"
+            "pixel(c, 26, 10, '255,255,255,255'); pixel(d, 1, 1, '0,0,0,255');\n"
+            "pixel(d, 10, 10, '255,255,255,255');\n"
+            "c.clear('#ffffff'); c.setFillColor('#000000');\n"
+            "c.save(); c.translate(64, 0); c.rotate(90); c.drawRect(0, 0, 8, 8); c.restore();\n"
+            "c.save(); c.rotate(180, 32, 32); c.drawRect(0, 48, 8, 8); c.restore();\n"
+            "c.save(); c.scale(2, 2); c.drawRect(4, 4, 4, 4); c.restore();\n"
+            "c.save(); c.skew(1, 0); c.drawRect(0, 16, 4, 4); c.restore();\n"
+            "c.save(); c.clipRect(32, 32, 8, 8); c.translate(20, 0); c.reset();\n"
+            "c.drawRect(32, 32, 16, 8); c.restore();\n"
+            "pixel(c, 60, 4, '0,0,0,255'); pixel(c, 60, 12, '0,0,0,255');\n"
+            "pixel(c, 10, 10, '0,0,0,255'); pixel(c, 19, 17, '0,0,0,255');\n"
+            "pixel(c, 35, 35, '0,0,0,255'); pixel(c, 44, 35, '255,255,255,255');\n"
+            "for (const name of ['translate', 'rotate', 'scale', 'skew', 'clipRect']) {\n"
+            "  let threw = false; try { c[name](Symbol(), 1, 1, 1); } catch (e) { threw = e instanceof TypeError; }\n"
+            "  if (!threw) throw Error(name + ' must propagate conversion errors');\n"
+            "}\n"
+            "c.save(); c.translate(10, 10); a.resize(32, 32); c.drawRect(0, 0, 4, 4);\n"
+            "pixel(c, 1, 1, '0,0,0,255');\n"
+            "a.canvas = null; a.destroy();\n"
+            "function throwsRef(fn) { try { fn(); } catch (e) { if (e instanceof ReferenceError) return; throw e; } throw Error('expected ReferenceError'); }\n"
+            "for (const name of ['save', 'restore', 'translate', 'rotate', 'scale', 'skew', 'reset', 'clipRect'])\n"
+            "  throwsRef(() => c[name](1, 1, 1, 1));\n"
+            "const replacement = sys.graphics.createCanvasTexture(8, 8);\n"
+            "for (const name of ['save', 'restore', 'translate', 'rotate', 'scale', 'skew', 'reset', 'clipRect'])\n"
+            "  throwsRef(() => c[name](1, 1, 1, 1));\n"
+            "throwsRef(() => d.save.call({}));\n"
+            "replacement.destroy(); b.destroy();\n");
+    expect_pixel(&raster, 1, 1, 0, 0, 0, 0, "texture does not transform main canvas");
+    assert(is_white(&raster, 9, 9));
+    js_graphic_destroy(graphic);
+    js_runtime_destroy(runtime);
+    skia_surface_destroy(raster.surface);
+    window_destroy(window);
+    return 0;
+}
+
 static void test_lua(const char *root)
 {
     Raster raster;
@@ -546,6 +623,8 @@ static void test_accessibility(const char *root)
 
 int main(int argc, char **argv)
 {
+    if (argc == 3 && strcmp(argv[2], "--texture") == 0)
+        return test_texture_transforms(argv[1]);
     assert(argc == 2);
     test_wrapper();
     test_javascript(argv[1]);

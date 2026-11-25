@@ -17,6 +17,7 @@ extern "C"
     {
         const char *title;
         const char *project_dir;
+        const char *icon;
         int width;
         int height;
         bool resizable;
@@ -25,6 +26,18 @@ extern "C"
     } WindowConfig;
 
     typedef struct Window Window;
+    union SDL_Event;
+
+    typedef struct WindowObservers
+    {
+        void *context;
+        void (*event)(void *context, Window *window, const union SDL_Event *event);
+        void (*frame)(void *context, Window *window);
+    } WindowObservers;
+
+    void window_set_observers(Window *window, const WindowObservers *observers);
+    
+    bool window_read_screen(Window *window, uint8_t *rgba, size_t size);
 
     Window *window_create(const WindowConfig *config);
 
@@ -99,6 +112,10 @@ extern "C"
     bool window_gl_destroy_render_target(Window *window, int target_id);
 
     bool window_gl_resize_render_target(Window *window, int target_id, int width, int height);
+
+    bool window_gl_read_render_target_pixels(Window *window, int target_id,
+                                             int *width, int *height,
+                                             uint8_t **pixels);
 
     bool window_gl_draw_region(Window *window, int program_id,
                                float x, float y, float w, float h,

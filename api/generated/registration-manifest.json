@@ -819,6 +819,16 @@
       "source": "src/network/wasm_udp_bindings.c",
       "subsystem": "udp",
       "symbol": "wasm_udp_register"
+    },
+    {
+      "namespace": "sys.video",
+      "platforms": [
+        "desktop"
+      ],
+      "runtime": "javascript",
+      "source": "src/graphics/js_video_bindings.c",
+      "subsystem": "video",
+      "symbol": "js_video_register"
     }
   ],
   "version": 1

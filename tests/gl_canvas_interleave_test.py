@@ -17,6 +17,43 @@ import sys
 from pathlib import Path
 
 APP = r"""
+function bytes(text) {
+    const data = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) data[i] = text.charCodeAt(i);
+    return data;
+}
+const vertex = bytes(`#version 300 es
+in vec2 a_position;
+void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`);
+const fragment = bytes(`#version 300 es
+precision highp float;
+out vec4 color;
+void main() { color = gl_FragCoord.y < 1.0 ? vec4(1, 0, 0, 1) : vec4(0, 1, 0, 1); }`);
+const readProgram = sys.gl.createProgramFromBuffer(vertex, fragment);
+const target = sys.gl.createRenderTarget(3, 2);
+sys.gl.drawRegion(readProgram, 0, 0, 3, 2, target);
+const readback = sys.gl.readRenderTargetPixels(target);
+const rgba = new Uint8Array(readback.pixels);
+if (readback.width !== 3 || readback.height !== 2 || rgba.length !== 24 ||
+    rgba[0] !== 0 || rgba[1] !== 255 || rgba[3] !== 255 ||
+    rgba[12] !== 255 || rgba[13] !== 0 || rgba[15] !== 255)
+    throw new Error('render target readback bytes or orientation incorrect: ' + Array.from(rgba));
+sys.gl.resizeRenderTarget(target, 2, 1);
+const resized = sys.gl.readRenderTargetPixels(target);
+if (resized.width !== 2 || resized.height !== 1 || resized.pixels.byteLength !== 8)
+    throw new Error('resized target readback dimensions incorrect');
+sys.gl.destroyRenderTarget(target);
+for (const id of [target, 0, -1, 1.5, NaN, '1']) {
+    let threw = false;
+    try { sys.gl.readRenderTargetPixels(id); } catch (e) { threw = true; }
+    if (!threw) throw new Error('invalid render target accepted: ' + id);
+}
+const surface = sys.graphics.createCanvasTexture(2, 1);
+const canvasReadback = surface.canvas.readPixels();
+if (canvasReadback.width !== 2 || canvasReadback.height !== 1 ||
+    !(canvasReadback.pixels instanceof ArrayBuffer) || canvasReadback.pixels.byteLength !== 8)
+    throw new Error('canvas texture readback shape incorrect');
+surface.destroy();
 const program = sys.gl.createProgram('image_preview.vert', 'image_preview.frag');
 const pixel = new Uint8Array([0, 0, 255, 255]);
 const texture = sys.gl.createTexture2D(1, 1, 'rgba8', pixel);

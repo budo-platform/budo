@@ -175,7 +175,7 @@ jobs:
             -DZLIB_USE_STATIC_LIBS=ON `
             -DBUDO_WINDOWS_STANDALONE=ON `
             -DBUDO_GITHUB_REPOSITORY_OVERRIDE="${{ github.repository }}" `
-            -DENABLE_NEURAL=OFF `
+            -DENABLE_ONNX=OFF `
             -DBUDO_QUICKJS_IMPL="$env:QUICKJS_IMPL" 2>&1 |
             ForEach-Object { "$_" } | Tee-Object -FilePath build-configure.log
           $code = $LASTEXITCODE

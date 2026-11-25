@@ -23,17 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@main
 
-      - name: Preliminary information
-        run: |
-          tag="$(sed -nE 's/^set\(BUDO_ANDROID_SUPPORT_BUNDLE_TAG "([^"]+)"\)$/\1/p' cmake/BudoDependencyLock.cmake)"
-          {
-            echo "## Android support bundle preparation"
-            echo ""
-            echo "Preparing tag: $tag"
-            echo "Publish url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag"
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice title=Android support bundle::Publishing $tag"
-
       # The bundle scripts live in the private pack.
       - name: Android pack
         id: pack
@@ -95,7 +84,7 @@ jobs:
       - name: Configure (fetch runtime sources)
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_LLAMACPP=OFF -DENABLE_NEURAL=OFF
+            -DENABLE_LLAMACPP=OFF -DENABLE_ONNX=OFF
 
       - name: Skia for Android cache key
         id: skia-android-key

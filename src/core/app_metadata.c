@@ -94,6 +94,8 @@ bool app_metadata_load(const char *project_dir, AppMetadata *out)
     if (json_get_string(json, "orientation", buf, sizeof(buf), "") && buf[0])
         snprintf(out->orientation, sizeof(out->orientation), "%s", buf);
 
+    json_get_string(json, "icon", out->icon, sizeof(out->icon), "");
+
     out->neural_enabled = json_get_bool(json, "neural", false);
     out->filesystem_enabled = json_get_bool(json, "filesystem", false);
 

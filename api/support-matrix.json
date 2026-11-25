@@ -358,11 +358,11 @@
       "constantCount": 0,
       "errorConvention": {
         "javascript": {
-          "details": "Creation and resize require positive dimensions and throw on invalid arguments or allocation failure. Methods throw TypeError for an invalid/destroyed receiver where checked; destroy is idempotent after clearing the object metadata.",
+          "details": "Creation and resize require positive dimensions and throw on invalid arguments or allocation failure. Transform and clip methods throw ReferenceError for an invalid or destroyed receiver; destroy is idempotent after clearing the object metadata.",
           "kind": "throws_on_invalid_arguments_or_operation_failure"
         }
       },
-      "operationCount": 29,
+      "operationCount": 37,
       "platformDifferences": {
         "web": {
           "details": [
@@ -376,7 +376,7 @@
       "runtimes": {
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 29,
+          "exportCount": 37,
           "namespace": [
             "sys.graphics",
             "CanvasTexture",
@@ -860,7 +860,7 @@
           "kind": "documented_sentinel_on_failure"
         }
       },
-      "operationCount": 61,
+      "operationCount": 62,
       "platformDifferences": {
         "android": {
           "details": [
@@ -906,6 +906,7 @@
             "create_render_target",
             "destroy_render_target",
             "resize_render_target",
+            "read_render_target_pixels",
             "draw_region",
             "draw_region_immediate",
             "bind_render_target_texture",
@@ -949,7 +950,7 @@
         },
         "javascript": {
           "constantExportCount": 0,
-          "exportCount": 54,
+          "exportCount": 55,
           "namespace": [
             "sys.gl",
             "sys.gl.screen"
@@ -975,6 +976,7 @@
           "namespace": "sys.gl",
           "omittedOperations": [
             "draw_fullscreen",
+            "read_render_target_pixels",
             "draw_region",
             "bind_render_target_texture",
             "bind_canvas_texture",
@@ -1002,6 +1004,7 @@
             "draw_fullscreen",
             "get_last_error",
             "get_project_dir",
+            "read_render_target_pixels",
             "draw_region",
             "bind_render_target_texture",
             "bind_canvas_texture",
@@ -1873,7 +1876,7 @@
     "neural": {
       "availabilityGates": [
         {
-          "behavior": "The root build adds all neural wrapper and binding sources and defines BUDO_NEURAL only while ENABLE_NEURAL remains enabled after the ONNX headers check. Without those sources there is no valid neural export surface.",
+          "behavior": "The root build adds all neural wrapper and binding sources and defines BUDO_NEURAL only while ENABLE_ONNX remains enabled after the ONNX headers check. Without those sources there is no valid neural export surface.",
           "kind": "compile_time",
           "platforms": [
             "desktop"
@@ -1886,7 +1889,7 @@
           ],
           "source": "CMakeLists.txt",
           "source_symbols": [
-            "ENABLE_NEURAL",
+            "ENABLE_ONNX",
             "BUDO_NEURAL",
             "wasm_neural_bindings"
           ]
@@ -1941,7 +1944,7 @@
           "source": "src/desktop/managed_desktop.c",
           "source_symbols": [
             "neural_enabled",
-            "wasm_canvas_enable_neural"
+            "wasm_canvas_enable_onnx"
           ]
         },
         {
@@ -2081,7 +2084,7 @@
           "details": [
             "Desktop JavaScript and Lua omit sys.neural unless both app metadata and context creation succeed.",
             "Desktop Wasmtime registers env.neural_* before app metadata is checked, so imports can exist without an active context.",
-            "Each Wasmtime canvas owns its neural context, store/memory references, and staged model state; neural registration and memory wiring are omitted together when ENABLE_NEURAL is disabled."
+            "Each Wasmtime canvas owns its neural context, store/memory references, and staged model state; neural registration and memory wiring are omitted together when ENABLE_ONNX is disabled."
           ],
           "source": "src/graphics/wasm_canvas_bindings.c"
         },
@@ -2431,6 +2434,78 @@
           "verifiedAbsentExportPrefixes": [
             "udp_"
           ]
+        }
+      }
+    },
+    "video": {
+      "availabilityGates": [
+        {
+          "behavior": "The experimental sys.video object exists only in ENABLE_VIDEO builds on macOS and Linux; disabled builds expose no video object.",
+          "kind": "compile_time",
+          "platforms": [
+            "desktop"
+          ],
+          "registration_effect": "required",
+          "runtimes": [
+            "javascript"
+          ],
+          "source": "CMakeLists.txt",
+          "source_symbols": [
+            "ENABLE_VIDEO",
+            "BUDO_VIDEO"
+          ]
+        }
+      ],
+      "capabilityGate": null,
+      "capabilityRelationships": [],
+      "constantCount": 0,
+      "errorConvention": {
+        "javascript": {
+          "details": "Invalid arguments throw. Immediate resource or backpressure failures return zero or false and set getError(); accepted operations report terminal outcomes on the runtime thread.",
+          "kind": "throw_programmer_error_report_async_failure"
+        }
+      },
+      "operationCount": 17,
+      "platformDifferences": {},
+      "runtimes": {
+        "javascript": {
+          "constantExportCount": 0,
+          "exportCount": 17,
+          "namespace": "sys.video",
+          "omittedOperations": [],
+          "platforms": [
+            "desktop"
+          ]
+        }
+      },
+      "stateOwnership": {
+        "cleanup": "Reader close is non-blocking and cancels outstanding callbacks; runtime teardown suppresses callbacks and joins workers before freeing VM state. Context loss invalidates retained textures and pending frame uploads.",
+        "javascript": "Each graphics runtime owns independent reader workers, callback references, preview and export operations, and retained texture handles. Polling delivers callbacks and uploads textures on the runtime thread."
+      },
+      "typescript": {},
+      "unsupportedRuntimes": {
+        "browser_wasm": {
+          "platforms": [
+            "web"
+          ],
+          "reason": "The video binding has no browser WebAssembly imports.",
+          "verifiedAbsentExportPrefixes": []
+        },
+        "lua": {
+          "platforms": [
+            "desktop",
+            "android",
+            "web"
+          ],
+          "reason": "The video binding is implemented only for desktop QuickJS.",
+          "verifiedAbsentExportPrefixes": []
+        },
+        "wasmtime": {
+          "platforms": [
+            "desktop"
+          ],
+          "reason": "The video binding has no Wasmtime host imports.",
+          "verifiedAbsentExportPrefixes": []
         }
       }
     }

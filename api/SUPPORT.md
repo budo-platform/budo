@@ -8,13 +8,13 @@ Do not edit manually.
 | `accessibility` | 4 | desktop, android, web (4) | desktop, android, web (4) | desktop (4) | - |
 | `audio` | 41 | desktop, android, web (46) | desktop, android, web (31) | desktop (15) | unsupported |
 | `canvas` | 54 | desktop, android, web (41) | desktop, android, web (41) | desktop (48) | web (30) |
-| `canvas_texture` | 29 | desktop, android, web (29) | unsupported | unsupported | unsupported |
+| `canvas_texture` | 37 | desktop, android, web (37) | unsupported | unsupported | unsupported |
 | `capabilities` | 6 | desktop, android, web (6) | desktop, android, web (6) | desktop (6) | - |
 | `console` | 3 | desktop, android, web (1) | desktop, android, web (1) | desktop (2) | unsupported |
 | `device` | 6 | desktop, android, web (6) | desktop, android, web (6) | desktop (6) | web (6) |
 | `drawing_resources` | 17 | desktop, android, web (17) | desktop, android, web (17) | desktop (15) | web (5) |
 | `file` | 20 | desktop, android, web (27) | desktop, android, web (16) | desktop (6) | unsupported |
-| `gl` | 61 | desktop, android, web (54) | desktop, android, web (48) | desktop (47) | web (11) |
+| `gl` | 62 | desktop, android, web (55) | desktop, android, web (48) | desktop (47) | web (11) |
 | `input_window` | 14 | desktop, android, web (9) | desktop, android, web (9) | desktop (9) | web (5) |
 | `llamacpp` | 4 | desktop, android (4) | desktop, android (4) | unsupported | unsupported |
 | `magneto` | 8 | desktop, android, web (8) | desktop, android, web (8) | desktop (13) | unsupported |
@@ -26,6 +26,7 @@ Do not edit manually.
 | `scheduling` | 8 | desktop, android, web (6) | desktop, android, web (4) | desktop (2) | web (2) |
 | `sqlite` | 9 | desktop, android, web (7) | desktop, android, web (7) | desktop (8) | unsupported |
 | `udp` | 5 | desktop, android (5) | desktop, android (5) | desktop (5) | unsupported |
+| `video` | 17 | desktop (17) | unsupported | unsupported | unsupported |
 
 Numbers in parentheses are guest-visible exports. Runtime-specific omissions
 and ownership/error metadata are available in `api/support-matrix.json`.

@@ -8,7 +8,6 @@ on:
 
 jobs:
   build-linux:
-    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +21,10 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev libssl-dev zlib1g-dev libgl1-mesa-dev
+          sudo apt-get install -y cmake build-essential pkg-config ffmpeg \
+            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
+            libswresample-dev libx264-dev libsdl2-dev libfreetype6-dev \
+            libfontconfig1-dev libssl-dev zlib1g-dev libgl1-mesa-dev
 
       - name: Skia
         uses: ./.github/actions/skia
@@ -34,10 +36,9 @@ jobs:
         run: ./scripts/setup-stb.sh
 
       - name: Build
-        run: make build CMAKE_FLAGS="-DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
+        run: make build CMAKE_FLAGS="-DENABLE_VIDEO=ON -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
   build-macos:
-    if: false
     runs-on: macos-latest
 
     steps:
@@ -49,7 +50,7 @@ jobs:
           url: ${{ secrets.BUDO_ANDROID_PACK_URL }}
 
       - name: Install packages
-        run: brew install cmake sdl2
+        run: brew install cmake sdl2 ffmpeg x264 pkgconf
 
       - name: Skia
         uses: ./.github/actions/skia
@@ -61,7 +62,7 @@ jobs:
         run: ./scripts/setup-stb.sh
 
       - name: Build
-        run: make build CMAKE_FLAGS="-DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
+        run: make build CMAKE_FLAGS="-DENABLE_VIDEO=ON -DBUDO_GITHUB_REPOSITORY_OVERRIDE=${{ github.repository }}"
 
   build-windows:
     if: false

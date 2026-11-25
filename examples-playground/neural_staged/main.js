@@ -51,7 +51,7 @@ const capProbe = sys.capabilities && sys.capabilities.neural;
 neuralAvailable = !!(capProbe && capProbe.available);
 
 if (!neuralAvailable) {
-    statusLine = 'sys.capabilities.neural.available is false (build without ENABLE_NEURAL?)';
+    statusLine = 'sys.capabilities.neural.available is false (build without ENABLE_ONNX?)';
 } else if (!sys.neural || !sys.neural.isAvailable()) {
     neuralAvailable = false;
     statusLine = 'sys.neural absent (set "neural": true in app.json)';

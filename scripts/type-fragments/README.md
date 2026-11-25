@@ -30,6 +30,7 @@ capabilities, device, and math contracts by
 | `gl-options.d.ts.frag`     | After the `SysGL` block closes (top-level interface). |
 | `generated-basics.d.ts.frag` | After `GLDrawOptions`, before `SysCanvas`; generated from contracts. |
 | `sysneural-staged.d.ts.frag` | Inside `interface SysNeural { … }` after extracted neural fns. |
+| `sysvideo.d.ts.frag`       | Callback and error interfaces before extracted `SysVideo` methods. |
 | `sysudp.d.ts.frag`         | After `SysDevice`, before `SysCapabilities`.        |
 
 The `Sys` interface itself is emitted by the script. When you add a new

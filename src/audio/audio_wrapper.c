@@ -499,6 +499,9 @@ struct AudioContext
     SDL_AudioDeviceID device;
     SDL_AudioSpec spec;
     bool playing;
+    bool output_clock_started;
+    double output_start_time;
+    uint64_t output_frames;
     float master_gain;
     char asset_root[4096];
 
@@ -515,6 +518,23 @@ struct AudioContext
 
     char error_msg[256];
 };
+
+static SDL_SpinLock output_observer_lock;
+static AudioOutputObserver output_observer;
+static void *output_observer_context;
+
+bool audio_set_output_observer(AudioOutputObserver observer, void *context)
+{
+    SDL_AtomicLock(&output_observer_lock);
+    bool available = !observer || !output_observer;
+    if (available)
+    {
+        output_observer = observer;
+        output_observer_context = context;
+    }
+    SDL_AtomicUnlock(&output_observer_lock);
+    return available;
+}
 
 static float generate_oscillator_sample(Oscillator *osc, float sample_rate)
 {
@@ -637,6 +657,14 @@ static void audio_callback(void *userdata, Uint8 *stream, int len)
     float *output = (float *)stream;
     int num_samples = len / sizeof(float) / ctx->spec.channels;
 
+    if (!ctx->output_clock_started)
+    {
+        ctx->output_start_time = (double)SDL_GetPerformanceCounter() /
+                                 (double)SDL_GetPerformanceFrequency();
+        ctx->output_clock_started = true;
+    }
+    double timestamp = ctx->output_start_time +
+                       (double)ctx->output_frames / (double)ctx->spec.freq;
     memset(stream, 0, len);
 
     int stream_frames = num_samples < ctx->stream_mix_frames ? num_samples : ctx->stream_mix_frames;
@@ -704,6 +732,13 @@ static void audio_callback(void *userdata, Uint8 *stream, int len)
             output[s] = (left + right) * 0.5f;
         }
     }
+
+    SDL_AtomicLock(&output_observer_lock);
+    if (output_observer)
+        output_observer(output_observer_context, output, num_samples,
+                        ctx->spec.freq, ctx->spec.channels, timestamp);
+    SDL_AtomicUnlock(&output_observer_lock);
+    ctx->output_frames += (uint64_t)num_samples;
 
     if (streaming)
         audio_wake_app(ctx);
@@ -808,6 +843,13 @@ void audio_start(AudioContext *ctx)
 {
     if (!ctx)
         return;
+    if (!ctx->playing)
+    {
+        SDL_LockAudioDevice(ctx->device);
+        ctx->output_frames = 0;
+        ctx->output_clock_started = false;
+        SDL_UnlockAudioDevice(ctx->device);
+    }
     SDL_PauseAudioDevice(ctx->device, 0);
     ctx->playing = true;
 }

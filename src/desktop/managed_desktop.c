@@ -29,6 +29,9 @@
 #include "core/subsystem_registry.h"
 #include "core/window.h"
 #include "desktop/desktop_host.h"
+#ifdef BUDO_VIDEO
+#include "desktop/desktop_recording.h"
+#endif
 #include "file/file_wrapper.h"
 #include "graphics/js_canvas_bindings.h"
 #include "graphics/lua_canvas_bindings.h"
@@ -48,6 +51,7 @@ typedef struct ManagedApp
     const BudoRunOptions *options;
     const char *project_dir;
     const char *watch_root;
+    char resolved_project_dir[PATH_MAX];
     char virtual_project_dir[PATH_MAX];
     char single_file_source[PATH_MAX];
     char main_script[PATH_MAX];
@@ -317,6 +321,13 @@ static bool managed_app_prepare(ManagedApp *config, const BudoRunOptions *option
     if (file_exists(config->project_dir))
         return configure_single_file_app(config, config->project_dir);
 
+    if (!realpath(config->project_dir, config->resolved_project_dir))
+    {
+        fprintf(stderr, "Error: Cannot resolve project directory '%s': %s\n",
+                config->project_dir, strerror(errno));
+        return false;
+    }
+    config->project_dir = config->resolved_project_dir;
     config->watch_root = config->project_dir;
 
     if (config->file_root == NULL)
@@ -536,7 +547,7 @@ static bool runtime_adapter_initialize(void *opaque)
 #ifdef BUDO_NEURAL
     if (runtime->config->runtime_kind == MANAGED_RUNTIME_WEBASSEMBLY &&
         runtime->metadata->neural_enabled &&
-        !wasm_canvas_enable_neural(runtime->common_contexts.wasm_ctx))
+        !wasm_canvas_enable_onnx(runtime->common_contexts.wasm_ctx))
         fprintf(stderr, "neural: failed to create context for WASM runtime\n");
 #endif
 
@@ -660,6 +671,9 @@ typedef struct ManagedDesktopApplication
     InputState *input;
     Window *window; 
     bool window_failed;
+#ifdef BUDO_VIDEO
+    DesktopRecording *recording;
+#endif
 } ManagedDesktopApplication;
 
 static void managed_desktop_activate_graphics(void *opaque)
@@ -673,6 +687,7 @@ static void managed_desktop_activate_graphics(void *opaque)
         WindowConfig window_config = {
             .title = options->title,
             .project_dir = application->config->project_dir,
+            .icon = application->metadata->icon,
             .width = options->width,
             .height = options->height,
             .resizable = true,
@@ -685,6 +700,17 @@ static void managed_desktop_activate_graphics(void *opaque)
             application->window_failed = true;
             return;
         }
+#ifdef BUDO_VIDEO
+        if (options->record_path)
+        {
+            application->recording = desktop_recording_start(application->window, options->record_path);
+            if (!application->recording)
+            {
+                application->window_failed = true;
+                return;
+            }
+        }
+#endif
     }
     if (!application->window)
         return;
@@ -722,7 +748,12 @@ static bool managed_desktop_exit_requested(const ManagedDesktopApplication *appl
 
 static bool managed_desktop_keep_running(void *opaque)
 {
-    return !managed_desktop_exit_requested(opaque, NULL);
+    ManagedDesktopApplication *application = opaque;
+#ifdef BUDO_VIDEO
+    if (!desktop_recording_ok(application->recording))
+        return false;
+#endif
+    return !application->window_failed && !managed_desktop_exit_requested(application, NULL);
 }
 
 static double managed_desktop_idle_ms(void *opaque)
@@ -852,6 +883,13 @@ int managed_desktop_run(const BudoRunOptions *options)
 {
     ManagedApp config;
 
+#ifndef BUDO_VIDEO
+    if (options->record_path)
+    {
+        fprintf(stderr, "Error: --record requires a macOS/Linux build with ENABLE_VIDEO=ON\n");
+        return 1;
+    }
+#endif
     printf("Budo start\n");
     if (!managed_app_prepare(&config, options))
     {
@@ -912,6 +950,20 @@ int managed_desktop_run(const BudoRunOptions *options)
     }
 
     file_watcher_destroy(application.watcher);
+#ifdef BUDO_VIDEO
+    if (application.recording)
+    {
+        if (!desktop_recording_finish(application.recording))
+            exit_code = 1;
+    }
+    else if (options->record_path && !application.window_failed)
+    {
+        fprintf(stderr, "Error: No recording was created; the app did not open a recordable window\n");
+        exit_code = 1;
+    }
+#endif
+    if (application.window_failed)
+        exit_code = 1;
     runtime_instance_destroy(&runtime);
     if (application.window)
         window_destroy(application.window);

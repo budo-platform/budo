@@ -373,6 +373,17 @@
             }
         },
         {
+            "name": "read_render_target_pixels",
+            "wrapper_symbol": "window_gl_read_render_target_pixels",
+            "signature": "(target_id:i32) -> top-to-bottom RGBA8 pixels or error",
+            "exports": {
+                "javascript": {
+                    "name": "readRenderTargetPixels",
+                    "namespace": "sys.gl"
+                }
+            }
+        },
+        {
             "name": "draw_region",
             "wrapper_symbol": "window_gl_draw_region",
             "signature": "queued region draw using program and optional target",

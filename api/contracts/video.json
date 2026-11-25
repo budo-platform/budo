@@ -1,0 +1,166 @@
+{
+    "version": 1,
+    "subsystem": "video",
+    "error_convention": {
+        "javascript": {
+            "kind": "throw_programmer_error_report_async_failure",
+            "details": "Invalid arguments throw. Immediate resource or backpressure failures return zero or false and set getError(); accepted operations report terminal outcomes on the runtime thread."
+        }
+    },
+    "wrapper_headers": [
+        "src/video/video_reader.h",
+        "src/video/video_texture.h",
+        "src/video/video_player.h",
+        "src/video/video_export.h",
+        "src/video/video_frame_writer.h"
+    ],
+    "runtimes": {
+        "javascript": {
+            "source": "src/graphics/js_video_bindings.c",
+            "registration_symbol": "js_video_register",
+            "namespace": "sys.video",
+            "platforms": ["desktop"],
+            "export_extractor": "quickjs_cfunc",
+            "export_scopes": ["video_functions"]
+        }
+    },
+    "unsupported_runtimes": {
+        "lua": {
+            "source": "src/graphics/lua_canvas_bindings.c",
+            "registration_symbol": "lua_canvas_create",
+            "platforms": ["desktop", "android", "web"],
+            "reason": "The video binding is implemented only for desktop QuickJS."
+        },
+        "wasmtime": {
+            "source": "src/graphics/wasm_canvas_bindings.c",
+            "registration_symbol": "wasm_canvas_create",
+            "platforms": ["desktop"],
+            "reason": "The video binding has no Wasmtime host imports."
+        },
+        "browser_wasm": {
+            "source": "src/web/web_main.c",
+            "registration_symbol": "js_web_wasm_start",
+            "platforms": ["web"],
+            "reason": "The video binding has no browser WebAssembly imports."
+        }
+    },
+    "availability_gates": [
+        {
+            "kind": "compile_time",
+            "registration_effect": "required",
+            "runtimes": ["javascript"],
+            "platforms": ["desktop"],
+            "source": "CMakeLists.txt",
+            "source_symbols": ["ENABLE_VIDEO", "BUDO_VIDEO"],
+            "behavior": "The experimental sys.video object exists only in ENABLE_VIDEO builds on macOS and Linux; disabled builds expose no video object."
+        }
+    ],
+    "state_ownership": {
+        "javascript": "Each graphics runtime owns independent reader workers, callback references, preview and export operations, and retained texture handles. Polling delivers callbacks and uploads textures on the runtime thread.",
+        "cleanup": "Reader close is non-blocking and cancels outstanding callbacks; runtime teardown suppresses callbacks and joins workers before freeing VM state. Context loss invalidates retained textures and pending frame uploads."
+    },
+    "operations": [
+        {
+            "name": "open_reader",
+            "wrapper_symbol": "video_reader_open_file",
+            "signature": "(path, callbacks) -> reader handle or zero",
+            "exports": {"javascript": "openReader"}
+        },
+        {
+            "name": "request_frame",
+            "wrapper_symbol": "video_reader_request_frame",
+            "signature": "(reader, presentation-order ordinal, callbacks) -> bool",
+            "exports": {"javascript": "requestFrame"}
+        },
+        {
+            "name": "cancel_frame_request",
+            "wrapper_symbol": "video_reader_cancel_frame",
+            "signature": "(reader) -> bool; deliver video.cancelled asynchronously",
+            "exports": {"javascript": "cancelFrameRequest"}
+        },
+        {
+            "name": "release_frame",
+            "wrapper_symbol": "video_texture_close",
+            "signature": "(frame) -> bool; release the retained GL texture",
+            "exports": {"javascript": "releaseFrame"}
+        },
+        {
+            "name": "close_reader",
+            "wrapper_symbol": "video_reader_request_close",
+            "signature": "(reader) -> bool; request non-blocking shutdown",
+            "exports": {"javascript": "closeReader"}
+        },
+        {
+            "name": "preview",
+            "wrapper_symbol": "video_player_open_files",
+            "signature": "(background, inset, callbacks) -> preview handle or zero",
+            "exports": {"javascript": "preview"}
+        },
+        {
+            "name": "close_preview",
+            "wrapper_symbol": "video_player_request_close",
+            "signature": "(preview) -> bool",
+            "exports": {"javascript": "closePreview"}
+        },
+        {
+            "name": "pause_preview",
+            "wrapper_symbol": "video_player_pause",
+            "signature": "(preview) -> bool",
+            "exports": {"javascript": "pausePreview"}
+        },
+        {
+            "name": "resume_preview",
+            "wrapper_symbol": "video_player_resume",
+            "signature": "(preview) -> bool",
+            "exports": {"javascript": "resumePreview"}
+        },
+        {
+            "name": "seek_preview",
+            "wrapper_symbol": "video_player_open_files_at",
+            "signature": "(preview, timestamp_us) -> bool",
+            "exports": {"javascript": "seekPreview"}
+        },
+        {
+            "name": "export_mp4",
+            "wrapper_symbol": "video_export_start_files",
+            "signature": "(background, inset, output, callbacks) -> export handle or zero",
+            "exports": {"javascript": "exportMp4"}
+        },
+        {
+            "name": "cancel_export",
+            "wrapper_symbol": "video_export_cancel",
+            "signature": "(export) -> bool",
+            "exports": {"javascript": "cancelExport"}
+        },
+        {
+            "name": "open_frame_writer",
+            "wrapper_symbol": "video_frame_writer_open",
+            "signature": "(files/ output, options, callbacks) -> writer handle or zero; one active export",
+            "exports": {"javascript": "openFrameWriter"}
+        },
+        {
+            "name": "write_frame",
+            "wrapper_symbol": "video_frame_writer_submit",
+            "signature": "(writer, ordinal, top-down RGBA8, optional Float32Array PCM) -> bool; copied buffers, one outstanding frame, onReady acknowledgement",
+            "exports": {"javascript": "writeFrame"}
+        },
+        {
+            "name": "finish_frame_writer",
+            "wrapper_symbol": "video_frame_writer_finish",
+            "signature": "(writer) -> bool; requires all totalFrames acknowledged, asynchronous atomic finalization",
+            "exports": {"javascript": "finishFrameWriter"}
+        },
+        {
+            "name": "cancel_frame_writer",
+            "wrapper_symbol": "video_frame_writer_cancel",
+            "signature": "(writer) -> bool; nonblocking cancellation before finalization, terminal video.cancelled",
+            "exports": {"javascript": "cancelFrameWriter"}
+        },
+        {
+            "name": "get_error",
+            "binding_symbols": {"javascript": "js_video_get_error"},
+            "signature": "() -> most recent immediate failure message",
+            "exports": {"javascript": "getError"}
+        }
+    ]
+}

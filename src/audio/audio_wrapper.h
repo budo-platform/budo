@@ -29,6 +29,14 @@ extern "C"
 
     typedef struct AudioContext AudioContext;
 
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+
+    typedef void (*AudioOutputObserver)(void *context, const float *samples,
+                                       int frames, int sample_rate, int channels,
+                                       double timestamp_seconds);
+    bool audio_set_output_observer(AudioOutputObserver observer, void *context);
+#endif
+
     AudioContext *audio_create(void);
 
     void audio_destroy(AudioContext *ctx);

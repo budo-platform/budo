@@ -2,6 +2,9 @@
 #include "graphics/js_canvas_effects_bindings.h"
 #include "graphics/js_gl_bindings.h"
 #include "graphics/js_image_bindings.h"
+#ifdef BUDO_VIDEO
+#include "graphics/js_video_bindings.h"
+#endif
 #include "graphics/js_tools.h"
 #include "graphics/color_util.h"
 #include "core/window.h"
@@ -55,6 +58,15 @@ JSGraphicContext *js_graphic_context(JSContext *ctx, JSValueConst *func_data)
 }
 
 static const JsGraphicFunction js_canvas_texture_funcs[2];
+
+static JSValue texture_transform_save(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_restore(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_translate(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_rotate(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_scale(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_skew(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_reset(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
+static JSValue texture_transform_clip_rect(JSContext *, JSValueConst, int, JSValueConst *, int, JSValue *);
 
 typedef struct
 {
@@ -227,10 +239,12 @@ static int js_get_canvas_texture_id_from_value(JSContext *ctx, JSValue value)
     }
     if (JS_IsObject(value))
     {
-        JSValue prop = JS_GetPropertyStr(ctx, value, "__canvasTextureId");
+        JSValue owner = JS_GetPropertyStr(ctx, value, "__canvasTextureOwner");
+        JSValue prop = JS_GetPropertyStr(ctx, JS_IsObject(owner) ? owner : value, "__canvasTextureId");
         if (!JS_IsUndefined(prop))
             JS_ToInt32(ctx, &id, prop);
         JS_FreeValue(ctx, prop);
+        JS_FreeValue(ctx, owner);
     }
     return id;
 }
@@ -1582,6 +1596,14 @@ static const JsGraphicFunction js_canvas_texture_canvas_funcs[] = {
     {"setImageFilter", 2, js_canvas_texture_canvas_set_image_filter},
     {"setColorFilter", 2, js_canvas_texture_canvas_set_color_filter},
     {"setFont", 1, js_canvas_texture_canvas_set_font},
+    {"save", 0, texture_transform_save},
+    {"restore", 0, texture_transform_restore},
+    {"translate", 2, texture_transform_translate},
+    {"rotate", 3, texture_transform_rotate},
+    {"scale", 2, texture_transform_scale},
+    {"skew", 2, texture_transform_skew},
+    {"reset", 0, texture_transform_reset},
+    {"clipRect", 4, texture_transform_clip_rect},
 };
 
 static JSValue js_graphics_create_canvas_texture(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
@@ -1616,7 +1638,6 @@ static JSValue js_graphics_create_canvas_texture(JSContext *ctx, JSValue this_va
     }
 
     canvas_obj = JS_NewObject(ctx);
-    js_canvas_texture_set_id(ctx, canvas_obj, id);
     for (size_t i = 0; i < sizeof(js_canvas_texture_canvas_funcs) / sizeof(js_canvas_texture_canvas_funcs[0]); i++)
     {
         js_graphic_register_function(ctx, canvas_obj, &js_canvas_texture_canvas_funcs[i], graphic_ctx);
@@ -1631,6 +1652,8 @@ static JSValue js_graphics_create_canvas_texture(JSContext *ctx, JSValue this_va
     {
         js_graphic_register_function(ctx, obj, &js_canvas_texture_funcs[i], graphic_ctx);
     }
+    
+    JS_DefinePropertyValueStr(ctx, canvas_obj, "__canvasTextureOwner", JS_DupValue(ctx, obj), 0);
     JS_SetPropertyStr(ctx, obj, "canvas", canvas_obj);
 
     return obj;
@@ -2563,129 +2586,123 @@ static JSValue js_stop_text_input(JSContext *ctx, JSValue this_val,
     return JS_UNDEFINED;
 }
 
-static JSValue transform_save(JSContext *ctx, JSValueConst this_value,
-                              int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_save(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
-
-    skia_canvas_save(graphic_ctx->drawingDesk.canvas);
-
+    skia_canvas_save(canvas);
     return JS_UNDEFINED;
 }
 
-static JSValue transform_restore(JSContext *ctx, JSValueConst this_value,
-                                 int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_restore(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
-
-    skia_canvas_restore(graphic_ctx->drawingDesk.canvas);
-
+    skia_canvas_restore(canvas);
     return JS_UNDEFINED;
 }
 
-static JSValue transform_translate(JSContext *ctx, JSValueConst this_value,
-                                   int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_translate(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
-
     if (argument_count < 2)
         return JS_UNDEFINED;
 
     double dx, dy;
-    JS_ToFloat64(ctx, &dx, arguments[0]);
-    JS_ToFloat64(ctx, &dy, arguments[1]);
-    skia_canvas_translate(graphic_ctx->drawingDesk.canvas, dx, dy);
+    if (JS_ToFloat64(ctx, &dx, arguments[0]) < 0 || JS_ToFloat64(ctx, &dy, arguments[1]) < 0)
+        return JS_EXCEPTION;
+    skia_canvas_translate(canvas, dx, dy);
     return JS_UNDEFINED;
 }
 
-static JSValue transform_rotate(JSContext *ctx, JSValueConst this_value,
-                                int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_rotate(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
-
     if (argument_count < 1)
         return JS_UNDEFINED;
 
     double degrees;
-    JS_ToFloat64(ctx, &degrees, arguments[0]);
+    if (JS_ToFloat64(ctx, &degrees, arguments[0]) < 0)
+        return JS_EXCEPTION;
     if (argument_count >= 3 && !JS_IsUndefined(arguments[1]) && !JS_IsUndefined(arguments[2]))
     {
         double px, py;
-        JS_ToFloat64(ctx, &px, arguments[1]);
-        JS_ToFloat64(ctx, &py, arguments[2]);
-        skia_canvas_rotate_around(graphic_ctx->drawingDesk.canvas, degrees, px, py);
+        if (JS_ToFloat64(ctx, &px, arguments[1]) < 0 || JS_ToFloat64(ctx, &py, arguments[2]) < 0)
+            return JS_EXCEPTION;
+        skia_canvas_rotate_around(canvas, degrees, px, py);
     }
     else
     {
-        skia_canvas_rotate(graphic_ctx->drawingDesk.canvas, degrees);
+        skia_canvas_rotate(canvas, degrees);
     }
     return JS_UNDEFINED;
 }
 
-static JSValue transform_scale(JSContext *ctx, JSValueConst this_value,
-                               int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_scale(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
     if (argument_count < 2)
         return JS_UNDEFINED;
     double sx, sy;
-    JS_ToFloat64(ctx, &sx, arguments[0]);
-    JS_ToFloat64(ctx, &sy, arguments[1]);
-    skia_canvas_scale(graphic_ctx->drawingDesk.canvas, sx, sy);
+    if (JS_ToFloat64(ctx, &sx, arguments[0]) < 0 || JS_ToFloat64(ctx, &sy, arguments[1]) < 0)
+        return JS_EXCEPTION;
+    skia_canvas_scale(canvas, sx, sy);
     return JS_UNDEFINED;
 }
 
-static JSValue transform_skew(JSContext *ctx, JSValueConst this_value,
-                              int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_skew(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
     if (argument_count < 2)
         return JS_UNDEFINED;
     double sx, sy;
-    JS_ToFloat64(ctx, &sx, arguments[0]);
-    JS_ToFloat64(ctx, &sy, arguments[1]);
-    skia_canvas_skew(graphic_ctx->drawingDesk.canvas, sx, sy);
+    if (JS_ToFloat64(ctx, &sx, arguments[0]) < 0 || JS_ToFloat64(ctx, &sy, arguments[1]) < 0)
+        return JS_EXCEPTION;
+    skia_canvas_skew(canvas, sx, sy);
     return JS_UNDEFINED;
 }
 
-static JSValue transform_reset(JSContext *ctx, JSValueConst this_value,
-                               int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_reset(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
-    skia_canvas_reset_transform(graphic_ctx->drawingDesk.canvas);
+    skia_canvas_reset_transform(canvas);
     return JS_UNDEFINED;
 }
 
-static JSValue transform_clip_rect(JSContext *ctx, JSValueConst this_value,
-                                   int argument_count, JSValueConst *arguments, int magic, JSValue *func_data)
+static JSValue op_transform_clip_rect(JSContext *ctx, SkiaCanvas *canvas, int argument_count, JSValueConst *arguments)
 {
-    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
-    if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas)
-        return JS_ThrowInternalError(ctx, "No active canvas");
     if (argument_count < 4)
         return JS_UNDEFINED;
     double x, y, width, height;
-    JS_ToFloat64(ctx, &x, arguments[0]);
-    JS_ToFloat64(ctx, &y, arguments[1]);
-    JS_ToFloat64(ctx, &width, arguments[2]);
-    JS_ToFloat64(ctx, &height, arguments[3]);
-    skia_canvas_clip_rect(graphic_ctx->drawingDesk.canvas, x, y, x + width, y + height);
+    if (JS_ToFloat64(ctx, &x, arguments[0]) < 0 || JS_ToFloat64(ctx, &y, arguments[1]) < 0 ||
+        JS_ToFloat64(ctx, &width, arguments[2]) < 0 || JS_ToFloat64(ctx, &height, arguments[3]) < 0)
+        return JS_EXCEPTION;
+    skia_canvas_clip_rect(canvas, x, y, x + width, y + height);
     return JS_UNDEFINED;
 }
+
+#define DEFINE_TRANSFORM_BINDINGS(name) \
+    static JSValue transform_##name(JSContext *ctx, JSValueConst this_value, int argc, JSValueConst *argv, int magic, JSValue *func_data) \
+    { \
+        JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data); \
+        if (!graphic_ctx || !graphic_ctx->drawingDesk.canvas) \
+            return JS_ThrowInternalError(ctx, "No active canvas"); \
+        return op_transform_##name(ctx, graphic_ctx->drawingDesk.canvas, argc, argv); \
+    } \
+    static JSValue texture_transform_##name(JSContext *ctx, JSValueConst this_value, int argc, JSValueConst *argv, int magic, JSValue *func_data) \
+    { \
+        JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data); \
+        if (!graphic_ctx) \
+            return JS_ThrowInternalError(ctx, "No active graphic"); \
+        CanvasTexture *texture = js_get_canvas_texture_from_this(ctx, graphic_ctx, this_value); \
+        if (!texture) \
+            return JS_EXCEPTION; \
+        SkiaCanvas *canvas = window_canvas_texture_get_canvas(texture); \
+        if (!canvas) \
+            return JS_ThrowInternalError(ctx, "No active canvas"); \
+        return op_transform_##name(ctx, canvas, argc, argv); \
+    }
+
+DEFINE_TRANSFORM_BINDINGS(save)
+DEFINE_TRANSFORM_BINDINGS(restore)
+DEFINE_TRANSFORM_BINDINGS(translate)
+DEFINE_TRANSFORM_BINDINGS(rotate)
+DEFINE_TRANSFORM_BINDINGS(scale)
+DEFINE_TRANSFORM_BINDINGS(skew)
+DEFINE_TRANSFORM_BINDINGS(reset)
+DEFINE_TRANSFORM_BINDINGS(clip_rect)
+#undef DEFINE_TRANSFORM_BINDINGS
 
 static const JsGraphicFunction js_sys_canvas_funcs[] = {
     {"clear", 1, js_canvas_clear},
@@ -2822,6 +2839,9 @@ JSGraphicContext *js_graphic_init(JSRuntimeContext *ctx)
     ADD_SYS_OBJECT_MEMBER(sys_obj, "graphics", js_sys_graphics_funcs);
 
     js_gl_register(ctx->context, graphic_ctx, sys_obj);
+#ifdef BUDO_VIDEO
+    js_video_register(ctx->context, sys_obj, graphic_ctx);
+#endif
 
     JSValue input_obj = JS_NewObject(ctx->context);
     for (size_t i = 0; i < sizeof(js_sys_input_funcs) / sizeof(js_sys_input_funcs[0]); i++)
@@ -2863,10 +2883,16 @@ void js_graphic_set_frame_context(JSGraphicContext *graphic_ctx, SkiaCanvas *can
     graphic_ctx->width = width;
     graphic_ctx->height = height;
     graphic_ctx->display_density = display_density > 0.0f ? display_density : 1.0f;
+#ifdef BUDO_VIDEO
+    js_video_context_restored(graphic_ctx);
+#endif
 }
 
 void js_graphic_destroy(JSGraphicContext *ctx)
 {
+#ifdef BUDO_VIDEO
+    js_video_cleanup(ctx);
+#endif
     js_image_cleanup(ctx);
     if (ctx->input)
         input_text_stop(ctx->input);

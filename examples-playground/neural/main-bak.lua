@@ -56,7 +56,7 @@ end
 
 local function setup()
     if not sys.neural.isAvailable() then
-        status_line = "ONNX Runtime not available (build without ENABLE_NEURAL?)"
+        status_line = "ONNX Runtime not available (build without ENABLE_ONNX?)"
         return
     end
 

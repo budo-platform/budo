@@ -88,6 +88,21 @@ brew install cmake sdl2
 sudo apt-get install cmake build-essential libsdl2-dev libfreetype6-dev libfontconfig1-dev
 ```
 
+Fresh Linux builds enable video by default and require pkg-config and FFmpeg 5
+or newer development libraries:
+
+```bash
+sudo apt-get install pkg-config libavformat-dev libavcodec-dev libavutil-dev \
+  libswscale-dev libswresample-dev
+```
+
+Alternatively, build without video support (including `sys.video` and
+`--record`):
+
+```bash
+make everything CMAKE_FLAGS="-DENABLE_VIDEO=OFF"
+```
+
 #### Windows
 
 - Install Visual Studio 2019+ or MinGW-w64
@@ -134,6 +149,54 @@ URL or, with explicit unsafe opt-in, the digest used during provisioning.
 ```bash
 ./build/budo run examples/demo
 ```
+
+### Record an application
+
+Fresh macOS/Linux builds enable video support by default. With FFmpeg
+development libraries and the `libx264` encoder installed, record an app with:
+
+```bash
+./build/budo run my-app --record demo.mp4
+```
+
+This writes `demo.mp4` (H.264 video with AAC app audio) and `demo.json` (pointer and keyboard
+events) in the selected output directory, which must already exist. Relative
+paths are relative to the shell's working directory. Existing files are replaced
+when the recording is finalized. Close the app window normally to finalize both
+files; force-killing the process cannot finalize them. Apps that never open a
+graphics window cannot be recorded.
+
+Audio captures the app's final stereo mix at 44.1 kHz, including oscillators,
+buffer playback, and output streams, with silence when the app is not playing.
+It does not capture the microphone or other applications' sound.
+
+Video is recorded at a constant 30 fps with square pixels, repeating the last
+image while the app is idle and dropping intermediate updates when it renders
+faster. It keeps the initial window's drawable-pixel dimensions, including HiDPI
+scaling, for the entire session. After any resize, the whole app image is scaled
+proportionally to **contain** it in that fixed rectangle, centered with black
+bars as needed, never cropped or stretched. Canvas and custom GL output are
+captured; OS window decorations and the OS cursor are not. Source and output
+frames are limited to 16 megapixels. Odd dimensions are preserved using H.264
+4:4:4; even dimensions use the more widely supported 4:2:0 format.
+
+The JSON object contains `version`, fixed `width` and `height`, `fit: "contain"`,
+`timestampUnit: "microseconds"`, and an ordered `events` array. Each event has
+`timestampUs` relative to recording start, `type`, and its current drawable
+`windowWidth`/`windowHeight`:
+
+- `pointermove`, `pointerdown`, `pointerup`: top-left drawable-pixel `x`/`y`,
+  SDL `button` number (zero for movement), and SDL `buttons` bitmask.
+- `wheel`: SDL `deltaX`/`deltaY` and `flipped`.
+- `keydown`, `keyup`: SDL `scancode`, layout-aware `keycode`, `modifiers` bitmask,
+  and `repeat`. Repeated key-downs and multiple events within a frame are retained.
+- `textinput`: committed UTF-8 `text`.
+- `resize` and `blur`: window geometry and focus-loss markers.
+
+To map pointer coordinates onto the video, apply the same contain scale
+`min(width / windowWidth, height / windowHeight)` and centered offsets.
+Recordings continue across `--watch` reloads. Input logs include typed text:
+avoid entering passwords or other sensitive information while recording.
 
 ### Create a new application
 

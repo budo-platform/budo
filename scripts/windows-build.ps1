@@ -121,7 +121,7 @@ cmake -B "$BUILD_DIR" -G Ninja ^
     -DSKIA_PATH=$SKIA_DIR ^
     -DSDL2_DIR=$SDL2_DIR\cmake ^
     -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR" ^
-    -DENABLE_NEURAL=OFF ^
+    -DENABLE_ONNX=OFF ^
     -DBUDO_QUICKJS_IMPL=$QuickJsImpl ^
     "$SRC_DIR"
 "@

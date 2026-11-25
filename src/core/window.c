@@ -41,6 +41,7 @@ struct Window
     int height;
     float dpi_scale;
     bool should_close;
+    WindowObservers observers;
 
     uint64_t start_time;
     uint64_t last_frame_time;
@@ -271,6 +272,83 @@ static void prepare_screen_for_mesh(Window *window)
     glDepthMask(GL_FALSE);
 }
 
+static void window_set_icon(SDL_Window *window, const char *project_dir, const char *icon)
+{
+    char path[PATH_MAX];
+    int width = 0, height = 0;
+    uint8_t *pixels = NULL;
+    SDL_Surface *surface;
+    const char *ext;
+    int path_length;
+    bool svg_icon;
+
+    if (!icon || !icon[0])
+        return;
+    path_length = project_dir ? snprintf(path, sizeof(path), "%s/%s", project_dir, icon) : -1;
+    if (!path_is_safe_relative(icon) || path_length < 0 || (size_t)path_length >= sizeof(path))
+    {
+        SDL_Log("Warning: invalid application icon path: %s", icon);
+        return;
+    }
+
+    ext = strrchr(icon, '.');
+    svg_icon = ext && SDL_strcasecmp(ext, ".svg") == 0;
+    if (svg_icon)
+    {
+        SkiaSVG *svg = skia_svg_load_file(path);
+        SkiaSurface *raster = svg ? skia_surface_create_raster(128, 128) : NULL;
+        if (raster)
+        {
+            SkiaCanvas *canvas = skia_surface_get_canvas(raster);
+            pixels = malloc(128 * 128 * 4);
+            if (canvas && pixels)
+            {
+                skia_canvas_clear(canvas, SKIA_COLOR_TRANSPARENT);
+                skia_svg_render(svg, canvas, 0, 0, 128, 128);
+                if (skia_surface_read_pixels(raster, pixels))
+                {
+                    width = height = 128;
+                    
+                    for (int i = 0; i < width * height; i++)
+                    {
+                        unsigned alpha = pixels[i * 4 + 3];
+                        if (alpha)
+                            for (int c = 0; c < 3; c++)
+                                pixels[i * 4 + c] = (uint8_t)((pixels[i * 4 + c] * 255u + alpha / 2) / alpha);
+                    }
+                }
+            }
+        }
+        skia_surface_destroy(raster);
+        skia_svg_destroy(svg);
+    }
+    else
+    {
+        pixels = image_load_rgba8(path, &width, &height);
+    }
+
+    if (!pixels || width <= 0 || height <= 0)
+    {
+        SDL_Log("Warning: could not load application icon: %s", path);
+    }
+    else
+    {
+        surface = SDL_CreateRGBSurfaceWithFormatFrom(pixels, width, height, 32, width * 4,
+                                                     SDL_PIXELFORMAT_RGBA32);
+        if (surface)
+        {
+            SDL_SetWindowIcon(window, surface);
+            SDL_FreeSurface(surface);
+        }
+        else
+            SDL_Log("Warning: could not create application icon surface: %s", SDL_GetError());
+    }
+    if (svg_icon)
+        free(pixels);
+    else
+        image_free(pixels);
+}
+
 Window *window_create(const WindowConfig *config)
 {
     Window *window;
@@ -330,6 +408,8 @@ Window *window_create(const WindowConfig *config)
         SDL_Quit();
         return NULL;
     }
+
+    window_set_icon(window->sdl_window, config->project_dir, config->icon);
 
     window->gl_context = SDL_GL_CreateContext(window->sdl_window);
     if (!window->gl_context)
@@ -751,6 +831,8 @@ bool window_poll_events(Window *window, InputState *input)
             break;
 #endif
         }
+        if (window->observers.event)
+            window->observers.event(window->observers.context, window, &event);
     }
 
     if (input)
@@ -795,29 +877,7 @@ static bool immediate_gl_draw_region_now(Window *window, GLuint program, GLProgr
                                          int target_id, bool bind_explicit_target,
                                          bool flush_default_canvas)
 {
-    static const GLfloat positions[] = {
-        -1.0f,
-        -1.0f,
-        1.0f,
-        -1.0f,
-        -1.0f,
-        1.0f,
-        1.0f,
-        1.0f,
-    };
-    static const GLfloat tex_coords[] = {
-        0.0f,
-        1.0f,
-        1.0f,
-        1.0f,
-        0.0f,
-        0.0f,
-        1.0f,
-        0.0f,
-    };
     GLBoundRenderTarget target;
-    GLint position_loc;
-    GLint tex_coord_loc;
     GLint offset_loc;
     int vp_x, vp_y, vp_w, vp_h;
 
@@ -862,8 +922,6 @@ static bool immediate_gl_draw_region_now(Window *window, GLuint program, GLProgr
     }
 
     immediate_gl_apply_render_target_viewport(&target, vp_x, vp_y, vp_w, vp_h);
-    glBindVertexArray(window->fullscreen_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnable(GL_SCISSOR_TEST);
     glScissor(vp_x, vp_y, vp_w, vp_h);
 
@@ -883,26 +941,7 @@ static bool immediate_gl_draw_region_now(Window *window, GLuint program, GLProgr
     if (offset_loc >= 0)
         glUniform2f(offset_loc, rx, ry);
 
-    position_loc = slot ? slot->position_loc : glGetAttribLocation(program, "a_position");
-    if (position_loc >= 0)
-    {
-        glEnableVertexAttribArray((GLuint)position_loc);
-        glVertexAttribPointer((GLuint)position_loc, 2, GL_FLOAT, GL_FALSE, 0, positions);
-    }
-
-    tex_coord_loc = slot ? slot->tex_coord_loc : glGetAttribLocation(program, "a_texCoord");
-    if (tex_coord_loc >= 0)
-    {
-        glEnableVertexAttribArray((GLuint)tex_coord_loc);
-        glVertexAttribPointer((GLuint)tex_coord_loc, 2, GL_FLOAT, GL_FALSE, 0, tex_coords);
-    }
-
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-    if (position_loc >= 0)
-        glDisableVertexAttribArray((GLuint)position_loc);
-    if (tex_coord_loc >= 0)
-        glDisableVertexAttribArray((GLuint)tex_coord_loc);
+    immediate_gl_draw_fullscreen_geometry(window, program, slot);
 
     immediate_gl_cleanup_texture_units(1, 7);
 
@@ -928,6 +967,8 @@ void window_present(Window *window)
 
     if (window->screen_rendered_this_frame)
     {
+        if (window->observers.frame)
+            window->observers.frame(window->observers.context, window);
         SDL_GL_SwapWindow(window->sdl_window);
         return;
     }
@@ -945,7 +986,48 @@ void window_present(Window *window)
     draw_fullscreen(window, window->blit_program, window->canvas_texture);
 
     glBindTexture(GL_TEXTURE_2D, 0);
+    if (window->observers.frame)
+        window->observers.frame(window->observers.context, window);
     SDL_GL_SwapWindow(window->sdl_window);
+}
+
+void window_set_observers(Window *window, const WindowObservers *observers)
+{
+    window->observers = observers ? *observers : (WindowObservers){0};
+}
+
+bool window_read_screen(Window *window, uint8_t *rgba, size_t size)
+{
+    if (!window || !rgba || window->width <= 0 || window->height <= 0 ||
+        (uint64_t)window->width * (uint64_t)window->height > SIZE_MAX / 4 ||
+        size != (size_t)window->width * (size_t)window->height * 4)
+        return false;
+
+    GLint framebuffer, read_buffer, pack_buffer, alignment, row_length, skip_rows, skip_pixels;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &framebuffer);
+    glGetIntegerv(GL_READ_BUFFER, &read_buffer);
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &row_length);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &skip_rows);
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &skip_pixels);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadBuffer(GL_BACK);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_PACK_SKIP_ROWS, 0);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+    glReadPixels(0, 0, window->width, window->height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    GLenum error = glGetError();
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)framebuffer);
+    glReadBuffer((GLenum)read_buffer);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, (GLuint)pack_buffer);
+    glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+    glPixelStorei(GL_PACK_ROW_LENGTH, row_length);
+    glPixelStorei(GL_PACK_SKIP_ROWS, skip_rows);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, skip_pixels);
+    return error == GL_NO_ERROR;
 }
 
 void window_get_size(Window *window, int *width, int *height)

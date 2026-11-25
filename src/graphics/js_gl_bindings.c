@@ -9,6 +9,8 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
+#include <limits.h>
 
 #ifdef QUICKJS_NG
 #define BUDO_JS_IS_ARRAY(ctx, val) JS_IsArray(val)
@@ -506,6 +508,50 @@ static JSValue js_gl_resize_render_target(JSContext *ctx, JSValue this_val, int 
         return js_throw_window_error(ctx, graphic_ctx);
 
     return JS_UNDEFINED;
+}
+
+static JSValue js_gl_read_render_target_pixels(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
+{
+    JSGraphicContext *graphic_ctx = js_graphic_context(ctx, func_data);
+    double id;
+    int width, height;
+    uint8_t *pixels;
+    JSValue buffer, result;
+
+    if (!graphic_ctx)
+        return JS_ThrowInternalError(ctx, "No active graphic");
+    if (argc < 1 || !JS_IsNumber(argv[0]))
+        return JS_ThrowTypeError(ctx, "Expected a render target id");
+    if (JS_ToFloat64(ctx, &id, argv[0]) < 0)
+        return JS_EXCEPTION;
+    if (!isfinite(id) || id < 1 || id > INT_MAX || floor(id) != id)
+        return JS_ThrowRangeError(ctx, "Invalid render target id");
+    if (!window_gl_read_render_target_pixels(graphic_ctx->window, (int)id,
+                                              &width, &height, &pixels))
+        return js_throw_window_error(ctx, graphic_ctx);
+    buffer = JS_NewArrayBufferCopy(ctx, pixels, (size_t)width * (size_t)height * 4);
+    free(pixels);
+    if (JS_IsException(buffer))
+        return buffer;
+    result = JS_NewObject(ctx);
+    if (JS_IsException(result))
+    {
+        JS_FreeValue(ctx, buffer);
+        return result;
+    }
+    if (JS_SetPropertyStr(ctx, result, "width", JS_NewInt32(ctx, width)) < 0 ||
+        JS_SetPropertyStr(ctx, result, "height", JS_NewInt32(ctx, height)) < 0)
+    {
+        JS_FreeValue(ctx, buffer);
+        JS_FreeValue(ctx, result);
+        return JS_EXCEPTION;
+    }
+    if (JS_SetPropertyStr(ctx, result, "pixels", buffer) < 0)
+    {
+        JS_FreeValue(ctx, result);
+        return JS_EXCEPTION;
+    }
+    return result;
 }
 
 static JSValue js_gl_draw_region(JSContext *ctx, JSValue this_val, int argc, JSValue *argv, int magic, JSValue *func_data)
@@ -1669,6 +1715,7 @@ static const JsGraphicFunction js_sys_gl_funcs[] = {
     {"createRenderTarget", 2, js_gl_create_render_target},
     {"destroyRenderTarget", 1, js_gl_destroy_render_target},
     {"resizeRenderTarget", 3, js_gl_resize_render_target},
+    {"readRenderTargetPixels", 1, js_gl_read_render_target_pixels},
     {"drawRegion", 5, js_gl_draw_region},
     {"bindTexture", 4, js_gl_bind_texture},
     {"bindCanvasTexture", 4, js_gl_bind_canvas_texture},

@@ -1383,7 +1383,7 @@ static GlRenderTargetApi render_target_api(void)
 static const GlRenderTargetConstants render_target_constants = {
     GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_LINEAR, GL_CLAMP_TO_EDGE,
-    GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, GL_FRAMEBUFFER,
+    GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, GL_FRAMEBUFFER,
     GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, GL_DEPTH_COMPONENT24,
     GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_COMPLETE};
 
@@ -1438,6 +1438,109 @@ bool window_gl_resize_render_target(Window *window, int target_id, int width, in
         set_error(window, "Render target framebuffer incomplete after resize");
         return false;
     }
+    return true;
+}
+
+bool window_gl_read_render_target_pixels(Window *window, int target_id,
+                                         int *width, int *height,
+                                         uint8_t **pixels)
+{
+    GLRenderTarget *rt;
+    uint8_t *data;
+    size_t row_bytes, size;
+    GLint framebuffer, read_buffer, target_read_buffer;
+    GLint pack_buffer, alignment, row_length, skip_rows, skip_pixels;
+    GLenum error, status;
+
+    if (!BUDO_GL_WINDOW_READY(window) || !width || !height || !pixels)
+    {
+        set_error(window, "Render target readback unavailable");
+        return false;
+    }
+    rt = get_render_target_slot(window, target_id);
+    if (!rt || rt->width <= 0 || rt->height <= 0)
+    {
+        set_error(window, "Invalid render target id");
+        return false;
+    }
+    if ((size_t)rt->width > SIZE_MAX / 4 ||
+        (size_t)rt->height > SIZE_MAX / ((size_t)rt->width * 4))
+    {
+        set_error(window, "Render target readback size overflow");
+        return false;
+    }
+    row_bytes = (size_t)rt->width * 4;
+    size = row_bytes * (size_t)rt->height;
+    data = (uint8_t *)malloc(size);
+    if (!data)
+    {
+        set_error(window, "Render target readback allocation failed");
+        return false;
+    }
+
+    BUDO_GL_WINDOW_MAKE_CURRENT(window);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        free(data);
+        set_error(window, "OpenGL error before render target readback");
+        return false;
+    }
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &framebuffer);
+    glGetIntegerv(GL_READ_BUFFER, &read_buffer);
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &row_length);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &skip_rows);
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &skip_pixels);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        free(data);
+        set_error(window, "Could not query OpenGL readback state");
+        return false;
+    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, rt->fbo);
+    target_read_buffer = GL_COLOR_ATTACHMENT0;
+    glGetIntegerv(GL_READ_BUFFER, &target_read_buffer);
+    status = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_PACK_SKIP_ROWS, 0);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+    if (status == GL_FRAMEBUFFER_COMPLETE)
+        glReadPixels(0, 0, rt->width, rt->height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    error = glGetError();
+    glReadBuffer((GLenum)target_read_buffer);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)framebuffer);
+    glReadBuffer((GLenum)read_buffer);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, (GLuint)pack_buffer);
+    glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+    glPixelStorei(GL_PACK_ROW_LENGTH, row_length);
+    glPixelStorei(GL_PACK_SKIP_ROWS, skip_rows);
+    glPixelStorei(GL_PACK_SKIP_PIXELS, skip_pixels);
+    if (glGetError() != GL_NO_ERROR || error != GL_NO_ERROR ||
+        status != GL_FRAMEBUFFER_COMPLETE)
+    {
+        free(data);
+        set_error(window, "Render target readback failed");
+        return false;
+    }
+
+    for (int y = 0; y < rt->height / 2; ++y)
+    {
+        uint8_t *top = data + (size_t)y * row_bytes;
+        uint8_t *bottom = data + (size_t)(rt->height - 1 - y) * row_bytes;
+        for (size_t x = 0; x < row_bytes; ++x)
+        {
+            uint8_t byte = top[x];
+            top[x] = bottom[x];
+            bottom[x] = byte;
+        }
+    }
+    *width = rt->width;
+    *height = rt->height;
+    *pixels = data;
     return true;
 }
 
@@ -1622,7 +1725,11 @@ static void immediate_gl_apply_depth_state(const GLBoundRenderTarget *bound,
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
         if (clear_depth && bound && bound->has_depth)
+        {
+            /* glClear honours the depth mask, which the previous draw may have disabled. */
+            glDepthMask(GL_TRUE);
             glClear(GL_DEPTH_BUFFER_BIT);
+        }
     }
     else
     {

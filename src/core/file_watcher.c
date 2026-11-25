@@ -73,7 +73,8 @@ static void signature_add_entry(FileSignature *sig,
     sig->entries++;
     signature_mix_path(sig, relative_path);
     signature_mix_u64(sig, size);
-    signature_mix_u64(sig, mtime_ns);
+
+    signature_mix_u64(sig, directory ? 0 : mtime_ns);
     signature_mix_u64(sig, directory ? 1 : 0);
 }
 
@@ -145,7 +146,8 @@ static bool scan_directory(FileWatcher *watcher, const char *absolute_dir,
         uint64_t size;
         uint64_t mtime_ns;
 
-        if (strcmp(data.cFileName, ".") == 0 || strcmp(data.cFileName, "..") == 0)
+        if (strcmp(data.cFileName, ".") == 0 || strcmp(data.cFileName, "..") == 0 ||
+            strncmp(data.cFileName, ".budo-write-", 12) == 0)
             continue;
         if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
             continue;
@@ -204,7 +206,8 @@ static bool scan_directory(FileWatcher *watcher, const char *absolute_dir,
         struct stat st;
         bool is_dir;
 
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
+            strncmp(entry->d_name, ".budo-write-", 12) == 0)
             continue;
         if (!join_path(child_abs, sizeof(child_abs), absolute_dir, entry->d_name) ||
             !join_relative_path(child_rel, sizeof(child_rel), relative_dir, entry->d_name))

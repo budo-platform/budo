@@ -47,7 +47,7 @@ let outputName = '';
 
 function setup() {
     if (!sys.capabilities.neural.available || typeof sys.neural === 'undefined') {
-        statusLine = 'ONNX Runtime not available (build without ENABLE_NEURAL?)';
+        statusLine = 'ONNX Runtime not available (build without ENABLE_ONNX?)';
         return;
     }
 

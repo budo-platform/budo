@@ -81,11 +81,11 @@
             ],
             "source": "CMakeLists.txt",
             "source_symbols": [
-                "ENABLE_NEURAL",
+                "ENABLE_ONNX",
                 "BUDO_NEURAL",
                 "wasm_neural_bindings"
             ],
-            "behavior": "The root build adds all neural wrapper and binding sources and defines BUDO_NEURAL only while ENABLE_NEURAL remains enabled after the ONNX headers check. Without those sources there is no valid neural export surface."
+            "behavior": "The root build adds all neural wrapper and binding sources and defines BUDO_NEURAL only while ENABLE_ONNX remains enabled after the ONNX headers check. Without those sources there is no valid neural export surface."
         },
         {
             "kind": "compile_time",
@@ -136,7 +136,7 @@
             "source": "src/desktop/managed_desktop.c",
             "source_symbols": [
                 "neural_enabled",
-                "wasm_canvas_enable_neural"
+                "wasm_canvas_enable_onnx"
             ],
             "behavior": "Wasmtime env.neural_* imports are registered with instance-owned binding state while the canvas runtime is created, but app.json neural: true is required to create its NeuralContext. Without opt-in the imports remain and return failure sentinels."
         },
@@ -254,7 +254,7 @@
             "details": [
                 "Desktop JavaScript and Lua omit sys.neural unless both app metadata and context creation succeed.",
                 "Desktop Wasmtime registers env.neural_* before app metadata is checked, so imports can exist without an active context.",
-                "Each Wasmtime canvas owns its neural context, store/memory references, and staged model state; neural registration and memory wiring are omitted together when ENABLE_NEURAL is disabled."
+                "Each Wasmtime canvas owns its neural context, store/memory references, and staged model state; neural registration and memory wiring are omitted together when ENABLE_ONNX is disabled."
             ]
         },
         "android": {

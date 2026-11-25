@@ -91,6 +91,7 @@ int budo_native_desktop_main(int argc, char **argv)
 
     window_config.title = descriptor->name ? descriptor->name : "Budo Native";
     window_config.project_dir = ".";
+    window_config.icon = NULL;
     window_config.width = 800;
     window_config.height = 600;
     window_config.resizable = true;
